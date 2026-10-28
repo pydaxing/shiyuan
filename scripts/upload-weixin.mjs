@@ -5,6 +5,7 @@ import { resolve, join } from 'node:path';
 import { loadEnv } from 'vite';
 import { checkReleaseVersion, validateCompiledVersion } from './check-release-version.mjs';
 import { verifyPreviewTarget } from './preview-weixin.mjs';
+import { confirmedUploadResult } from './weixin-upload-result.mjs';
 
 const args = process.argv.slice(2);
 const options = {};
@@ -31,7 +32,10 @@ try {
 }
 await writeFile(join(output, 'upload-response.private.json'), raw, { mode: 0o600 });
 const response = JSON.parse(raw.slice(raw.indexOf('{')));
-assert.ok(response.ok === true && response.result?.success === true, `微信未确认上传成功，详情见 ${output}`);
-const receipt = { ...version, ...target, description: options['--desc'], startedAt, completedAt: new Date().toISOString(), uploaded: true, uploadBytes: response.result.info?.size?.total, reviewSubmitted: false, productionPublished: false };
+if (response.result?.taskId && response.result.status !== 'success') {
+  await writeFile(join(output, 'upload-pending.json'), JSON.stringify({ taskId: response.result.taskId, status: response.result.status, uploaded: false, reviewSubmitted: false }, null, 2), { mode: 0o600 });
+}
+const completed = confirmedUploadResult(response);
+const receipt = { ...version, ...target, description: options['--desc'], startedAt, completedAt: new Date().toISOString(), uploaded: true, uploadBytes: completed.info?.size?.total, reviewSubmitted: false, productionPublished: false };
 await writeFile(join(output, 'upload-receipt.json'), JSON.stringify(receipt, null, 2) + '\n', { mode: 0o600 });
 console.log(JSON.stringify(receipt));
