@@ -27,7 +27,7 @@ function initialSnapshot() {
   return snapshot;
 }
 
-function harness({ initial = initialSnapshot(), storage = new Map(), platform, refresh } = {}) {
+function harness({ initial = initialSnapshot(), storage = new Map(), platform, refresh, reuseRenderedState = false } = {}) {
   const requests = [];
   const frames = [];
   let view;
@@ -41,7 +41,12 @@ function harness({ initial = initialSnapshot(), storage = new Map(), platform, r
     send: payload => new Promise((resolve, reject) => requests.push({ payload, resolve, reject })),
     reconcile: async (result, id) => { queue.receive(result.snapshot, result.revision, id); },
     refresh: async () => { if (refresh) await refresh({ queue, server }); },
-    onChange: value => { view = value; frames.push(clone(value)); },
+    onChange: value => {
+      if (reuseRenderedState && view) {
+        for (const [field, next] of Object.entries(value)) if (JSON.stringify(view[field]) !== JSON.stringify(next)) view[field] = next;
+      } else view = value;
+      frames.push(clone(value));
+    },
     onStatus: value => { status = value; },
   });
   queue.activate(initial, context);
@@ -414,4 +419,19 @@ test('like projections are desired-state overlays, not a second toggle after ref
   app.requests[0].resolve({ snapshot: current, revision: 1 });
   await saved;
   assert.deepEqual(app.view.comments[0].likes, ['me', 'another']);
+});
+
+test('reactive field updates cannot mutate the confirmed baseline when toggling fridge repeatedly', async () => {
+  const app = harness({ reuseRenderedState: true });
+  for (const [index, enabled] of [true, false, true].entries()) {
+    const task = app.queue.enqueue('setFeature', ['fridge', enabled]);
+    assert.equal(app.view.family.features.fridge, enabled);
+    assert.equal(app.queue.getBase().family.features.fridge, !enabled);
+    assert.equal(app.requests.length, index + 1);
+    app.confirm(index);
+    await task;
+    await tick();
+    assert.equal(app.queue.getBase().family.features.fridge, enabled);
+    assert.equal(app.status.failures.length, 0);
+  }
 });

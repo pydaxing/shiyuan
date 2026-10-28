@@ -53,7 +53,9 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
     const entries = operations.map(statusEntry);
     const failures = entries.filter(operation => ['failed', 'blocked', 'uncertain'].includes(operation.status));
     if (journalError) failures.unshift({ id: 'journal', name: 'journal', label: '保存待同步记录', args: [], status: 'failed', message: journalError.message, canRetry: true, retryable: true, canDismiss: false, discardable: false });
-    onChange(view);
+    // Renderers patch reactive objects in place; never expose the confirmed
+    // baseline or projected view to those mutations.
+    onChange(clone(view));
     onStatus({ operations: entries, pendingCount: entries.filter(operation => operation.status !== 'failed').length, syncing: entries.some(operation => operation.status === 'sending'), failures });
   }
 
