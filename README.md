@@ -64,14 +64,14 @@
       <td width="280" align="center" nowrap><a href="docs/images/readme/family-diary-phone.png"><img src="docs/images/readme/family-diary-phone.png" alt="iPhone 17 边框效果图：食愿我家页面展开开火日记，展示家庭餐食记录" width="280" /></a></td>
     </tr>
     <tr>
-      <td align="center" nowrap>给家起个名字，选一张封面</td>
-      <td align="center" nowrap>从别人的拿手菜里找灵感</td>
-      <td align="center" nowrap>家人的口味，慢慢收进菜单</td>
-      <td align="center" nowrap>一家人的选择，汇成同一餐</td>
-      <td align="center" nowrap>调整本餐用量，确认准备进度</td>
-      <td align="center" nowrap>想好做什么，再整理买什么</td>
-      <td align="center" nowrap>已有食材，分类记录</td>
-      <td align="center" nowrap>把平常的一餐，留作日常记录</td>
+      <td align="center" nowrap>起个喜欢的家庭名，再选一张温暖的封面</td>
+      <td align="center" nowrap>逛逛别人家的拿手菜，发现下一道想吃的</td>
+      <td align="center" nowrap>把家人喜欢的每道菜，慢慢收进自家菜单</td>
+      <td align="center" nowrap>汇总家人今天想吃的，一起安排好这一餐</td>
+      <td align="center" nowrap>按这一餐调整食材量，逐道确认备菜进度</td>
+      <td align="center" nowrap>想好做什么再买什么，按菜整理采购清单</td>
+      <td align="center" nowrap>冷藏冷冻常温分开记，看看家里还有什么</td>
+      <td align="center" nowrap>展开一餐一饭的记录，留下家里开火日常</td>
     </tr>
   </tbody>
 </table>
