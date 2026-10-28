@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="24" viewBox="0 0 128 24" role="img" aria-label="cloud: CloudBase">
+  <title>cloud: CloudBase</title>
+  <defs><clipPath id="r"><rect width="128" height="24" rx="4"/></clipPath></defs>
+  <g clip-path="url(#r)"><rect width="48" height="24" fill="#344951"/><rect x="48" width="80" height="24" fill="#426d88"/></g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
+    <text x="24" y="16">cloud</text><text x="88" y="16">CloudBase</text>
+  </g></svg>

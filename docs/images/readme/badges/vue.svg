@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="24" viewBox="0 0 64 24" role="img" aria-label="Vue: 3">
+  <title>Vue: 3</title>
+  <defs><clipPath id="r"><rect width="64" height="24" rx="4"/></clipPath></defs>
+  <g clip-path="url(#r)"><rect width="39" height="24" fill="#344951"/><rect x="39" width="25" height="24" fill="#437665"/></g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
+    <text x="19.5" y="16">Vue</text><text x="51.5" y="16">3</text>
+  </g></svg>

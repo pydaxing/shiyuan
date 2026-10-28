@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="154" height="24" viewBox="0 0 154 24" role="img" aria-label="WeChat: Mini Program">
+  <title>WeChat: Mini Program</title>
+  <defs><clipPath id="r"><rect width="154" height="24" rx="4"/></clipPath></defs>
+  <g clip-path="url(#r)"><rect width="60" height="24" fill="#344951"/><rect x="60" width="94" height="24" fill="#41775b"/></g>
+  <g fill="#fff" text-anchor="middle" font-family="Verdana,DejaVu Sans,sans-serif" font-size="11">
+    <text x="30" y="16">WeChat</text><text x="107" y="16">Mini Program</text>
+  </g></svg>
