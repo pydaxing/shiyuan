@@ -297,7 +297,7 @@ function avatarComponent(name) {
 }
 function renderedAvatarProps(value) {
   if (!value || typeof value !== 'object') return [];
-  if (value.avatar === true && value.round === true && value.variant === 'card') return [value];
+  if (value.avatar === true && value.round === true && value.variant === 'avatar') return [value];
   return Object.values(value).flatMap(renderedAvatarProps);
 }
 const avatarRows = Vue.reactive({ rows: [{ recipe: { id: 'dish', title: '同一道菜', image: '' }, groups: [], chosenBy: avatarProfiles.value.map(member => ({ id: member.id, name: '旧昵称', avatar: 'cloud://old/snapshot.png' })) }], members: avatarProfiles.value, removable: false });
