@@ -37,34 +37,44 @@
 
 ## 看看食愿
 
-页面内容来自微信开发者工具中连接真实云数据的截图，与 **iPhone 17 标准版边框合成**为下方效果图。点击图片可以查看大图。
+页面内容来自微信开发者工具中连接真实云数据的截图，与 **iPhone 17 标准版边框合成**为下方效果图。左右滑动浏览完整页面，点击图片查看大图。
 
-### 发现下一道想吃的菜
-
-在推荐列表里找灵感，打开详情了解一道菜。这里展示美食推荐页与「香蕉黑芝麻面包」详情，从看见喜欢，到把好做法留进自家菜单。
-
-<p align="center">
-  <a href="docs/images/readme/discover-phone.png"><img src="docs/images/readme/discover-phone.png" alt="iPhone 17 边框效果图：食愿美食推荐页，展示真实云端菜品列表、分类导航和搜索入口" width="280" /></a>
-  <a href="docs/images/readme/recipe-phone.png"><img src="docs/images/readme/recipe-phone.png" alt="iPhone 17 边框效果图：香蕉黑芝麻面包的菜谱详情，展示菜品封面、名称与来源家庭" width="280" /></a>
-</p>
-
-### 食材用量与图文做法，一起看清楚
-
-想做一道菜，先看需要准备什么，再看每一步怎么做。以「青椒炒牛肉」为例，食材与配料列出对应用量，做法按步骤配图展开，查材料和看做法都在同一份菜谱里。
-
-<p align="center">
-  <a href="docs/images/readme/ingredients-phone.png"><img src="docs/images/readme/ingredients-phone.png" alt="iPhone 17 边框效果图：青椒炒牛肉菜谱的食材与配料列表，展示各项材料名称、用量及单位" width="280" /></a>
-  <a href="docs/images/readme/steps-phone.png"><img src="docs/images/readme/steps-phone.png" alt="iPhone 17 边框效果图：青椒炒牛肉菜谱的分步做法，展示步骤说明与对应步骤图片" width="280" /></a>
-</p>
-
-### 新家庭，从第一道菜、第一餐开始
-
-菜单与厨房的起步引导，让刚开始使用的家庭也有清楚的下一步：先建立自家菜单，再安排一起吃的一餐。下方展示尚未添加菜品、尚未安排餐食时的真实页面。
-
-<p align="center">
-  <a href="docs/images/readme/menu-phone.png"><img src="docs/images/readme/menu-phone.png" alt="iPhone 17 边框效果图：食愿家庭菜单尚无菜品时的真实页面，展示建立自家菜单的起步引导" width="280" /></a>
-  <a href="docs/images/readme/kitchen-phone.png"><img src="docs/images/readme/kitchen-phone.png" alt="iPhone 17 边框效果图：食愿家庭厨房尚未安排餐食时的真实页面，展示开始安排一餐的起步引导" width="280" /></a>
-</p>
+<table>
+  <thead>
+    <tr>
+      <th width="280" align="center" nowrap>属于一家人的食愿</th>
+      <th width="280" align="center" nowrap>美食 · 发现想吃的</th>
+      <th width="280" align="center" nowrap>菜单 · 留下喜欢的</th>
+      <th width="280" align="center" nowrap>厨房 · 安排一起吃的</th>
+      <th width="280" align="center" nowrap>备菜 · 按餐准备</th>
+      <th width="280" align="center" nowrap>采购 · 按菜整理</th>
+      <th width="280" align="center" nowrap>冰箱 · 记住家里有的</th>
+      <th width="280" align="center" nowrap>我家 · 留下开火日常</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/family-cover-phone.png"><img src="docs/images/readme/family-cover-phone.png" alt="iPhone 17 边框效果图：食愿家庭名称与封面页面，展示一家人的名称及家庭封面" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/discover-phone.png"><img src="docs/images/readme/discover-phone.png" alt="iPhone 17 边框效果图：食愿美食推荐页，展示真实云端菜品列表、分类导航和搜索入口" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/menu-phone.png"><img src="docs/images/readme/menu-phone.png" alt="iPhone 17 边框效果图：食愿家庭菜单页面，用于浏览自家菜品并选择想吃的菜" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/kitchen-phone.png"><img src="docs/images/readme/kitchen-phone.png" alt="iPhone 17 边框效果图：食愿厨房页面，展示家庭餐食安排与菜品信息" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/preparation-phone.png"><img src="docs/images/readme/preparation-phone.png" alt="iPhone 17 边框效果图：食愿厨房备菜页面，展示本餐菜品的食材配料、用量与准备状态" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/shopping-phone.png"><img src="docs/images/readme/shopping-phone.png" alt="iPhone 17 边框效果图：食愿采购清单页面，按餐食与菜品整理待准备的食材配料" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/fridge-phone.png"><img src="docs/images/readme/fridge-phone.png" alt="iPhone 17 边框效果图：食愿冰箱页面，用于查看和管理家庭已有食材及存放分类" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/family-diary-phone.png"><img src="docs/images/readme/family-diary-phone.png" alt="iPhone 17 边框效果图：食愿我家页面展开开火日记，展示家庭餐食记录" width="280" /></a></td>
+    </tr>
+    <tr>
+      <td align="center" nowrap>给家起个名字，选一张封面</td>
+      <td align="center" nowrap>从别人的拿手菜里找灵感</td>
+      <td align="center" nowrap>家人的口味，慢慢收进菜单</td>
+      <td align="center" nowrap>一家人的选择，汇成同一餐</td>
+      <td align="center" nowrap>调整本餐用量，确认准备进度</td>
+      <td align="center" nowrap>想好做什么，再整理买什么</td>
+      <td align="center" nowrap>已有食材，分类记录</td>
+      <td align="center" nowrap>把平常的一餐，留作日常记录</td>
+    </tr>
+  </tbody>
+</table>
 
 ## 一家人的日常
 
