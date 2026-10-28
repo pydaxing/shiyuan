@@ -177,7 +177,7 @@ export function peekImage(value, variant = 'card') {
   if (!cloudMode) return mediaUrls.value[value] || '';
   return protectedImages.peek(imageVersion(value, variant)) || (variant === 'detail' ? protectedImages.peek(imageVersion(value, 'card')) : '');
 }
-export function loadImage(value, variant = 'original', options) {
+export function loadImage(value, variant = 'card', options) {
   return cloudMode && typeof value === 'string' && value.startsWith('cloud://') ? protectedImages.load(imageVersion(value, variant), options) : Promise.resolve(resolveImage(value, variant));
 }
 

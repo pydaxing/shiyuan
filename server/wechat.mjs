@@ -183,7 +183,10 @@ let firstInvocation = true;
 export async function main(event) {
   if (event?.action === 'prepareImageDelivery') {
     try { return { ok: true, data: await maintainImages(event, cloud.getWXContext()) }; }
-    catch (error) { return { ok: false, code: error.code || 'INTERNAL', message: error.code ? error.message : '图片维护暂不可用' }; }
+    catch (error) {
+      if (error.maintenanceReason) console.warn('image-maintenance-denied', error.maintenanceReason);
+      return { ok: false, code: error.code || 'INTERNAL', message: error.code ? error.message : '图片维护暂不可用' };
+    }
   }
   const first = firstInvocation;
   firstInvocation = false;

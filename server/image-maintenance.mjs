@@ -1,17 +1,18 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
-const forbidden = () => { throw Object.assign(new Error('图片维护授权无效或已过期'), { code: 'FORBIDDEN' }); };
+const forbidden = reason => { throw Object.assign(new Error('图片维护授权无效或已过期'), { code: 'FORBIDDEN', maintenanceReason: reason }); };
 
 export function createImageMaintenance({ repository, prepare, now = Date.now }) {
   return async (event, context = {}) => {
-    if (context.OPENID || !/^image-job-[a-f0-9]{32}$/.test(event.jobId || '') || !/^[a-f0-9]{64}$/.test(event.token || '')) forbidden();
+    if (context.OPENID) forbidden('client_context');
+    if (!/^image-job-[a-f0-9]{32}$/.test(event.jobId || '') || !/^[a-f0-9]{64}$/.test(event.token || '')) forbidden('request_format');
     const job = await repository.get('imports', event.jobId);
     if (job?.kind !== 'image_delivery_job_v1' || job.state !== 'active' || !Number.isFinite(job.expiresAt) || job.expiresAt <= now() || !Array.isArray(job.fileIds)
-      || !/^[a-f0-9]{64}$/.test(job.tokenHash || '') || !timingSafeEqual(Buffer.from(hash(event.token), 'hex'), Buffer.from(job.tokenHash, 'hex'))) forbidden();
+      || !/^[a-f0-9]{64}$/.test(job.tokenHash || '') || !timingSafeEqual(Buffer.from(hash(event.token), 'hex'), Buffer.from(job.tokenHash, 'hex'))) forbidden('job_validation');
     const fileIds = event.fileIds;
     if (!Array.isArray(fileIds) || !fileIds.length || fileIds.length > 3 || new Set(fileIds).size !== fileIds.length
-      || fileIds.some(fileId => typeof fileId !== 'string' || !job.fileIds?.includes(fileId))) forbidden();
+      || fileIds.some(fileId => typeof fileId !== 'string' || !job.fileIds?.includes(fileId))) forbidden('file_allowlist');
     const records = await Promise.all(fileIds.map(async fileId => {
       try { return { fileId, record: await repository.get('media', hash(fileId)) }; }
       catch (error) { return { fileId, error }; }

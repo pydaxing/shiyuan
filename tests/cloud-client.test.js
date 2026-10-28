@@ -498,10 +498,12 @@ test('display rendering batches thumbnails, caches by size and only downloads an
   await app.loadImage(ids[0], 'detail');
   assert.equal(app.calls[1].images[0].variant, 'detail');
   await app.loadImage(ids[0]);
+  assert.equal(app.calls.length, 2, 'implicit image loads reuse the thumbnail and never fetch the original');
+  await app.loadImage(ids[0], 'original');
   assert.equal(app.calls[2].action, 'mediaContent');
   assert.equal(app.calls[2].variant, 'original');
   assert.equal(app.calls.filter(call => call.action === 'mediaContent').length, 1);
-  await app.loadImage(ids[0]);
+  await app.loadImage(ids[0], 'original');
   assert.equal(app.calls.length, 3);
   assert.equal(app.resolveImage(ids[0], 'card'), paths[0], 'opening an original must not replace card thumbnails');
   disk.delete(paths[0]);
