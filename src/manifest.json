@@ -2,8 +2,8 @@
   "name": "食愿",
   "appid": "",
   "description": "把想吃的，变成一桌好饭。家庭点餐与食材管理。",
-  "versionName": "1.0.1",
-  "versionCode": "10001",
+  "versionName": "1.0.2",
+  "versionCode": "10002",
   "uniStatistics": { "enable": false },
   "h5": { "title": "食愿 · 家庭小厨房", "router": { "mode": "hash" } },
   "mp-weixin": {

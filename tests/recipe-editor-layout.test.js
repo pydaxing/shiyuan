@@ -290,6 +290,22 @@ test('reordering steps preserves stable identities, text, images and valid bound
   assert.equal(editor.steps.value[0], first);
 });
 
+test('repeated swaps preserve contents and upload-in-progress blocks reordering', () => {
+  const editor = createEditor();
+  editor.steps.value.push(editor.newStep(), editor.newStep());
+  const original = [...editor.steps.value];
+  for (let cycle = 0; cycle < 8; cycle++) {
+    editor.moveStep(0, 1);
+    editor.moveStep(1, 1);
+    editor.moveStep(2, -1);
+    editor.moveStep(1, -1);
+    assert.deepEqual(editor.steps.value, original);
+  }
+  editor.busyImages.value = 1;
+  editor.moveStep(0, 1);
+  assert.deepEqual(editor.steps.value, original);
+});
+
 test('step removal and addition retain optional content without reusing field identities', () => {
   const editor = createEditor();
   const initialId = editor.steps.value[0].id;

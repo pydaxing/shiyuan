@@ -7,7 +7,8 @@ import { selectImagePaths, chooseLocalImage, chooseLocalImages, imageUploadLabel
 import { focusKeyboardField } from '../src/services/keyboard.js';
 
 const originalUni = globalThis.uni;
-afterEach(() => { globalThis.uni = originalUni; });
+const originalWx = globalThis.wx;
+afterEach(() => { globalThis.uni = originalUni; globalThis.wx = originalWx; });
 
 test('every mixed-source selection visibly offers camera and album before opening either', async () => {
   const calls = [];
@@ -251,4 +252,34 @@ test('all app upload entry points share source selection, including profile and 
   assert.match(profile, /selectImagePaths\(\)/);
   assert.match(profile, /:open-type="nativeAvatarPicker \? 'chooseAvatar' : undefined"/);
   assert.match(profile, /if \(nativeAvatarPicker \|\| uploading\.value \|\| props\.disabled\) return;/);
+});
+
+
+test('WeChat uses image-only native media picker for both sources and preserves originals', async () => {
+  for (const tapIndex of [0, 1]) {
+    globalThis.uni = { showActionSheet: async () => ({ tapIndex }), chooseImage: () => assert.fail('legacy picker must not run') };
+    globalThis.wx = { chooseMedia(options) {
+      assert.deepEqual(options.mediaType, ['image']);
+      assert.deepEqual(options.sizeType, ['original']);
+      assert.deepEqual(options.sourceType, [tapIndex ? 'album' : 'camera']);
+      assert.equal(options.count, tapIndex ? 3 : 1);
+      options.success({ tempFiles: [{ tempFilePath: 'original.jpg' }] });
+    } };
+    assert.deepEqual(await selectImagePaths(3), ['original.jpg']);
+  }
+});
+
+test('native cancellation is harmless; privacy and unknown failures retain diagnostics without fallback', async () => {
+  globalThis.uni = { chooseImage: () => assert.fail('must not retry or bypass native rejection') };
+  for (const reason of ['chooseMedia:fail cancel', 'chooseMedia:fail privacy permission is not authorized', 'chooseMedia:fail unexpected internal error']) {
+    const failure = { errMsg: reason };
+    globalThis.wx = { chooseMedia: options => options.fail(failure) };
+    if (reason.includes('cancel')) assert.deepEqual(await selectImagePaths(1, ['album']), []);
+    else await assert.rejects(selectImagePaths(1, ['album']), error => {
+      assert.equal(error.cause, failure);
+      assert.ok(error.message.includes(reason));
+      assert.equal(error.message.includes('照片访问权限'), false);
+      return true;
+    });
+  }
 });

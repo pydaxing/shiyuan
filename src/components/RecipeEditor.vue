@@ -69,9 +69,11 @@ function removeIngredient(index) {
 }
 function moveStep(index, change) {
   const target = index + change;
-  if (target < 0 || target >= steps.value.length) return;
-  const [step] = steps.value.splice(index, 1);
-  steps.value.splice(target, 0, step);
+  if (busyImages.value > 0 || index < 0 || index >= steps.value.length || target < 0 || target >= steps.value.length) return;
+  const reordered = [...steps.value];
+  const [step] = reordered.splice(index, 1);
+  reordered.splice(target, 0, step);
+  steps.value = reordered;
 }
 async function save() {
   if (saving.value || busyImages.value > 0) return;
@@ -122,9 +124,10 @@ async function save() {
     <view v-for="(step, index) in steps" :key="step.id" class="step-editor" role="group" :aria-label="`做法步骤${index + 1}`">
       <view class="step-editor-header">
         <text class="step-editor-label">步骤 {{ index + 1 }}</text>
-        <view class="step-tools">
-          <button role="button" :aria-label="`上移步骤${index + 1}`" :disabled="index === 0 || busyImages > 0" @click="moveStep(index, -1)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="arrow-up" :size="18" /></button>
-          <button role="button" :aria-label="`下移步骤${index + 1}`" :disabled="index === steps.length - 1 || busyImages > 0" @click="moveStep(index, 1)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="arrow-down" :size="18" /></button>
+        <!-- Refresh native control bindings when a stable step changes position. -->
+        <view v-for="position in [index]" :key="position" class="step-tools">
+          <button role="button" :aria-label="`上移步骤${index + 1}`" :disabled="index === 0 || busyImages > 0" @click="moveStep(steps.findIndex(item => item.id === step.id), -1)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="arrow-up" :size="18" /></button>
+          <button role="button" :aria-label="`下移步骤${index + 1}`" :disabled="index === steps.length - 1 || busyImages > 0" @click="moveStep(steps.findIndex(item => item.id === step.id), 1)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="arrow-down" :size="18" /></button>
           <button role="button" class="step-remove" :aria-label="`删除步骤${index + 1}`" :disabled="busyImages > 0" @click="steps.splice(index, 1)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="trash-danger" :size="20" /></button>
         </view>
       </view>

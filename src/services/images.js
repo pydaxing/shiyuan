@@ -152,11 +152,30 @@ export async function selectImagePaths(count = 1, sourceType = ['album', 'camera
   }
   const requestedCount = source === 'camera' ? 1 : limit;
   try {
-    const selected = await uni.chooseImage({ count: requestedCount, sizeType: ['original'], sourceType: [source] });
-    return (selected.tempFilePaths || []).filter(Boolean).slice(0, requestedCount);
+    // Use the native image-only media picker on WeChat. Keep chooseImage for
+    // other platforms and older clients that do not expose chooseMedia.
+    const nativeMedia = typeof wx !== 'undefined' && typeof wx.chooseMedia === 'function';
+    const selected = nativeMedia
+      ? await new Promise((resolve, reject) => wx.chooseMedia({
+        count: requestedCount, mediaType: ['image'], sizeType: ['original'],
+        sourceType: [source], success: resolve, fail: reject,
+      }))
+      : await uni.chooseImage({ count: requestedCount, sizeType: ['original'], sourceType: [source] });
+    const paths = nativeMedia ? selected.tempFiles?.map(file => file.tempFilePath) : selected.tempFilePaths;
+    return (paths || []).filter(Boolean).slice(0, requestedCount);
   } catch (error) {
-    if (/cancel/i.test(error?.errMsg || error?.message || '')) return [];
-    throw new Error(source === 'camera' ? '无法打开相机，请检查微信和系统的相机权限后重试' : '无法打开相册，请检查照片访问权限后重试');
+    const reason = error?.errMsg || error?.message || String(error);
+    if (/cancel/i.test(reason)) return [];
+    let message;
+    if (/privacy|隐私/i.test(reason)) {
+      message = '图片选择未获隐私授权，请检查小程序隐私声明并完成授权';
+    } else if (/auth deny|authorize.*fail|permission|denied/i.test(reason)) {
+      message = source === 'camera' ? '无法打开相机，请检查微信和系统的相机权限后重试' : '无法打开相册，请检查照片访问权限后重试';
+    } else {
+      message = source === 'camera' ? '无法打开相机，请重试' : '无法打开相册，请重试';
+    }
+    // Preserve provider diagnostics instead of labelling every failure as denial.
+    throw new Error(`${message}（${reason}）`, { cause: error });
   }
 }
 
