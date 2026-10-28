@@ -1,9 +1,12 @@
 <picture>
-  <source media="(max-width: 640px) and (prefers-color-scheme: dark)" srcset="docs/images/readme/cover-compact-dark.png" />
-  <source media="(max-width: 640px)" srcset="docs/images/readme/cover-compact.png" />
-  <source media="(prefers-color-scheme: dark)" srcset="docs/images/readme/cover-dark.png" />
-  <img src="docs/images/readme/cover.png" alt="食愿 — 把想吃的，变成一起吃的。属于一家人的菜单、厨房与餐桌。" width="100%" />
+  <source media="(max-width: 600px)" srcset="docs/images/promotion/readme-cta-top-compact.png" />
+  <img src="docs/images/promotion/readme-cta-top.png" alt="食愿：今天吃什么？把想吃的，变成一起吃的。微信小程序搜索「食愿小灶」，或扫描右侧小程序码体验。" width="100%" />
 </picture>
+
+<p align="center">
+  <strong>打开微信 → 搜索小程序「食愿小灶」</strong><br />
+  也可以用微信扫一扫上方小程序码；同一台手机浏览时，可保存<a href="docs/images/promotion/mini-program-code-1280.jpg">小程序码原图</a>，在微信扫一扫中从相册识别。
+</p>
 
 <p align="center">
   <a href="docs/版本与发布.md"><img src="docs/images/readme/badges/version.svg" alt="源码版本 1.0.0" height="24" /></a>
@@ -13,6 +16,7 @@
 </p>
 
 <p align="center">
+  <a href="#体验食愿小灶">小程序体验</a> ·
   <a href="#看看食愿">界面预览</a> ·
   <a href="#一家人的日常">功能介绍</a> ·
   <a href="#开始开发">开始开发</a> ·
@@ -125,7 +129,7 @@
 
 ## 开始开发
 
-有私有仓库访问权限后，可以下载源码并恢复开发环境：
+仓库已公开，可以下载源码并安装依赖：
 
 ```sh
 git clone https://github.com/pydaxing/shiyuan.git
@@ -134,15 +138,17 @@ npm ci
 cp .env.example .env.production
 ```
 
-在 `.env.production` 填写正式 AppID、云环境和云函数配置，再运行：
+独立开发请使用**自己的微信小程序 AppID 与 CloudBase 云环境**，在 `.env.production` 填写配置，并同步调整 `cloudbaserc.json` 的云环境与函数名称，再运行：
 
 ```sh
 npm run build:release
 ```
 
-使用微信开发者工具打开 **`dist/release`**，登录有开发权限的微信账号进行真实云数据预览。已验证的工具环境、配置来源、常用命令和上传工具要求，见 **[开发接手指南](docs/开发接手指南.md)**。
+按 [云端部署](docs/正式云端部署.md) 在自己的云环境准备数据库规则、索引及云函数后，使用微信开发者工具打开 **`dist/release`**，登录有开发权限的微信账号进行真实云数据预览。已验证的工具环境、配置来源、常用命令和上传工具要求，见 **[开发接手指南](docs/开发接手指南.md)**。
 
 仓库保存源码与项目资源。数据库、云存储、账号登录和本机私有配置各自维护；换电脑时需要恢复配置与工具登录。新的 Codex 可从 [AGENTS.md](AGENTS.md) 开始理解项目。
+
+当前尚未选定开源许可证，仓库不包含 MIT 等通用授权；品牌、菜谱图片与第三方素材的权利归属见各自来源说明。
 
 ## 文档导航
 
@@ -154,14 +160,30 @@ npm run build:release
 | [云端部署](docs/正式云端部署.md) | 核对云环境、数据库规则与云函数部署 |
 | [版本与发布](docs/版本与发布.md) | 更新版本号、校验构建与准备微信上传 |
 | [首页素材维护](docs/项目首页维护.md) | 更新封面、截图与顶部徽章 |
+| [宣传素材](docs/images/promotion/README.md) | 下载小程序码、分享封面和宣传海报 |
+| [推广与增长](docs/推广与增长.md) | 查看推广计划、渠道建议与介绍文案 |
 | [开发协作](CONTRIBUTING.md) | 反馈问题、提出改进、提交代码 |
 
 ## 反馈与协作
 
-有仓库权限的伙伴可以通过 [Issues](https://github.com/pydaxing/shiyuan/issues) 记录问题与想法。描述遇到问题的页面、操作步骤、期望结果和实际表现，会让修复更快；截图请先遮挡个人资料和家庭邀请码。
+欢迎通过 [Issues](https://github.com/pydaxing/shiyuan/issues/new/choose) 记录问题与想法。描述遇到问题的页面、操作步骤、期望结果和实际表现，会让修复更快；截图请先遮挡个人资料和家庭邀请码。
 
 准备修改代码时，从 [开发协作](CONTRIBUTING.md) 开始。希望每一次改进，都让一家人更轻松地决定吃什么、一起把饭做好。
 
-<br />
+## 体验食愿小灶
+
+今晚吃什么，可以从一家人都想吃的一道菜开始。打开微信，搜索小程序 **「食愿小灶」**，或者扫一扫下面的小程序码。
+
+<picture>
+  <source media="(max-width: 600px)" srcset="docs/images/promotion/readme-cta-bottom-compact.png" />
+  <img src="docs/images/promotion/readme-cta-bottom.png" alt="今晚吃什么，一起决定。微信搜索「食愿小灶」，或扫描小程序码，收藏想吃的、一起点菜、安排下厨。" width="100%" />
+</picture>
+
+<p align="center">
+  <a href="docs/images/promotion/mini-program-code-1280.jpg">查看小程序码</a> ·
+  <a href="docs/images/promotion/poster.png">保存宣传海报</a> ·
+  <a href="https://github.com/pydaxing/shiyuan/issues/new/choose">反馈使用感受</a><br />
+  如果食愿对你有帮助，欢迎 Star 关注后续进展，也欢迎把它分享给每天一起商量吃什么的人。
+</p>
 
 <p align="center"><strong>食愿 · 好好吃饭，一起生活。</strong></p>

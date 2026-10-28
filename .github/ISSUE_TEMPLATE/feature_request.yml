@@ -1,0 +1,22 @@
+name: 功能建议
+description: 从真实吃饭和做饭的场景出发，告诉我们哪里可以更好。
+title: "[建议] "
+body:
+  - type: textarea
+    id: scenario
+    attributes:
+      label: 你遇到了什么麻烦？
+      description: 例如两个人很难一起定菜单，或者采购时容易漏掉配料。
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 希望怎样改善？
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 你现在怎样解决？（可选）
+      description: 有哪些可借鉴的方法，或尝试过但不合适的做法？

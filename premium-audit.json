@@ -29,7 +29,7 @@
     }
   ],
   "mode": "strict",
-  "projectRoot": "/Users/chengsong/Workspace/home/codex/食愿",
+  "projectRoot": ".",
   "schemaVersion": 1,
   "summary": {
     "errors": 3,

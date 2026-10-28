@@ -6,7 +6,7 @@
 - 微信开发者工具中使用唯一 `dist/release` 的现有真实云数据，只读检查「今天 / 晚餐 / 备菜中」的「白菜梗炒牛肉」：右侧头像消失，菜图和「1人想吃」保留，三个操作位置不变；点击仍能打开原菜品详情，关闭后正常返回。切换「我家」确认家庭成员头像及资料编辑入口保留。当前真实数据仅有这一张活动餐卡，其他状态通过共享模板与回归覆盖，不声称现场制造或验证历史餐卡。
 - 定向95项、完整1581项测试通过；微信构建、原生交互检查及Web构建通过，Web只构建、不用于验收。原生检查确认厨房无头像组件和占位、多人想吃人数不变、选餐确认仍可查看与移除菜品，同时保留家庭头像更新和匿名回退校验。最终开发工具Errors 0、Warnings 18，为既有弃用 / WXSS / 资源预加载提示。
 - 源码哈希确认运行时仅 `MealDishList.vue` 和 `styles.css` 改动；已校验AppID、云环境及云函数，359个正式预览文件与本轮微信构建一致。严格UI审计仍仅有 `MenuSwipeRow.vue` 三处既有WXS委托按钮误报，无新增；官方设计lint仍受离线依赖缓存缺失限制，不将其描述为通过。
-- 证据目录：`/Users/chengsong/.codex/visualizations/2026/09/23/01a0cc80-1b76-7f73-830c-7b37f0ee1844/kitchen-without-voter-avatars-20261023/`，包含修改前备份、真实厨房 / 家庭 / 详情截图、测试、构建和最终一致性校验。最终效果为 `final-kitchen-phone.png`；仅使用390px iPhone 12/13模拟器，未使用浏览器或模拟数据、未修改真实记录、未部署云函数、上传或发布小程序。
+- 证据目录：`<本机验收记录目录>/kitchen-without-voter-avatars-20261023/`，包含修改前备份、真实厨房 / 家庭 / 详情截图、测试、构建和最终一致性校验。最终效果为 `final-kitchen-phone.png`；仅使用390px iPhone 12/13模拟器，未使用浏览器或模拟数据、未修改真实记录、未部署云函数、上传或发布小程序。
 
 ## 2026-10-23：仅收紧美食卡片间距（当前验收）
 
@@ -14,7 +14,7 @@
 - 顶部标题 / 导航 / 搜索仍为8px边距，卡片内文字留白、60px摘要最小高度、字号、图片比例、6px圆角、白卡与 `#fafafa` 背景保持原样。其他页面、弹窗与详情渐变不变；骨架与真实卡片共用相同间距。源码哈希确认本轮运行时代码仅 `src/styles.css` 变化。
 - 在唯一 `dist/release` 的微信开发者工具、390px iPhone 12/13模拟器中，用现有真实云数据观察修改前后效果：卡片与边缘更贴近，横纵间隙一致，顶部工具条位置和搜索宽度保持原样；菜单页仍保持原间距。实际下拉显示「正在刷新」，完成后恢复列表并保留推荐选中状态。最终Errors 0、Warnings 15，为既有API弃用 / WXSS / 资源预加载警告；未使用浏览器或虚拟数据，未改动任何真实记录，未进行真机或额外窄屏验收。
 - 定向80项、完整1580项测试通过；微信构建与原生检查、Web构建均通过，Web仅构建不作验收。AppID、云环境、云函数验证通过，本轮构建与正式预览的359个文件一致（独立项目配置保留）。严格UI审计仍仅有 `MenuSwipeRow.vue` 三处既有WXS委托按钮误报；官方设计lint因离线缓存缺少 `micromark-extension-mdxjs` 未完成，不将两者描述为通过，未额外安装依赖。
-- 证据目录：`/Users/chengsong/.codex/visualizations/2026/09/23/01a0cc80-1b76-7f73-830c-7b37f0ee1844/community-gutters-20261023/`。`reference-spacing.json` 保存采样，`before-native.png` 与 `final-feed-native.png` 保存实际前后预览，`final-feed-phone.png` 为最终原生截图裁剪，`refresh.ax.txt` 记录实际刷新状态；备份、测试、构建和预览一致性记录同目录。仅本地编译同步，未部署云函数、上传或发布小程序。
+- 证据目录：`<本机验收记录目录>/community-gutters-20261023/`。`reference-spacing.json` 保存采样，`before-native.png` 与 `final-feed-native.png` 保存实际前后预览，`final-feed-phone.png` 为最终原生截图裁剪，`refresh.ax.txt` 记录实际刷新状态；备份、测试、构建和预览一致性记录同目录。仅本地编译同步，未部署云函数、上传或发布小程序。
 
 ## 2026-10-23：美食轻灰背景与顶部下拉刷新（当前验收）
 
@@ -24,7 +24,7 @@
 - 在唯一 `dist/release` 微信开发者工具、390px iPhone 12/13模拟器中，使用现有真实云数据检查轻灰卡片间隙、原生下拉时的「正在刷新」及自动恢复、最新排序和「牛肉」搜索保留、无结果时下拉、列表滚动和真实菜品详情返回原位置。对照菜单页背景未变；未新增、修改、删除真实记录，未点击导入、选菜、发布等写操作，未使用浏览器或演示数据代替验收。未进行真机或额外窄屏验收。
 - 定向71项、完整1580项测试通过，`npm run build:weixin`、原生交互产物检查及 `npm run build:web` 通过；Web仅构建、不用于验收。AppID / 云环境 / 云函数目标校验通过，正式预览与本轮微信构建的359个文件一致（保留独立项目配置）。源码哈希确认仅5个既有美食相关文件和1个新增滚动组合函数变化，没有覆盖其他会话改动。
 - 严格UI审计仍有 `MenuSwipeRow.vue` 三处既有WXS委托按钮误报，无新增，不将严格审计描述为通过。官方设计文档离线lint因缺少缓存依赖 `micromark-extension-mdxjs` 未能完成，未安装额外依赖。原生开发工具未见新增运行错误；既有API弃用、WXSS与资源预加载警告仍存在。
-- 证据目录：`/Users/chengsong/.codex/visualizations/2026/09/23/01a0cc80-1b76-7f73-830c-7b37f0ee1844/community-surface-refresh-20261023/`。`refresh-centered-phone.png` 是最终居中刷新样式，`search-refresh-final-native.png`、`empty-refresh-native.png` 记录真实搜索与无结果刷新，`detail-return-comparison.png` 为同一详情打开前后的原生截图并排裁剪；备份、测试、构建、审计及最终目标 / 文件一致性记录保存在同目录。仅同步本地正式预览，未部署云函数、上传或发布小程序。
+- 证据目录：`<本机验收记录目录>/community-surface-refresh-20261023/`。`refresh-centered-phone.png` 是最终居中刷新样式，`search-refresh-final-native.png`、`empty-refresh-native.png` 记录真实搜索与无结果刷新，`detail-return-comparison.png` 为同一详情打开前后的原生截图并排裁剪；备份、测试、构建、审计及最终目标 / 文件一致性记录保存在同目录。仅同步本地正式预览，未部署云函数、上传或发布小程序。
 
 ## 2026-10-23：详情封面与正文上沿自然衔接（当前验收）
 
@@ -32,7 +32,7 @@
 - 保留24px上浮、16px圆角及全部边距，滚动渐白顶栏、作者与统计的入口区分、标签位置、按钮文案、菜单图片圆角和业务逻辑均未改。源码前后哈希确认本轮仅 `src/styles.css` 变化，另更新对应回归和设计约定。
 - 在唯一 `dist/release` 微信开发者工具中，只读检查真实菜单「蒜香黑椒牛肉粒」与美食「生椰抹茶」详情：浓色菜品图和浅色饮品图均保留照片主体色彩，上沿没有原来的纯白硬切线；正文清晰，美食作者、封面类别和图标加数字的统计正常。390px iPhone 12/13模拟器最终显示Errors 0、Warnings 17，为既有API弃用、WXSS选择器和资源预加载提示；未进行真机或额外窄屏验收。
 - 定向29项、完整1567项测试通过，`npm run build:weixin` 及原生编译检查通过。严格UI审计仍为 `MenuSwipeRow.vue` 三处既有WXS委托按钮误报，无新增，不将严格审计描述为通过。预览目标校验通过，正式预览 `app.wxss` 与本轮构建一致。
-- 证据目录：`/Users/chengsong/.codex/visualizations/2026/09/23/01a0cc80-1b76-7f73-830c-7b37f0ee1844/detail-seam-polish-20261023/`。`menu-detail-after-phone.png`、`community-detail-after-phone.png` 为原生截图裁剪，`seam-before-after-native.png` 是同一道菜修改前后衔接区域的并排裁剪；测试、构建、备份和目标校验记录同目录保存。未修改真实数据、未使用演示数据、未部署云函数、上传或发布小程序。
+- 证据目录：`<本机验收记录目录>/detail-seam-polish-20261023/`。`menu-detail-after-phone.png`、`community-detail-after-phone.png` 为原生截图裁剪，`seam-before-after-native.png` 是同一道菜修改前后衔接区域的并排裁剪；测试、构建、备份和目标校验记录同目录保存。未修改真实数据、未使用演示数据、未部署云函数、上传或发布小程序。
 
 ## 2026-10-23：详情入口信息分工与菜单图片圆角（当前验收）
 
@@ -41,14 +41,14 @@
 - 微信现场验证：真实菜单「蒜香黑椒牛肉粒」详情显示「＋选择」且没有作者 / 统计；厨房既有「白菜梗炒牛肉」只读详情同样隐藏两项，列表图片圆角与菜单一致。美食「豆瓣肉末烧豆腐」标题下显示真实作者「元气满满的马卡龙」，图片右下完整显示图标和真实0，按钮为「＋加入菜单」，无重复统计或「家庭」可见单位。
 - 首次原生检查发现计数的百分比最大宽度在自定义组件宿主内二次收缩，导致数字被挤掉；改为固有宽度且不收缩后重新编译、同步并截图确认恢复。最终证据为 `community-detail-final-native.png` / `community-detail-final-phone.png`，早期 `community-count-before-fix-native.png` 仅记录修复前问题。
 - 定向48项、完整1567项测试通过；`npm run build:weixin` 与全部原生编译检查通过。严格UI审计仍仅有 `MenuSwipeRow.vue` 三处既有WXS委托按钮误报，无新增；不将严格审计描述为通过。设计文档仅更新本轮行为约定，不修改已有颜色、字号、圆角token。
-- 证据与备份目录：`/Users/chengsong/.codex/visualizations/2026/09/23/01a0cc80-1b76-7f73-830c-7b37f0ee1844/detail-context-20261023/`。仅使用同一 `dist/release`、真实云数据、390px iPhone 12/13微信开发者工具模拟器；未改动真实记录、未点击选菜 / 导入 / 编辑保存 / 删除。采购、日记、套餐及好友落地页仅经共享组件和自动化回归覆盖，不声称逐页现场或窄屏、真机验证。仅本地编译及同一预览同步，未部署云函数、上传或发布小程序。
+- 证据与备份目录：`<本机验收记录目录>/detail-context-20261023/`。仅使用同一 `dist/release`、真实云数据、390px iPhone 12/13微信开发者工具模拟器；未改动真实记录、未点击选菜 / 导入 / 编辑保存 / 删除。采购、日记、套餐及好友落地页仅经共享组件和自动化回归覆盖，不声称逐页现场或窄屏、真机验证。仅本地编译及同一预览同步，未部署云函数、上传或发布小程序。
 
 ## 2026-10-23：详情封面渐隐减淡（当前验收）
 
 - 仅微调共享封面底部渐变：高度由图片的36%收窄为正文卡片覆盖量加20px，可见上缘保持极低透明度，较强渐隐藏在卡片下面。保留滚动渐白顶栏、圆角正文卡、按钮、发布者和家庭数布局。
 - 已在唯一 `dist/release` 微信开发者工具中只读打开真实「白菜梗炒牛肉」详情并检查截图：照片与分类标签不再大片泛白，正文卡上缘只保留很轻的衔接。使用390px的iPhone 12/13模拟器，没有操作用户数据，不将此描述为真机微信验收。
 - 定向39项、完整1564项测试通过；微信构建与原生编译检查通过，编译与真实预览的 `app.wxss` 一致。严格UI审计仍仅报告 `MenuSwipeRow.vue` 三处既有WXS委托按钮误报，无新增发现。
-- 截图及日志：`/Users/chengsong/.codex/visualizations/2026/09/23/01a0cc80-1b76-7f73-830c-7b37f0ee1844/detail-fade-refinement-20261023/`；`after-native.png` 为原始截图，`after-phone.png` 为同一截图的手机区域裁剪。仅前端重编译并更新同一预览，未部署云函数、上传或发布小程序。
+- 截图及日志：`<本机验收记录目录>/detail-fade-refinement-20261023/`；`after-native.png` 为原始截图，`after-phone.png` 为同一截图的手机区域裁剪。仅前端重编译并更新同一预览，未部署云函数、上传或发布小程序。
 
 ## 2026-10-23：详情参考图二次精修（当前验收）
 
@@ -64,7 +64,7 @@
 - 详情三个点打开「编辑 / 删除」尖角气泡，层级高于详情且未遮挡标题，点击外部正常收起。鼠标滚轮在气泡遮罩上不会滚动其后正文，因此不把它记为触摸滚动关闭的现场证明；原生滚动事件关闭状态有组件 / 编译回归覆盖。本轮没有执行删除、编辑保存、公开导入、发送分享、发布或下单。
 - 已查看 `reference-vs-native.png` 并排对照：保留食愿蓝灰配色、黄金比例封面与食材 / 做法信息，不复制外卖价格、黄按钮、评论或商家推荐；对照图两边初始滚动位置和内容不同，不声称像素级复刻。
 
-证据目录：`/Users/chengsong/.codex/visualizations/2026/09/23/01a0cc80-1b76-7f73-830c-7b37f0ee1844/detail-polish-20261023/`。
+证据目录：`<本机验收记录目录>/detail-polish-20261023/`。
 
 验证：`npm test` 1564项通过；`npm run build:weixin` 及其中的原生编译检查通过，新增原生编译后scroll事件、透明度往返、署名和未知计数检查。严格UI静态审计仍报告 `MenuSwipeRow.vue` 三处既有WXS委托按钮误报，不能称全仓静态审计通过；既有WXS行为回归及编译检查确认委托动作有效。本轮未新增同类审计发现。
 
@@ -81,8 +81,8 @@ final result: passed
 ### 参考与当前产物
 
 - 参考：用户附件 `codex-clipboard-bdd2d4db-9368-44f3-9b14-440cd8bb8ac5.png` 和 `codex-clipboard-8792471d-895a-4ebb-8074-9891c459d341.jpg`。
-- 唯一原生预览：`/Users/chengsong/Workspace/home/codex/食愿/dist/release`，AppID `wx1fe9d6db08a0e91b`，云环境 `cloudbase-d8gqg3oqed7609824`，函数 `kitchen-v2`，经 `verifyPreviewTarget` 核对。不使用浏览器或演示项目。
-- 当前截图、并排对照和日志目录：`/Users/chengsong/.codex/visualizations/2026/09/23/01a0cc80-1b76-7f73-830c-7b37f0ee1844/detail-share-layout-20261023/`。
+- 唯一原生预览：`dist/release`，AppID `wx1fe9d6db08a0e91b`，云环境 `cloudbase-d8gqg3oqed7609824`，函数 `kitchen-v2`，经 `verifyPreviewTarget` 核对。不使用浏览器或演示项目。
+- 当前截图、并排对照和日志目录：`<本机验收记录目录>/detail-share-layout-20261023/`。
 - `menu-detail-final.png` 为开发者工具原始截图；`menu-detail-phone.png` 仅裁去编辑器外框，没有改变应用内容；`reference-versus-native.png` 将参考和实际截图等宽并排，已打开进行逐项比较。两边菜品、系统安全区和商业模块不同，不以内容或像素完全一致作为判定。
 
 ### 对照与修正
