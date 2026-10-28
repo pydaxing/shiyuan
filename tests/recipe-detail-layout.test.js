@@ -39,7 +39,7 @@ test('every step photo preserves the whole image, including multi-photo steps', 
 });
 
 test('ingredient and method counts share heading typography and a middle dot separator', () => {
-  const headings = nodes.filter(node => hasClass(node, 'recipe-section-heading'));
+  const headings = nodes.filter(node => hasClass(node, 'recipe-section-heading') && !hasClass(node, 'recipe-guide-heading'));
   assert.equal(headings.length, 2);
   for (const heading of headings) {
     const labels = heading.children.filter(node => node.type === 1);
@@ -66,7 +66,8 @@ test('reader hides generic imported step headings without removing meaningful ti
   assert.equal(title.props.find(prop => prop.name === 'if').exp.content, 'recipeStepTitle(step)');
   const stepLead = nodes.find(node => hasClass(node, 'recipe-step-lead'));
   assert.match(stepLead.loc.source, /step-number/);
-  assert.match(stepLead.loc.source, /step-body/);
+  assert.doesNotMatch(stepLead.loc.source, /step-body/);
+  assert.ok(nodes.find(node => hasClass(node, 'recipe-step')).children.some(node => node.type === 1 && hasClass(node, 'step-body')));
   assert.ok(nodes.some(node => hasClass(node, 'recipe-method-empty') && node.props.some(prop => prop.name === 'if' && prop.exp.content === '!recipe.steps.length')));
 });
 

@@ -193,6 +193,7 @@ export function validateRecipe(recipe, options) {
   const error = Object.values(recipeFieldErrors(recipe, options))[0];
   if (error) throw new Error(error);
   validateImage(recipe.image);
+  if (recipe.guideImage !== undefined) validateImage(recipe.guideImage);
   if (recipe.nutrition !== undefined && (typeof recipe.nutrition !== 'string' || recipe.nutrition.length > 500)) throw new Error('营养疗效最多 500 字');
   if (recipe.provenance !== undefined) {
     const provenance = recipe.provenance;

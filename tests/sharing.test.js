@@ -30,3 +30,11 @@ test('oversized embedded images fail before producing an unimportable share', as
   const platform = { getFileSystemManager: () => ({ readFile: ({ success }) => success({ data: 'A'.repeat(500000) }) }) };
   await assert.rejects(portableShare(recipe, [recipe], '我', 'dish', platform), /图片无效/);
 });
+
+test('optional recipe guide survives share export without becoming a cooking step', async () => {
+  const recipe = { ...createSeed().recipes[0], guideImage: '/static/guide.png' };
+  const exported = parseShare(await portableShare(recipe, [recipe], '我', 'dish', {}));
+  assert.equal(exported.recipes[0].guideImage, recipe.guideImage);
+  assert.deepEqual(exported.recipes[0].steps, recipe.steps);
+  assert.throws(() => parseShare(JSON.stringify({ ...exported, recipes: [{ ...exported.recipes[0], guideImage: { image: 'bad' } }] })), /图片/);
+});

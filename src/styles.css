@@ -1669,3 +1669,15 @@ button.nav-item.touch-feedback, button.nav-item:active:not([disabled]), .content
   .family-member-grid { gap: 4px; }
   .feature-icon { display: flex; }
 }
+
+/* Shared recipe detail: faded continuation beneath the expand control. */
+.recipe-ingredients-section { position: relative; }
+.recipe-disclosure { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 44px; padding: 10px 16px; border: 0; background: transparent; color: var(--green); font-size: var(--type-meta); }
+.recipe-disclosure-fade { position: relative; z-index: 1; margin-top: -74px; min-height: 74px; padding-top: 24px; background: linear-gradient(to bottom, transparent 0%, var(--white) 85%); border-radius: 0; }
+.recipe-disclosure::after { border: 0; }
+.disclosure-chevron { width: 7px; height: 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); margin-top: -4px; }
+.disclosure-chevron.is-expanded { transform: rotate(225deg); margin-top: 4px; }
+.ingredient-list-folded { overflow: hidden; padding-bottom: 0; border-radius: var(--radius-control) var(--radius-control) 0 0; }
+.ingredient-list-folded .ingredient-row-peek { height: 36px; min-height: 0; box-sizing: border-box; overflow: hidden; white-space: nowrap; }
+.ingredient-list-folded .ingredient-row-peek:nth-child(6):last-child { height: 72px; }
+.recipe-step > .step-body { margin-top: 8px; line-height: 26px; }

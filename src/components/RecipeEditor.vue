@@ -41,7 +41,7 @@ const error = ref('');
 const saving = ref(false);
 const submitted = ref(false);
 const fieldRefs = {};
-const draft = computed(() => ({ title: title.value, category: category.value, servings: 2, minutes: String(minutes.value).trim() === '' ? null : minutes.value, image: image.value, nutrition: nutrition.value, ingredients: ingredients.value, steps: cleanSteps(steps.value) }));
+const draft = computed(() => ({ title: title.value, category: category.value, servings: 2, minutes: String(minutes.value).trim() === '' ? null : minutes.value, image: image.value, ...(props.recipe?.guideImage ? { guideImage: props.recipe.guideImage } : {}), nutrition: nutrition.value, ingredients: ingredients.value, steps: cleanSteps(steps.value) }));
 const fieldErrors = computed(() => submitted.value ? recipeFieldErrors({ ...draft.value, steps: steps.value }, { requireStepTitles: true }) : {});
 function changeIngredientUnit(ingredient, unit) {
   const input = ingredientInput(ingredient);

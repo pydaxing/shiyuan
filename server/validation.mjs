@@ -9,7 +9,7 @@ const id = value => { if (typeof value !== 'string' || !/^[\w-]{1,200}$/.test(va
 const optionalId = value => value ? id(value) : '';
 
 function normalizeRecipeFields(input) {
-  const recipe = pick(object(input), ['title', 'category', 'minutes', 'image', 'nutrition', 'ingredients', 'steps', 'provenance']);
+  const recipe = pick(object(input), ['title', 'category', 'minutes', 'image', 'guideImage', 'nutrition', 'ingredients', 'steps', 'provenance']);
   if (recipe.provenance !== undefined) recipe.provenance = pick(object(recipe.provenance), ['source', 'url', 'license', 'attribution', 'note']);
   recipe.servings = 2;
   if (!Array.isArray(recipe.ingredients) || !Array.isArray(recipe.steps)) invalid('请填写食材和做法');

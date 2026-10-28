@@ -12,6 +12,7 @@ export async function portableShare(item, recipes, author, kind = 'dish', platfo
   payload.image = await portable(payload.image);
   for (const recipe of payload.recipes) {
     recipe.image = await portable(recipe.image);
+    if (recipe.guideImage) recipe.guideImage = await portable(recipe.guideImage);
     for (const step of recipe.steps) {
       if (step.images) step.images = await Promise.all(step.images.map(portable));
       else step.image = await portable(step.image);
