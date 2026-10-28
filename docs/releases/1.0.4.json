@@ -13,7 +13,7 @@
   "validation": {
     "testsPassed": 2137,
     "regression": "Prior code reproduced reported CONFLICT by patching the rendered object in place. Clone boundary passes three sequential fridge toggles without corrupting confirmed baseline.",
-    "nativePreview": "Real cloud dist/release family settings page opened read-only. No live feature toggle without specific user authorization; phone experience build not yet retested.",
+    "nativePreview": "2026-10-28: User explicitly authorized one fridge toggle and restoration. Verified official dist/release AppID/cloud target. In real cloud family UI, original off -> on (tab changed from shopping to ingredients) -> off (shopping restored), no visible synchronization/conflict errors. Reopened project via named native menu and confirmed original off state persisted. Mobile experience build remains untested.",
     "existingFailures": "Old local blocked operations preserved. User may discard explicitly failed feature settings then toggle again; do not clear unrelated or uncertain commands."
   },
   "artifact": {
