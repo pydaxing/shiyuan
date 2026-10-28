@@ -1,0 +1,19 @@
+node_modules/
+dist/
+.DS_Store
+.env
+.env.*
+!.env.example
+project.private.config.json
+artifacts/
+.archify/
+*.log
+*.private.json
+.npmrc
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Generated from server/wechat.mjs by npm run build:cloud
+/cloudfunctions/kitchen/index.js

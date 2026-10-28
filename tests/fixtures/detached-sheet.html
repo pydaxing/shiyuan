@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>独立弹层样式回归</title>
+  <link rel="stylesheet" href="/styles.css">
+  <style>
+    page, view, scroll-view { display: block; }
+    .fixture-page { padding: 30px 18px; }
+    .fixture-page .recipe-grid { margin-top: 90px; }
+    .fixture-page .recipe-card { min-height: 210px; padding: 20px; }
+    .fixture-page .fixture-nav { position: fixed; bottom: 0; left: 0; right: 0; padding: 24px; background: #fffefa; }
+    .fixture-capsule { position: fixed; right: 12px; top: 66px; z-index: 200; padding: 7px 14px; border-radius: 22px; background: #ffffffdd; }
+    .portal-host { --paper: initial; --white: initial; --ink: initial; --green: initial; --green-light: initial; --muted: initial; --line: initial; --orange: initial; color: black; font-family: serif; font-size: 16px; line-height: normal; }
+    .fixture-sheet { height: calc(100dvh - 120px); }
+    .fixture-sheet .sheet-scroll { overflow: auto; }
+    .fixture-recipes { min-height: 640px; }
+    .fixture-note { display: block; margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <page class="app-shell fixture-page">
+    <text class="page-heading">我家菜单</text>
+    <view class="recipe-grid"><view class="recipe-card">底层菜品卡片</view><view class="recipe-card">不应穿透弹窗</view><view class="recipe-card">底层套餐卡片</view></view>
+    <view class="fixture-nav">点餐　　广场　　采购　　家庭</view>
+  </page>
+  <view class="fixture-capsule">•••　◉</view>
+  <section class="portal-host">
+    <view class="app-shell sheet-root">
+      <view class="sheet-backdrop">
+        <view class="sheet-mask"></view>
+        <view class="sheet fixture-sheet" role="dialog" aria-label="独立弹层复现">
+          <view class="sheet-header"><text class="sheet-title">这一餐，就吃这些</text><button class="icon-button" aria-label="关闭弹窗">×</button></view>
+          <scroll-view class="sheet-scroll">
+            <view class="sheet-content">
+              <view class="checkout-schedule"><text class="subheading">哪一餐吃？</text><view class="meal-bar"><view class="reservation-days"><button class="active">今天</button><button>明天</button><button>后天</button></view><view class="meal-tabs"><button>早餐</button><button>午餐</button><button class="active">晚餐</button><button>宵夜</button></view></view></view>
+              <view class="fixture-recipes"><text class="fixture-note">这里是弹窗内容，不应看见底层菜单。</text><view class="ingredient-list"><view class="ingredient-row">番茄炒蛋</view><view class="ingredient-row">玉米排骨汤</view></view></view>
+              <text class="fixture-note">已经滚动到弹层底部</text>
+            </view>
+          </scroll-view>
+          <view class="sheet-footer"><button class="primary-button full">送到厨房</button></view>
+        </view>
+      </view>
+    </view>
+  </section>
+</body>
+</html>

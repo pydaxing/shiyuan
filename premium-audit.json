@@ -1,0 +1,41 @@
+{
+  "findings": [
+    {
+      "category": "violation",
+      "file": "src/components/MenuSwipeRow.vue",
+      "line": 156,
+      "message": "Enabled literal button has no detectable action or submit behavior.",
+      "remediation": "Connect the button to a real action, make it a submit button, or disable/remove it.",
+      "ruleId": "affordance.actionless-button",
+      "severity": "error"
+    },
+    {
+      "category": "violation",
+      "file": "src/components/MenuSwipeRow.vue",
+      "line": 158,
+      "message": "Enabled literal button has no detectable action or submit behavior.",
+      "remediation": "Connect the button to a real action, make it a submit button, or disable/remove it.",
+      "ruleId": "affordance.actionless-button",
+      "severity": "error"
+    },
+    {
+      "category": "violation",
+      "file": "src/components/MenuSwipeRow.vue",
+      "line": 159,
+      "message": "Enabled literal button has no detectable action or submit behavior.",
+      "remediation": "Connect the button to a real action, make it a submit button, or disable/remove it.",
+      "ruleId": "affordance.actionless-button",
+      "severity": "error"
+    }
+  ],
+  "mode": "strict",
+  "projectRoot": "/Users/chengsong/Workspace/home/codex/食愿",
+  "schemaVersion": 1,
+  "summary": {
+    "errors": 3,
+    "total": 3,
+    "unresolved": 0,
+    "violations": 3,
+    "warnings": 0
+  }
+}

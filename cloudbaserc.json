@@ -1,0 +1,14 @@
+{
+  "envId": "cloudbase-d8gqg3oqed7609824",
+  "functionRoot": "cloudfunctions",
+  "functions": [
+    {
+      "name": "kitchen-v2",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 60,
+      "memorySize": 256,
+      "installDependency": true
+    }
+  ]
+}

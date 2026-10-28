@@ -1,0 +1,4 @@
+{
+  "pages": [{ "path": "pages/index/index", "style": { "onReachBottomDistance": 360, "navigationStyle": "custom", "navigationBarTitleText": "食愿" } }, { "path": "pages/invite/index", "style": { "navigationBarTitleText": "家人邀请", "navigationBarBackgroundColor": "#ffffff" } }, { "path": "pages/shared/index", "style": { "navigationBarTitleText": "食愿小灶", "navigationBarBackgroundColor": "#ffffff" } }],
+  "globalStyle": { "backgroundColor": "#ffffff", "navigationBarTextStyle": "black" }
+}

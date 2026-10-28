@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "rulesFile": "database-rules.json",
+  "collections": [
+    { "name": "users", "indexes": [] },
+    { "name": "families", "indexes": [] },
+    { "name": "family_public_ids", "indexes": [] },
+    { "name": "recipes", "indexes": [["familyId", "_id"]] },
+    { "name": "meal_sets", "indexes": [["familyId", "_id"]] },
+    { "name": "orders", "indexes": [["familyId", "_id"]] },
+    { "name": "inventory", "indexes": [["familyId", "_id"]] },
+    { "name": "purchases", "indexes": [["familyId", "_id"]] },
+    { "name": "posts", "indexes": [["status", "_id"], ["status", "kind", "_id"], ["status", "categories", "_id"], ["status", "kind", "categories", "_id"], ["status", "assetIds", "_id"], ["familyId", "status", "_id"], ["familyId", "familyItemId", "status", "_id"], ["familyId", "familyItemId", "familyKind", "publisherId", "_id"]] },
+    { "name": "comments", "indexes": [["postId", "_id"]] },
+    { "name": "invites", "indexes": [] },
+    { "name": "shares", "indexes": [] },
+    { "name": "requests", "indexes": [] },
+    { "name": "media", "indexes": [] },
+    { "name": "imports", "indexes": [] },
+    { "name": "reports", "indexes": [["status", "createdAt"]] },
+    { "name": "rate_limits", "indexes": [] }
+  ]
+}

@@ -1,0 +1,116 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { createSeed } from '../src/data/seed.js';
+import { aggregateItems, completeOrder, formatAmount, getShoppingRequirements, makeOrder, mergeMealSelection, normalizeSnapshot, purchaseQuantity, validateSnapshot } from '../src/domain/kitchen.js';
+
+const date = '2026-09-07';
+const base = () => ({ id: 'order', recipes: createSeed().recipes, member: { id: 'me', name: '我' }, date, meal: '晚餐' });
+test('two members share a dish once, with both member identities', () => {
+  const first = makeOrder({ ...base(), cart: { tomato: 1 } });
+  const second = makeOrder({ ...base(), id: 'second', cart: { tomato: 1, chicken: 1 }, member: { id: 'partner', name: '家人' } });
+  const result = mergeMealSelection(first, second);
+  assert.equal(result.id, first.id);
+  assert.equal(result.items.length, 2);
+  assert.deepEqual(result.items[0].chosenBy, [{ id: 'me', name: '我' }, { id: 'partner', name: '家人' }]);
+  assert.equal(aggregateItems(result.items).find((item) => item.name === '番茄').quantity, 400);
+  assert.equal(first.items[0].chosenBy.length, 1);
+});
+test('updating one member selection preserves other members and stable cooking snapshots', () => {
+  const first = makeOrder({ ...base(), cart: { tomato: 1 }, note: '少盐' });
+  const second = makeOrder({ ...base(), cart: { tomato: 1 }, member: { id: 'partner', name: '家人' } });
+  const meal = mergeMealSelection(first, second);
+  const update = makeOrder({ ...base(), cart: { tomato: 1, soup: 1 }, note: '少辣' });
+  update.selections[0].items[0].recipe.ingredients[0].quantity = 900;
+  const result = mergeMealSelection(meal, update);
+  assert.equal(result.selections.length, 2);
+  assert.equal(result.items[0].recipe.ingredients[0].quantity, 400);
+  assert.equal(result.items[0].chosenBy.length, 2);
+  assert.equal(result.items[1].chosenBy.length, 1);
+  assert.equal(result.note, '我：少辣');
+});
+test('different dates or meal slots cannot merge; completed meals cannot reopen', () => {
+  const first = makeOrder({ ...base(), cart: { tomato: 1 } });
+  assert.throws(() => mergeMealSelection(first, { ...first, meal: '午餐' }), /同一天同一餐/);
+  assert.throws(() => mergeMealSelection(first, { ...first, date: '2026-09-08' }), /同一天同一餐/);
+  assert.throws(() => mergeMealSelection({ ...first, status: 'completed' }, first), /结束/);
+});
+test('old active orders migrate to one standard meal; completed history is untouched', () => {
+  const state = createSeed();
+  const legacy = { ...makeOrder({ ...base(), cart: { soup: 1 } }), diners: 4, entries: [{ id: 'soup', title: '汤', quantity: 2, kind: 'dish' }] };
+  delete legacy.selections;
+  legacy.items[0].quantity = 2; legacy.items[0].scale = 4 / 3;
+  state.orders = [legacy, { ...structuredClone(legacy), id: 'another', status: 'accepted', memberId: 'partner', memberName: '家人' }, { ...structuredClone(legacy), id: 'done', status: 'completed' }];
+  state.purchases = [{ id: 'purchase', name: '玉米', quantity: 3, unit: '根', orderIds: ['order', 'another'] }];
+  const next = normalizeSnapshot(state);
+  assert.equal(next.orders.length, 2);
+  assert.equal(next.orders[0].status, 'accepted');
+  assert.equal(next.orders[0].diners, undefined);
+  assert.equal(next.orders[0].items[0].quantity, 1);
+  assert.equal(next.orders[0].items[0].scale, undefined);
+  assert.equal(next.orders[0].items[0].chosenBy.length, 2);
+  assert.equal(aggregateItems(next.orders[0].items).find((item) => item.name === '玉米').quantity, 2);
+  assert.deepEqual(next.orders[1], state.orders[2]);
+  assert.deepEqual(next.purchases[0].orderIds, ['order']);
+  assert.doesNotThrow(() => validateSnapshot(next));
+  assert.deepEqual(normalizeSnapshot(next), next);
+  assert.equal(state.orders.length, 3);
+});
+test('legacy repeated submissions by the same member do not double votes or quantities', () => {
+  const state = createSeed();
+  const legacy = makeOrder({ ...base(), cart: { tomato: 1 } });
+  delete legacy.selections;
+  state.orders = [legacy, { ...structuredClone(legacy), id: 'twice' }];
+  const result = normalizeSnapshot(state);
+  assert.equal(result.orders.length, 1);
+  assert.equal(result.orders[0].selections.length, 1);
+  assert.equal(result.orders[0].items[0].chosenBy.length, 1);
+  assert.equal(result.orders[0].items[0].quantity, 1);
+});
+test('legacy purchasing rounds counts while completion leaves fractional cooking stock unchanged', () => {
+  const state = normalizeSnapshot(createSeed());
+  state.family.features.fridge = true;
+  const recipe = { ...state.recipes[0], ingredients: [{ name: '玉米', unit: '根', quantity: 0.5 }] };
+  state.orders = [makeOrder({ ...base(), recipes: [recipe], cart: { tomato: 1 } })];
+  state.inventory = [];
+  const [required] = getShoppingRequirements(state, date);
+  assert.equal(required.quantity, 0.5);
+  assert.equal(required.missing, 0.5);
+  assert.equal(required.toBuy, 1);
+  state.orders[0].status = 'accepted';
+  state.inventory = [{ id: 'corn', name: '玉米', quantity: 1, unit: '根' }];
+  assert.equal(completeOrder(state, 'order', date).inventory[0].quantity, 1);
+});
+test('round procurement only after combining shortages across all meals', () => {
+  const state = normalizeSnapshot(createSeed());
+  const recipe = { ...state.recipes[0], ingredients: [{ name: '玉米', unit: '根', quantity: 0.3 }] };
+  state.orders = [makeOrder({ ...base(), recipes: [recipe], cart: { tomato: 1 } }), makeOrder({ ...base(), id: 'lunch', meal: '午餐', recipes: [recipe], cart: { tomato: 1 } })];
+  state.inventory = [];
+  const [required] = getShoppingRequirements(state, date);
+  assert.equal(required.missing, 0.6);
+  assert.equal(required.toBuy, 1);
+});
+test('weights round to full grams, count units to whole pieces and display stays concise', () => {
+  assert.equal(purchaseQuantity(0.666666, '根'), 1);
+  assert.equal(purchaseQuantity(333.333333, 'g'), 334);
+  assert.equal(purchaseQuantity(0.333333, 'kg'), 0.334);
+  assert.equal(purchaseQuantity(0, '个'), 0);
+  assert.equal(purchaseQuantity(2, '个'), 2);
+  assert.equal(formatAmount(500, 'g'), '500 g');
+  assert.equal(formatAmount(1.333333, '根'), '1 又 1/3 根');
+  assert.equal(formatAmount(333.333333, 'g'), '约 333 g');
+  assert.equal(formatAmount(0, 'g'), '0 g');
+  assert.equal(formatAmount(0.5, '根'), '半根');
+});
+test('all quantity and date selectors use consistent custom controls, no portion input', () => {
+  for (const file of ['RecipeEditor', 'StockEditor', 'MealBar']) assert.doesNotMatch(readFileSync(new URL(`../src/components/${file}.vue`, import.meta.url), 'utf8'), /<picker\b/);
+  const home = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
+  assert.doesNotMatch(home, /diners|changeQuantity/);
+  assert.match(home, /RecipeSheet v-if="orderRecipe"/);
+  const community = readFileSync(new URL('../src/components/CommunityView.vue', import.meta.url), 'utf8');
+  assert.doesNotMatch(community, /我家近|cookingCount/);
+  assert.doesNotMatch(community, /已加入的家庭|近 7 天做过的家庭|community-stats/);
+  assert.match(community, /<RecipeContent v-if="current.kind === 'dish'"/);
+  assert.match(readFileSync(new URL('../src/components/RecipeContent.vue', import.meta.url), 'utf8'), /营养疗效/);
+  assert.match(community, /发布评论/);
+});

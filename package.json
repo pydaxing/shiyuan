@@ -1,0 +1,37 @@
+{
+  "name": "shiyuan-family-kitchen",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "uni --host 127.0.0.1 --port 5173",
+    "preview": "node scripts/preview.mjs",
+    "preview:weixin": "node scripts/preview-weixin.mjs",
+    "build:web": "uni build",
+    "build:cloud": "node scripts/build-cloud.mjs",
+    "build:release": "node scripts/build-release.mjs",
+    "build:weixin": "uni build -p mp-weixin && node scripts/check-native-inputs.mjs && node scripts/check-family-entry-taps.mjs && node scripts/check-native-images.mjs && node scripts/check-native-interactions.mjs",
+    "test": "node --test tests/*.test.js",
+    "assets": "node scripts/build-art.mjs && node scripts/build-ui-art.mjs",
+    "check": "npm test && npm run build:web && npm run build:weixin",
+    "release:check": "node scripts/check-release-version.mjs",
+    "release:upload": "node scripts/upload-weixin.mjs"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "3.0.0-5020420260813003",
+    "@dcloudio/uni-components": "3.0.0-5020420260813003",
+    "@dcloudio/uni-h5": "3.0.0-5020420260813003",
+    "@dcloudio/uni-mp-weixin": "3.0.0-5020420260813003",
+    "solarlunar": "3.1.0",
+    "vue": "3.4.21",
+    "vue-i18n": "9.14.5"
+  },
+  "devDependencies": {
+    "@babel/core": "7.25.2",
+    "@babel/preset-env": "7.29.7",
+    "@dcloudio/types": "3.4.31",
+    "@dcloudio/vite-plugin-uni": "3.0.0-5020420260813003",
+    "sharp": "0.34.3",
+    "vite": "5.2.8"
+  }
+}

@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" fill="none">
+  <title>食愿</title>
+  <desc>墨绿底色，奶油白屋檐与饭碗，暖杏色爱心。</desc>
+  <rect width="1024" height="1024" fill="#355E45"/>
+  <path d="M272 438L493 263C504 254 520 254 531 263L752 438" stroke="#FFFAEB" stroke-width="54" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M512 473L461 426C422 390 466 340 502 372L512 382L522 372C558 340 602 390 563 426L512 473Z" fill="#EAB18C"/>
+  <path d="M295 516H729C739 516 746 524 744 534C724 653 638 723 512 723C386 723 300 653 280 534C278 524 285 516 295 516Z" fill="#FFFAEB"/>
+  <path d="M442 765H582" stroke="#FFFAEB" stroke-width="30" stroke-linecap="round"/>
+</svg>
