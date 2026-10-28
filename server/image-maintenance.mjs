@@ -21,7 +21,7 @@ export function createImageMaintenance({ repository, prepare, now = Date.now }) 
       try {
         if (error) throw error;
         if (!record?.confirmed || record.fileId !== fileId || !record.encryptionKey) throw Object.assign(new Error('图片不存在或需要重新上传'), { code: 'IMAGE_REUPLOAD' });
-        for (const variant of ['card', 'detail']) await prepare(fileId, record, variant);
+        for (const variant of (record.profile ? ['card', 'detail', 'avatar'] : ['card', 'detail'])) await prepare(fileId, record, variant);
         return { fileId };
       } catch (error) { return { fileId, code: error.code || 'INTERNAL' }; }
     }

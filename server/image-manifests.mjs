@@ -10,7 +10,7 @@ export function createImageManifestReader({ repository, readImage, now = Date.no
     if (!readImage) return [];
     const distinct = new Map();
     for (const candidate of candidates) {
-      if (!candidate || !['card', 'detail'].includes(candidate.variant) || typeof candidate.fileId !== 'string' || !candidate.fileId.startsWith('cloud://') || candidate.fileId.length > 1000) continue;
+      if (!candidate || !['card', 'detail', 'avatar'].includes(candidate.variant) || typeof candidate.fileId !== 'string' || !candidate.fileId.startsWith('cloud://') || candidate.fileId.length > 1000) continue;
       const key = imageVersion(candidate.fileId, candidate.variant);
       if (!distinct.has(key)) distinct.set(key, candidate);
       if (distinct.size === 6) break;

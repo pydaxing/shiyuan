@@ -68,7 +68,7 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
   async function familyImageManifests(userId, family, profile, snapshot) {
     const members = family?.members || [];
     const self = members.find(member => member.id === userId);
-    const candidates = [imageCandidate(family?.cover, 'detail'), imageCandidate(self?.avatar || profile?.avatar), ...(snapshot?.recipes || []).slice(0, 4).map(recipe => imageCandidate(recipe.image)), ...members.map(member => imageCandidate(member.avatar))];
+    const candidates = [imageCandidate(family?.cover, 'detail'), imageCandidate(self?.avatar || profile?.avatar, 'avatar'), ...(snapshot?.recipes || []).slice(0, 4).map(recipe => imageCandidate(recipe.image)), ...members.map(member => imageCandidate(member.avatar, 'avatar'))];
     const allowed = new Set(imageReferences({ family, recipes: snapshot?.recipes || [] }));
     return loadImageManifests(candidates, (record, image) => allowed.has(image.fileId) || (record.profile && record.userId === userId && profile?.avatar === image.fileId));
   }
@@ -431,7 +431,7 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
     if (action === 'profileUpload') {
       if (typeof event.base64 !== 'string' || !event.base64.length || event.base64.length > 700000 || event.base64.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(event.base64)) fail('头像格式或大小无效');
       await throttle(userId, 'profileUpload', 10);
-      const stored = await storeImageBytes(Buffer.from(event.base64, 'base64'), { familyId: `profile-${userId}`, userId });
+      const stored = await storeImageBytes(Buffer.from(event.base64, 'base64'), { familyId: `profile-${userId}`, userId, profile: true });
       await repository.set('media', hash(stored.fileId), { ...stored, userId, familyId: `profile-${userId}`, profile: true, confirmed: true, createdAt: now() });
       return { fileId: stored.fileId };
     }

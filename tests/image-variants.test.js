@@ -8,7 +8,7 @@ import { createMediaBatch } from '../src/services/media-batch.js';
 import { COVER_RATIOS } from '../src/domain/image-crop.js';
 
 test('image variants have separate immutable cache versions and originals retain the legacy key', () => {
-  for (const variant of ['original', 'card', 'detail']) {
+  for (const variant of ['original', 'card', 'detail', 'avatar']) {
     const key = imageVersion('cloud://env/photo.bin', variant);
     assert.deepEqual(imageRequest(key), { fileId: 'cloud://env/photo.bin', variant });
   }
@@ -110,4 +110,13 @@ test('transport retries are bounded and never retry explicit permission failures
     await assert.rejects(fetch({ fileId: 'photo', variant: 'card' }));
     assert.equal(calls, code === 'NETWORK_ERROR' ? 2 : 1);
   }
+});
+
+
+test('avatars are bounded to 192 pixels and 20 KB even for high-detail large uploads', async () => {
+  const source = await sharp(randomBytes(1200 * 1200 * 3), { raw: { width: 1200, height: 1200, channels: 3 } }).png().toBuffer();
+  const avatar = await createDisplayImage(source, 'avatar');
+  assert.ok(avatar.width <= 192 && avatar.height <= 192);
+  assert.ok(avatar.size <= 20000);
+  assert.ok(avatar.size < source.length / 20);
 });

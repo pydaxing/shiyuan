@@ -27,7 +27,7 @@ async function fixture({ latency = 15, images = 6, legacyCards = false } = {}) {
     const card = { id: postId, title: recipe.title, kind: 'dish', image: fileId, author: '作者', categories: [recipe.category], publisherId: 'publisher', recipes: [{ id: recipe.id, title: recipe.title, category: recipe.category, image: fileId, minutes: recipe.minutes }] };
     await storage.set('posts', postId, { ...card, card: legacyCards ? undefined : card, assetIds: [fileId], status: 'published', recipes: [recipe] });
     const delivery = { version: 1, fileId: `private-card-${index}`, contentType: 'image/jpeg', bytes: 17000 };
-    await storage.set('media', digest(fileId), { familyId: 'public-source', fileId, confirmed: true, encryptionKey: 'private-key', variants: { card: { delivery, formatVersion: 1 }, detail: { delivery, formatVersion: 1 } } });
+    await storage.set('media', digest(fileId), { familyId: 'public-source', fileId, confirmed: true, encryptionKey: 'private-key', variants: { avatar: { delivery, formatVersion: 1 }, card: { delivery, formatVersion: 1 }, detail: { delivery, formatVersion: 1 } } });
     requests.push({ fileId, variant: 'card', postId, transport: 'url' });
   }
   const operations = [];
@@ -300,11 +300,11 @@ test('opt-in bootstrap manifests cover the first screen without another family a
   }
   const result = await server.call('bootstrap', { includeFeed: false, includeImageManifests: true });
   assert.equal(result.ok, true);
-  assert.equal(result.data.imageManifests.length, 5);
+  assert.equal(result.data.imageManifests.length, 6);
   assert.equal(result.data.imageManifests[0].fileId, family.cover);
   assert.equal(result.data.imageManifests[0].variant, 'detail');
   assert.equal(result.data.imageManifests[1].fileId, family.members[0].avatar);
-  assert.equal(result.data.imageManifests[1].variant, 'card');
+  assert.equal(result.data.imageManifests[1].variant, 'avatar');
   assert.equal(server.operations.filter(item => item.collection === 'users').length, 2);
   assert.equal(server.operations.filter(item => item.collection === 'families').length, 2);
   assert.equal(server.operations.filter(item => item.collection === 'media').length, 1);

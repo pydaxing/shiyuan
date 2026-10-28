@@ -22,9 +22,9 @@ function blurNickname(event) {
 }
 async function uploadAvatar(path) {
   pendingPreview.value = path;
-  const thumbnail = await compressNativePhoto(path, 'card');
+  const thumbnail = await compressNativePhoto(path, 'avatar');
   pendingPreview.value = thumbnail;
-  const fileId = await uploadProfileAvatar(path, { cardPath: thumbnail, onStage: stage => { progress.value = imageUploadLabel(stage); } });
+  const fileId = await uploadProfileAvatar(path, { cardPath: thumbnail, avatarPath: thumbnail, onStage: stage => { progress.value = imageUploadLabel(stage); } });
   progress.value = '100%';
   preview.value = thumbnail;
   emit('update:avatar', fileId);
@@ -60,7 +60,7 @@ async function choose(event) {
     <view class="profile-photo-actions">
       <button role="button" class="profile-avatar-button" :class="{ 'is-uploading': uploading }" :aria-label="uploading ? '头像上传中' : '编辑头像'" :aria-busy="uploading" :disabled="uploading || disabled" :open-type="nativeAvatarPicker ? 'chooseAvatar' : undefined" @click="choosePhoto" @chooseavatar="choose" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">
         <view class="profile-avatar-portrait">
-          <view class="profile-avatar-frame"><image class="profile-avatar-image" v-if="pendingPreview || preview || avatar" :src="pendingPreview || preview || $image(avatar)" mode="aspectFill" /><text v-else class="avatar">我</text><ImageUploadProgress v-if="uploading" :value="progress" compact /></view>
+          <view class="profile-avatar-frame"><image class="profile-avatar-image" v-if="pendingPreview || preview || avatar" :src="pendingPreview || preview || $image(avatar, 'avatar')" mode="aspectFill" /><text v-else class="avatar">我</text><ImageUploadProgress v-if="uploading" :value="progress" compact /></view>
           <view v-if="!uploading" class="profile-avatar-camera" aria-hidden="true"><AppIcon name="camera-inverse" :size="12" /></view>
         </view>
       </button>

@@ -62,7 +62,7 @@ const protectedImages = createMediaCache({
   concurrency: 6,
   maxEntries: 400,
   maxBytes: 48 * 1024 * 1024,
-  priority: key => imageRequest(key).variant === 'original',
+  priority: key => ['original', 'avatar'].includes(imageRequest(key).variant),
   fetchImage: (key, knownVersion) => {
     const image = imageRequest(key);
     const manifest = imageManifests.get(key);
@@ -470,6 +470,7 @@ export async function uploadProfileAvatar(path, previews = {}) {
   const confirmed = await transferImage(path, 'profileMediaTicket', 'profileMediaConfirm', undefined, previews.previewPath || previews.cardPath, previews.onStage);
   if (cloudStatus.value.userId !== userId) throw new Error('登录状态已变更，请重新上传');
   await primeUploadedPreview(confirmed.fileId, previews);
+  if (previews.avatarPath) await protectedImages.prime(imageVersion(confirmed.fileId, 'avatar'), previews.avatarPath).catch(() => {});
   return confirmed.fileId;
 }
 

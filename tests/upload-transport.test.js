@@ -175,7 +175,10 @@ test('original photos and bounded previews travel as files through the full clie
   assert.equal(denied.ok, false, 'another user cannot sign a private family original');
   assert.equal(transfers.length, 12);
   assert.ok(transfers.every(item => !storedFiles.has(item.fileID)), 'server removes temporary unencrypted originals');
-  assert.equal(savedCount, 32);
+  assert.equal(savedCount, 34); // profile avatar adds encrypted and private delivery thumbnails
+  assert.ok(avatarRecord.variants.avatar.bytes <= 20000);
+  assert.ok(avatarRecord.variants.avatar.width <= 192);
+  assert.equal((await module.exports.main({ action: 'mediaContent', fileId: avatar, variant: 'avatar' })).ok, true);
   assert.ok(calls.some(call => call.transport === 'url'));
   assert.ok(calls.every(item => !('base64' in item) && Buffer.byteLength(JSON.stringify(item)) < 1024));
   assert.equal(rows.get(`users:${userId}`).familyId, 'test-family');

@@ -8,6 +8,7 @@ import { decodeDatabaseJson } from './admin-recipe-import.mjs';
 
 const execute = promisify(execFile);
 const live = process.argv.includes('--live');
+const profilesOnly = process.argv.includes('--profiles-only');
 const argument = name => { const index = process.argv.indexOf(name); return index >= 0 ? process.argv[index + 1] : undefined; };
 const concurrency = Number(argument('--concurrency') || 2);
 assert.ok(Number.isInteger(concurrency) && concurrency >= 1 && concurrency <= 3, '图片处理并发数仅支持 1–3');
@@ -52,7 +53,7 @@ try {
     const fileIds = [];
     let after = '';
     while (true) {
-      const rows = await database('media', 'QUERY', { find: 'media', filter: { confirmed: true, ...(after ? { _id: { $gt: after } } : {}) }, projection: { _id: 1, fileId: 1 }, sort: { _id: 1 }, limit: 100 });
+      const rows = await database('media', 'QUERY', { find: 'media', filter: { confirmed: true, ...(profilesOnly ? { profile: true } : {}), ...(after ? { _id: { $gt: after } } : {}) }, projection: { _id: 1, fileId: 1 }, sort: { _id: 1 }, limit: 100 });
       assert.ok(Array.isArray(rows));
       for (const row of rows) if (typeof row.fileId === 'string' && row.fileId.startsWith('cloud://')) fileIds.push(row.fileId);
       if (rows.length < 100) break;
@@ -60,11 +61,12 @@ try {
       after = rows.at(-1)._id;
     }
     const unique = [...new Set(fileIds)];
-    plan = { environment: config.envId, createdAt: new Date().toISOString(), jobs: [] };
+    plan = { environment: config.envId, profilesOnly, createdAt: new Date().toISOString(), jobs: [] };
     for (let offset = 0; offset < unique.length; offset += 500) plan.jobs.push({ id: `image-job-${randomUUID().replaceAll('-', '')}`, fileIds: unique.slice(offset, offset + 500) });
     await save('plan.json', plan);
   }
   assert.equal(plan.environment, config.envId, '不能跨环境恢复图片任务');
+  assert.equal(Boolean(plan.profilesOnly), profilesOnly, '不能更改已有图片任务范围');
   const total = plan.jobs.reduce((count, job) => count + job.fileIds.length, 0);
   console.log(JSON.stringify({ live, total, jobs: plan.jobs.length, output, changes: '仅生成私有缩略图；不修改菜品、头像引用或原图' }));
   if (live) {

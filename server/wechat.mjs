@@ -82,7 +82,7 @@ async function saveImageWithVariants(bytes, ticket, preview) {
   const saved = await saveEncryptedImage(bytes, ticket);
   const variants = {};
   try {
-    for (const variant of ['card', 'detail']) variants[variant] = await saveVariant(preview || bytes, variant, ticket);
+    for (const variant of (ticket.profile ? ['card', 'detail', 'avatar'] : ['card', 'detail'])) variants[variant] = await saveVariant(preview || bytes, variant, ticket);
     return { ...saved, variants, contentType: imageContentType(bytes), bytes: bytes.length };
   } catch (error) {
     await removeTrackedFiles(options => cloud.deleteFile(options), [saved.fileId, ...Object.values(variants).flatMap(item => [item.fileId, item.delivery?.fileId])], ticket);
@@ -145,7 +145,7 @@ const delivery = createImageDelivery({
 
 async function readImage(fileId, record, variant = 'original', { transport, preparedOnly = false } = {}) {
   if (preparedOnly) {
-    if (!privateDeliveryEnabled || transport !== 'url' || !['card', 'detail'].includes(variant) || record.variants?.[variant]?.formatVersion !== 1 || record.variants[variant].delivery?.version !== 1) return null;
+    if (!privateDeliveryEnabled || transport !== 'url' || !['card', 'detail', 'avatar'].includes(variant) || record.variants?.[variant]?.formatVersion !== 1 || record.variants[variant].delivery?.version !== 1) return null;
     return delivery.manifest(fileId, record, variant);
   }
   if (transport === 'url' && privateDeliveryEnabled) return delivery.manifest(fileId, record, variant);

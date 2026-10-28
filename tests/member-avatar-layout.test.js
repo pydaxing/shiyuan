@@ -29,7 +29,7 @@ test('family avatars retain current member photos and shared anonymous rendering
   assert.ok(photo);
   assert.ok(hasClass(photo, 'member-avatar-image'));
   for (const name of ['avatar', 'round']) assert.ok(photo.props.some(prop => prop.name === name), name);
-  assert.equal(photo.props.find(prop => prop.name === 'variant')?.value?.content, 'card');
+  assert.equal(photo.props.find(prop => prop.name === 'variant')?.value?.content, 'avatar');
   assert.ok(!photo.props.some(prop => prop.arg?.content === 'fallback'), 'missing pictures use the anonymous icon, not nickname initials');
   const portrait = nodes('FamilyView').find(node => hasClass(node, 'member-photo'));
   assert.ok(!portrait.props.some(prop => prop.name === 'if'), 'members without photos still get a visible avatar container');

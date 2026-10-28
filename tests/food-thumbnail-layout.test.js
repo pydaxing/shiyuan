@@ -92,7 +92,7 @@ test('member and author avatars stay round while food thumbnails use landscape f
   for (const selector of ['.round-photo', '.round-photo .lazy-photo-image', '.round-photo .lazy-photo-placeholder', '.round-photo .lazy-photo-retry']) {
     assert.equal(declarationsFor(selector, photoStyles).get('border-radius'), '50%', selector);
   }
-  assert.match(readSource('components/FamilyView.vue'), /<LazyImage class="member-avatar-image" :src="member.avatar" variant="card" avatar round\s*\/>/);
+  assert.match(readSource('components/FamilyView.vue'), /<LazyImage class="member-avatar-image" :src="member.avatar" variant="avatar" avatar round\s*\/>/);
 });
 
 test('flexible recipe text cannot stretch golden-ratio thumbnails in selection and detail lists', () => {

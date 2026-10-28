@@ -38,7 +38,7 @@ function editProfile() {
       <view class="section-line family-members-heading"><text class="subheading">家庭成员</text><text class="muted">{{ state.family.members.length }} 人</text></view>
       <view class="member-grid family-member-grid">
         <view v-for="member in state.family.members" :key="member.id" class="member-card" :class="{ 'is-self': activeMember.id === member.id }">
-          <view class="member-portrait"><view class="member-photo"><LazyImage class="member-avatar-image" :src="member.avatar" variant="card" avatar round /></view><view v-if="state.family.headMemberId === member.id" class="head-crown" aria-label="一家之主"><AppIcon name="crown" active /></view></view>
+          <view class="member-portrait"><view class="member-photo"><LazyImage class="member-avatar-image" :src="member.avatar" variant="avatar" avatar round /></view><view v-if="state.family.headMemberId === member.id" class="head-crown" aria-label="一家之主"><AppIcon name="crown" active /></view></view>
           <text class="member-name">{{ member.name || '家人' }}</text><text class="member-status">{{ activeMember.id === member.id ? '我' : '家人' }}</text><text v-if="state.family.headMemberId === member.id" class="member-status member-head-label">一家之主</text>
           <button v-if="activeMember.id === member.id" class="member-profile-button" aria-label="编辑我的头像与昵称" @click.stop="$feedback(); editProfile()" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="member-profile-mark"><AppIcon name="edit" active /></view></button>
         </view>

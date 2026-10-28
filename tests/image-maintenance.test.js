@@ -70,3 +70,14 @@ test('missing media is reported per file without blocking valid files or leaking
   assert.equal(result.failures[0].code, 'IMAGE_REUPLOAD');
   assert.equal(JSON.stringify(result).includes('private'), false);
 });
+
+
+test('historical profile images also get an avatar thumbnail without changing their references', async () => {
+  const app = fixture();
+  const record = app.rows.get(`media:${hash(app.request.fileIds[0])}`);
+  record.profile = true;
+  const before = structuredClone(record);
+  assert.deepEqual((await app.run(app.request)).failures, []);
+  assert.deepEqual(app.calls.map(call => call.variant), ['card', 'detail', 'avatar', 'card', 'detail']);
+  assert.deepEqual(record, before);
+});

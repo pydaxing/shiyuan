@@ -162,7 +162,7 @@ test('profile camera photos preserve the dedicated profile upload ticket and bus
   await first;
   assert.equal(selections(), 1);
   assert.deepEqual(events, [
-    ['busy', true], ['compress', 'camera-avatar.jpg', 'card'],
+    ['busy', true], ['compress', 'camera-avatar.jpg', 'avatar'],
     ['upload', 'camera-avatar.jpg', 'card-avatar.jpg'], ['update:avatar', 'cloud://profile/avatar.jpg'], ['busy', false],
   ]);
   assert.equal(profile.preview.value, 'card-avatar.jpg');
