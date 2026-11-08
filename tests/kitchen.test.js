@@ -145,9 +145,10 @@ test('invalid units and nonfinite or nonpositive quantities are rejected', () =>
   assert.throws(() => validateIngredient(ingredient('', 1)), /名称/);
   assert.throws(() => validateIngredient(ingredient('番茄', 1, '适量')), /单位/);
 });
-test('recipe editor requires title and ingredients but allows omitted steps', () => {
+test('recipe editor requires title but permits empty optional ingredients and steps', () => {
   assert.throws(() => validateRecipe({ ...recipe(), title: '' }), /菜名/);
-  assert.throws(() => validateRecipe({ ...recipe(), ingredients: [] }), /食材/);
+  assert.doesNotThrow(() => validateRecipe({ ...recipe(), ingredients: [], steps: [] }));
+  assert.throws(() => validateRecipe({ ...recipe(), ingredients: [] }, { requireDetails: true }), /食材/);
   assert.doesNotThrow(() => validateRecipe({ ...recipe(), steps: [] }));
   assert.throws(() => validateRecipe({ ...recipe(), servings: 0 }), /份量/);
 });

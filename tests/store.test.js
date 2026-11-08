@@ -148,15 +148,17 @@ test('imported sets persist and repeated imports do not flatten or duplicate the
   assert.equal(store.state.value.recipes.length, previous.recipes.length);
   assert.doesNotThrow(() => validateSnapshot(JSON.parse(saved)));
 });
-test('editing imported dishes keeps set references and old orders unchanged', () => {
+test('editing imported dishes updates current set references and keeps old order IDs and contents unchanged', () => {
   const mealSet = store.state.value.mealSets[0];
   const dish = store.state.value.recipes.find((entry) => entry.id === mealSet.recipeIds[0]);
   store.submitOrder({ [`set:${mealSet.id}`]: 1 }, { date: localDate(), meal: '晚餐' }, '', 4);
   const oldTitle = dish.title;
-  store.saveRecipe({ ...dish, title: '修改后的豆腐' }, dish.id);
+  const forkId = store.saveRecipe({ ...dish, title: '修改后的豆腐' }, dish.id);
+  assert.notEqual(forkId, dish.id);
   assert.equal(store.state.value.orders[0].items[0].recipe.title, oldTitle);
-  assert.equal(store.state.value.mealSets[0].recipeIds[0], dish.id);
-  assert.equal(store.state.value.recipes.find((entry) => entry.id === dish.id).title, '修改后的豆腐');
+  assert.equal(store.state.value.orders[0].items[0].recipe.id, dish.id);
+  assert.equal(store.state.value.mealSets[0].recipeIds[0], forkId);
+  assert.equal(store.state.value.recipes.find((entry) => entry.id === forkId).title, '修改后的豆腐');
 });
 test('feature choices persist independently, disabled fridge purchases do not add stock', () => {
   const before = JSON.stringify(store.state.value.inventory);
@@ -194,8 +196,8 @@ test('member submissions upsert one kitchen order and preserve individual choice
   const slot = { date: localDate(), meal: '晚餐' };
   store.submitOrder({ tomato: 1, chicken: 1 }, slot, '少辣');
   store.switchMember('partner');
-  store.submitOrder({ tomato: 1 }, slot);
-  store.submitOrder({ tomato: 1, soup: 1 }, slot);
+  store.addOrderDishes(store.state.value.orders[0].id, { tomato: 1 });
+  store.addOrderDishes(store.state.value.orders[0].id, { tomato: 1, soup: 1 });
   const order = store.state.value.orders[0];
   assert.equal(store.state.value.orders.length, 1);
   assert.equal(order.items.length, 3);
@@ -204,18 +206,17 @@ test('member submissions upsert one kitchen order and preserve individual choice
   assert.equal(order.note, '我：少辣');
   assert.doesNotThrow(() => validateSnapshot(JSON.parse(saved)));
 });
-test('withdrawing selections retains the other member and cancels only an empty meal', () => {
+test('existing meal rejects empty resubmissions; kitchen cancellation permits rebooking', () => {
   const slot = { date: localDate(), meal: '晚餐' };
-  store.submitOrder({}, slot);
-  assert.equal(store.state.value.orders[0].items.length, 2);
-  assert.equal(store.state.value.orders[0].selections.length, 1);
-  store.switchMember('me');
-  store.submitOrder({}, slot);
-  assert.equal(store.state.value.orders[0].status, 'cancelled');
-  assert.doesNotThrow(() => validateSnapshot(JSON.parse(saved)));
+  const before = JSON.stringify(store.state.value);
+  assert.throws(() => store.submitOrder({}, slot), /已安排/);
+  assert.equal(JSON.stringify(store.state.value), before);
+  store.updateOrder(store.state.value.orders[0].id, 'cancelled');
   store.submitOrder({ soup: 1 }, slot);
-  assert.equal(store.state.value.orders.filter((order) => order.status === 'accepted').length, 1);
+  assert.equal(store.state.value.orders.filter(order => order.status === 'accepted').length, 1);
+  assert.doesNotThrow(() => validateSnapshot(JSON.parse(saved)));
 });
+
 test('meal slots stay separate and completed meals reject new selection', () => {
   resetFamilyFixture();
   const slot = { date: localDate(), meal: '晚餐' };
@@ -268,15 +269,17 @@ test('sharing publishes selected snapshots in the feed, not family private data 
   assert.equal(post.recipes.length, 1);
   assert.equal(post.recipes[0].steps.length, 3);
   for (const privateKey of ['family', 'members', 'orders', 'inventory', 'metrics']) assert.equal(post[privateKey], undefined);
-  store.saveRecipe({ ...store.state.value.recipes[0], title: '番茄炒蛋改版' }, 'tomato');
+  assert.throws(() => store.publishToCommunity('tomato'), error => error.code === 'ALREADY_SHARED');
+  const forkId = store.saveRecipe({ ...store.state.value.recipes[0], title: '番茄炒蛋改版' }, 'tomato');
+  assert.notEqual(forkId, 'tomato');
   assert.equal(store.state.value.posts[0].title, '番茄炒蛋');
   const before = saved;
-  assert.throws(() => store.publishToCommunity('tomato'), error => error.code === 'ALREADY_SHARED');
+  assert.throws(() => store.publishToCommunity('tomato'), /家庭菜单/);
   assert.equal(saved, before);
   assert.equal(store.state.value.posts.length, 1);
   assert.equal(store.state.value.posts[0].title, '番茄炒蛋');
   store.deleteCommunityPost(id);
-  const republished = store.publishToCommunity('tomato');
+  const republished = store.publishToCommunity(forkId);
   assert.notEqual(republished, id);
   assert.equal(store.state.value.posts[0].title, '番茄炒蛋改版');
   assert.doesNotThrow(() => validateSnapshot(JSON.parse(saved)));
@@ -313,7 +316,7 @@ test('publication, deletion and merged submissions remain atomic on storage fail
   const previous = saved;
   storageFull = true;
   try {
-    for (const action of [() => store.publishToCommunity('tomato'), () => store.removeFamilyEntry('tomato'), () => store.setChef(true), () => store.submitOrder({ soup: 1 }, slot)]) {
+    for (const action of [() => store.publishToCommunity('tomato'), () => store.removeFamilyEntry('tomato'), () => store.setChef(true), () => store.addOrderDishes(store.state.value.orders[0].id, { soup: 1 })]) {
       assert.throws(action, /保存失败/);
       assert.equal(saved, previous);
       assert.equal(JSON.stringify(store.state.value), previous);
@@ -377,11 +380,13 @@ test('nutrition saves, edits and publishes without leaking unshared private fiel
   store.saveRecipe({ ...store.state.value.recipes[0], nutrition: '  含蛋白质  ' }, 'tomato');
   const postId = store.publishToCommunity('tomato');
   assert.equal(store.state.value.posts[0].recipes[0].nutrition, '含蛋白质');
-  store.saveRecipe({ ...store.state.value.recipes[0], nutrition: '' }, 'tomato');
+  const forkId = store.saveRecipe({ ...store.state.value.recipes[0], nutrition: '' }, 'tomato');
+  assert.notEqual(forkId, 'tomato');
   assert.equal(store.state.value.posts[0].recipes[0].nutrition, '含蛋白质');
-  assert.throws(() => store.publishToCommunity('tomato'), error => error.code === 'ALREADY_SHARED');
+  assert.equal(store.state.value.recipes.find(recipe => recipe.id === forkId).nutrition, '');
+  assert.throws(() => store.publishToCommunity('tomato'), /家庭菜单/);
   store.deleteCommunityPost(postId);
-  store.publishToCommunity('tomato');
+  store.publishToCommunity(forkId);
   assert.equal(store.state.value.posts[0].recipes[0].nutrition, '');
 });
 test('likes, replies and post deletion roll back on storage failure', () => {

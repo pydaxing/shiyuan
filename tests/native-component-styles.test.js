@@ -24,7 +24,6 @@ test('native disabled appearance uses the same state as the actual disabled attr
     ['AddDishesSheet', 'locked || saving || entry.alreadySelected'],
     ['DishPreparationEditor', 'Boolean(unavailable) || ingredient.enabled === false'],
     ['DishReadyButton', 'disabled || busy'],
-    ['MealPreparationSheet', 'Boolean(pending(dish)) || dish.prepared'],
     ['ShareSheet', 'busy || syncing || !ready || entry.shared'],
   ]) {
     const source = readFileSync(new URL(`../src/components/${name}.vue`, import.meta.url), 'utf8');

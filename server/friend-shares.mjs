@@ -1,3 +1,5 @@
+import { workspaceDisplayName } from '../src/domain/workspace-identity.js';
+import { createIdentityPresentation } from './identity-presentation.mjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { makeShare } from '../src/domain/sharing.js';
 import { createKitchenActions } from '../src/domain/actions.js';
@@ -21,19 +23,19 @@ export function createFriendShares({ repository, membership, familyState, imageR
   async function handle(action, event, userId) {
     if (action === 'readShare') {
       const share = await read(repository, event.token);
-      const { familyId, familyItemId, familyKind, publisherId, publisherType, ...post } = share.post;
+      const { familyId, familyItemId, familyKind, publisherId, publisherType, ...post } = await createIdentityPresentation(repository).community(share.post);
       return { post };
     }
     if (action === 'createDishShare') {
       await throttle(userId, 'dishShare', 20);
       return repository.transaction(async db => {
-        const { family } = await membership(db, userId);
+        const { family, user } = await membership(db, userId);
         if (event.familyId && event.familyId !== family.id) fail('家庭已变更，请重试', 'CONFLICT');
         if (!['dish', 'set'].includes(event.kind)) fail('请选择菜品或套餐');
         const snapshot = await familyState(db, family, userId, false, ['recipes', 'mealSets']);
         const item = (event.kind === 'dish' ? snapshot.recipes : snapshot.mealSets).find(entry => entry.id === event.itemId);
         if (!item) fail('菜品或套餐已移除');
-        const post = JSON.parse(makeShare(item, snapshot.recipes, family.name, event.kind));
+        const post = JSON.parse(makeShare(item, snapshot.recipes, workspaceDisplayName(family, user), event.kind));
         Object.assign(post, { familyId: family.id, familyItemId: item.id, familyKind: event.kind, publisherId: userId, publisherType: 'user' });
         const token = randomBytes(24).toString('hex');
         post.id = `friend-${hash(token).slice(0, 32)}`;
@@ -55,7 +57,7 @@ export function createFriendShares({ repository, membership, familyState, imageR
         actions.addCollection({ ...share.post, familyId: share.familyId, publisherId: share.createdBy, publisherType: 'user' });
         await persist(db, before, snapshot, ['recipes', 'mealSets']);
       });
-      return bootstrap(userId, { includeFeed: false });
+      return bootstrap(userId, { includeFeed: false, defaultProfileVersion: event.defaultProfileVersion });
     }
   }
   return { read, handle };

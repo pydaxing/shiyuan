@@ -67,7 +67,7 @@ test('rapid removal taps cannot stack confirmations or dispatch a duplicate comm
   await context.remove(entry);
   assert.equal(context.modals.length, 1);
   assert.match(context.modals[0].content, /套餐/);
-  assert.match(context.modals[0].content, /厨房订单和美食分享保留/);
+  assert.match(context.modals[0].content, /餐单和美食分享保留/);
   context.modals[0].success({ confirm: true });
   await pending;
   assert.equal(context.writes.length, 1);

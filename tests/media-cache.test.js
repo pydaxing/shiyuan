@@ -169,6 +169,40 @@ function fixture(options = {}) {
   return { ...cache, urls, removed, errors };
 }
 
+test('scope changes retain only explicitly allowed fresh files without extending their lifetime', async () => {
+  let clock = 0;
+  const cache = fixture({ now: () => clock, checkImage: async () => true });
+  cache.activate('alice:family');
+  const avatar = await cache.load('self-avatar');
+  const privatePhoto = await cache.load('family-photo');
+  clock = 200000;
+  cache.activate('alice:personal', { retain: ['self-avatar'] });
+  assert.equal(cache.peek('self-avatar'), avatar, 'a verified avatar remains available synchronously');
+  assert.equal(cache.peek('family-photo'), '');
+  assert.deepEqual(cache.removed, [privatePhoto]);
+  clock = 300001;
+  cache.activate('alice:family', { retain: ['self-avatar'] });
+  assert.equal(cache.peek('self-avatar'), '', 'retaining cannot renew expired authorization');
+  assert.deepEqual(cache.removed, [privatePhoto, avatar]);
+});
+
+test('retaining an avatar still invalidates old in-flight requests and logout removes the avatar', async () => {
+  let finish;
+  const cache = fixture({ fetchImage: key => key === 'late' ? new Promise(resolve => { finish = resolve; }) : key });
+  cache.activate('alice:family');
+  const avatar = await cache.load('self-avatar');
+  const late = cache.load('late');
+  await new Promise(resolve => setImmediate(resolve));
+  cache.activate('alice:personal', { retain: ['self-avatar'] });
+  finish('private-image');
+  assert.equal(await late, '');
+  assert.equal(cache.peek('self-avatar'), avatar);
+  assert.equal(cache.peek('late'), '');
+  cache.clear();
+  assert.deepEqual(cache.urls.value, {});
+  assert.ok(cache.removed.includes(avatar));
+});
+
 test('expired immutable photo reauthorizes without downloading or rewriting identical bytes', async () => {
   let time = 0;
   let reject = false;

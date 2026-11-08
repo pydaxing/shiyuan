@@ -1,3 +1,4 @@
+import { isUnchangedCommunityRecipe } from '../src/domain/recipe-identity.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -94,26 +95,27 @@ test('invalid duration saves fail without mutating persisted state', () => {
   }
 });
 
-test('editor keeps the creation default but opens unknown duration as blank', () => {
+test('editor starts at twenty minutes and preserves existing duration', () => {
   assert.equal(editor().minutes.value, '20');
+  assert.equal(editor().draft.value.minutes, '20');
   for (const minutes of [null, 1, 25, 600]) {
     const form = editor(recipe(minutes));
-    assert.equal(form.minutes.value, minutes === null ? '' : String(minutes));
-    assert.equal(form.draft.value.minutes, minutes === null ? null : String(minutes));
+    assert.equal(form.minutes.value, minutes === null ? '20' : String(minutes));
+    assert.equal(form.draft.value.minutes, minutes === null ? '20' : String(minutes));
   }
 });
 
-test('editor saves blank duration as null, reopens blank and still validates entered minutes', async () => {
+test('editor persists blank duration as twenty, displays it after reopening and validates entered minutes', async () => {
   const context = fixture();
   const dish = context.state.recipes[0];
   const form = editor(dish, context.actions.saveRecipe);
   for (const blank of ['', ' \t ']) {
     form.minutes.value = blank;
-    assert.equal(form.draft.value.minutes, null);
+    assert.equal(form.draft.value.minutes, 20);
     await form.save();
     assert.equal(form.error.value, '');
-    assert.equal(context.state.recipes[0].minutes, null);
-    assert.equal(editor(context.state.recipes[0]).minutes.value, '');
+    assert.equal(context.state.recipes[0].minutes, 20);
+    assert.equal(editor(context.state.recipes[0]).minutes.value, '20');
   }
   for (const minutes of ['0', '601', '1.5', 'NaN']) {
     form.minutes.value = minutes;
@@ -173,13 +175,13 @@ test('dish and set orders keep null through member merges, selection edits and c
     actions.submitOrder({ [key]: 1 }, selection);
     assertUnknown();
     actions.switchMember('partner');
-    actions.submitOrder({ [dish.id]: 1 }, selection);
+    actions.addOrderDishes(context.state.orders[0].id, { [dish.id]: 1 });
     assert.equal(context.state.orders[0].selections.length, 2);
     assertUnknown();
-    actions.submitOrder({ [dish.id]: 1 }, selection, '少盐');
+    assert.throws(() => actions.submitOrder({ [dish.id]: 1 }, selection, '少盐'), /已安排/);
     assertUnknown();
-    actions.submitOrder({}, selection);
-    assert.equal(context.state.orders[0].selections.length, 1);
+    assert.throws(() => actions.submitOrder({}, selection), /已安排/);
+    assert.equal(context.state.orders[0].selections.length, 2);
     assertUnknown();
     actions.saveRecipe({ ...dish, minutes: '30' }, dish.id);
     assertUnknown();
@@ -211,10 +213,11 @@ test('set rows reuse metadata that omits unknown minutes and always shows the ca
     assert.ok(node.props.some(prop => prop.arg?.content === 'category' && prop.exp?.content === 'recipe.category'));
     assert.ok(node.props.some(prop => prop.arg?.content === 'minutes' && prop.exp?.content === 'recipe.minutes'));
   }
-  const duration = templateNodes('RecipeListMeta').find(node => node.tag === 'view' && node.props.some(prop => prop.name === 'if'));
+  const duration = templateNodes('RecipeListMeta').find(node => node.tag === 'view' && node.props.some(prop => prop.name === 'else-if'));
+  duration.loc.source = duration.loc.source.replace('v-else-if', 'v-if');
   const render = new Function('Vue', compile(duration.loc.source, { mode: 'function' }).code)(Vue);
-  for (const minutes of [null, undefined]) assert.equal(render({ minutes }, []).type, Vue.Comment);
-  for (const minutes of [1, 25, 600]) assert.equal(render({ minutes }, []).children.find(child => child.type === 'text').children, `${minutes} 分钟`);
+  for (const minutes of [null, undefined]) assert.equal(render({ minutes, foodMinutesLabel: presentation.foodMinutesLabel }, []).type, Vue.Comment);
+  for (const minutes of [1, 25, 600]) assert.equal(render({ minutes, foodMinutesLabel: presentation.foodMinutesLabel }, []).children.find(child => child.type === 'text').children, `${minutes} 分钟`);
 });
 
 test('cover tags omit unknown duration and preserve the exact known value', () => {
@@ -232,7 +235,7 @@ test('family menu metadata omits unknown minutes without changing set counts', (
   const source = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
   const declaration = source.match(/const menuEntries = computed\(\(\) => \[[\s\S]*?\n\]\);/)[0];
   const state = Vue.ref({ recipes: [recipe(), { ...recipe(25), id: 'known' }], mealSets: [{ id: 'pair', recipeIds: ['tomato', 'known', 'removed'] }] });
-  const entries = new Function('computed', 'state', `${declaration} return menuEntries.value;`)(Vue.computed, state);
+  const entries = new Function('computed', 'state', 'isUnchangedCommunityRecipe', `${declaration} return menuEntries.value;`)(Vue.computed, state, isUnchangedCommunityRecipe);
   const row = new Function('AppIcon', 'FoodThumbnail', 'foodMinutesLabel', componentSource('MenuSwipeRow').match(/<script>([\s\S]*?)<\/script>/)[1].replace(/^import .*;\s*$/gm, '').replace('export default', 'return'))({}, {}, presentation.foodMinutesLabel);
   const metadata = key => row.computed.secondaryMeta.call({ entry: entries.find(entry => entry.key === key) });
   assert.equal(metadata('tomato'), '');

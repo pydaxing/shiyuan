@@ -1,6 +1,7 @@
-import { ref } from 'vue';
+import { cloudTransportError } from './cloud-errors.js';
+import { computed, ref, watch } from 'vue';
 import { emptySnapshot } from '../domain/empty.js';
-import { INGREDIENT_UNITS_VERSION } from '../domain/ingredient-units.js';
+import { INGREDIENT_UNITS_VERSION, compatibleSpoonCommand } from '../domain/ingredient-units.js';
 import { createMediaCache } from './media-cache.js';
 import { createMediaBatch } from './media-batch.js';
 import { createImageStorage } from './image-storage.js';
@@ -12,11 +13,13 @@ import { invalidateCommunityFeed } from './community-feed.js';
 import { createCommandQueue } from './command-queue.js';
 import { createCommandJournal } from './command-journal.js';
 import { createImportProvenance } from './import-provenance.js';
+import { profileNameError } from '../domain/family.js';
+import { DEFAULT_PROFILE_VERSION, profileWithDefaults, compatibleDefaultProfilePayload, isDefaultAvatar } from '../domain/default-profile.js';
 
 export const cloudMode = import.meta.env?.VITE_DATA_MODE === 'cloud';
 export const cloudEnvironment = import.meta.env?.VITE_CLOUD_ENV || '';
 export const cloudFunction = import.meta.env?.VITE_CLOUD_FUNCTION || 'kitchen';
-export const cloudStatus = ref({ phase: cloudMode ? 'connecting' : 'local', error: '', revision: 0, busy: false, syncing: false, pending: 0, userId: '', familyId: '', familyRecoveryRequired: false });
+export const cloudStatus = ref({ phase: cloudMode ? 'connecting' : 'local', mealSharingVersion: 0, error: '', revision: 0, busy: false, syncing: false, pending: 0, userId: '', familyId: '', familyRecoveryRequired: false });
 export const commandQueueStatus = ref({ pendingCount: 0, syncing: false, operations: [], failures: [] });
 export const mutationStatus = ref({ pending: [], failures: [] });
 export const mediaUrls = ref({});
@@ -25,9 +28,30 @@ export const mediaRecovery = ref(0);
 export const mediaScopeRevision = ref(0);
 const mediaContexts = new Map();
 export const accountProfile = ref({ name: '', avatar: '' });
+let profileBaseline;
+export const accountProfilePreview = ref(null);
+export const familyModePreview = ref(null);
+export const personalModePreview = ref(null);
+const familyAppearanceCache = createPersistentCache(`shiyuan-family-appearance-v1-${cloudEnvironment}-${cloudFunction}`, { maxEntries: 1, maxChars: 6000, writeDelay: 150 });
+const personalAppearanceCache = createPersistentCache(`shiyuan-personal-appearance-v1-${cloudEnvironment}-${cloudFunction}`, { maxEntries: 1, maxChars: 6000, writeDelay: 150 });
+function rememberedAppearance(userId) {
+  return Boolean(userId && [familyAppearanceCache, personalAppearanceCache].some(cache => cache.get(userId)?.userId === userId));
+}
+function rememberWorkspaceAppearance(userId, family) {
+  if (!userId || !family?.id || !family.members?.some(member => member.id === userId)) return;
+  const personal = family.kind === 'personal';
+  const preview = personal ? personalModePreview : familyModePreview;
+  preview.value = { userId, id: family.id, name: family.name, cover: family.cover || '', memberCount: family.members.length };
+  (personal ? personalAppearanceCache : familyAppearanceCache).set(userId, preview.value);
+}
 let shareMediaToken = '';
 let inviteMediaToken = '';
 let stateRef;
+export const currentIdentity = computed(() => ({
+  userId: cloudStatus.value.userId, spaceId: cloudStatus.value.familyId,
+  profile: accountProfilePreview.value || accountProfile.value,
+  family: stateRef?.value.family,
+}));
 let initialized = false;
 let requestSequence = 0;
 let pendingRefresh;
@@ -75,6 +99,9 @@ const protectedImages = createMediaCache({
 });
 export function bindCloudState(state) {
   stateRef = state;
+  watch(() => JSON.stringify([state.value.family.id, state.value.family.name, state.value.family.cover, state.value.family.members?.map(member => [member.id, member.name, member.avatar]), accountProfile.value]), (next, previous) => {
+    if (previous && next !== previous) { postDetails.clear(); invalidateCommunityFeed({ reset: false }); }
+  });
   let renderedScope = '';
   commandQueue = createCommandQueue({
     snapshot: state.value,
@@ -92,6 +119,9 @@ export function bindCloudState(state) {
     },
     refresh: () => cloudCall('bootstrap'),
     onChange: snapshot => {
+      // Defaults are presentation only. Never let package paths enter the
+      // command queue's confirmed snapshot, journal, or dependency checks.
+      if (cloudMode && snapshot.family?.id && snapshot.family.members?.length) snapshot = { ...snapshot, family: { ...snapshot.family, members: snapshot.family.members.map(member => ({ ...member, ...profileWithDefaults(member, member.id) })) } };
       const scope = commandQueue?.getScope() || '';
       if ((renderedScope && scope !== renderedScope) || snapshot.family.id !== stateRef.value.family.id || snapshot.activeMemberId !== stateRef.value.activeMemberId) stateRef.value = snapshot;
       else for (const [field, value] of Object.entries(snapshot)) if (JSON.stringify(stateRef.value[field]) !== JSON.stringify(value)) stateRef.value[field] = value;
@@ -119,6 +149,8 @@ function ensureQueueContext() {
 }
 function clearCloudIdentity(error) {
   clearPrivateCache();
+  accountProfile.value = { name: '', avatar: '' };
+  profileBaseline = undefined;
   cloudStatus.value = { ...cloudStatus.value, familyId: '', userId: '', revision: 0, phase: error.code === 'NO_FAMILY' ? 'onboarding' : 'error' };
   commandQueue.activate(emptySnapshot(), queueContext());
 }
@@ -138,9 +170,12 @@ export function mergeCloudCommunity({ posts = [], comments = [], removePostIds =
   };
   commandQueue.receive(next, commandQueue.getRevision());
 }
-function clearImages() { protectedImages.clear(); imageManifests.clear(); mediaFailures.value = {}; mediaContexts.clear(); mediaScopeRevision.value += 1; }
-function activateImages(scope) { protectedImages.activate?.(scope); imageManifests.activate(scope); }
-function clearPrivateCache() { savedSnapshot = undefined; snapshotCache.clear(); postDetails.clear(); invalidateCommunityFeed(); clearImages(); }
+function clearImages(retain = []) { protectedImages.clear({ retain }); imageManifests.clear(); mediaFailures.value = {}; mediaContexts.clear(); mediaScopeRevision.value += 1; }
+function activateImages(scope, retain = []) { protectedImages.activate?.(scope, { retain }); imageManifests.activate(scope); }
+function clearPrivateCache({ retain = [], keepAppearance = false } = {}) {
+  savedSnapshot = undefined; snapshotCache.clear(); postDetails.clear(); invalidateCommunityFeed(); clearImages(retain);
+  if (!keepAppearance) { familyModePreview.value = null; personalModePreview.value = null; familyAppearanceCache.clear(); personalAppearanceCache.clear(); accountProfilePreview.value = null; }
+}
 function postDetailKey(postId, options) { return options.includeComments === false ? `${postId}:no-comments` : postId; }
 export function peekCommunityPost(postId, options = {}) { return postDetails.peek(currentScope(), postDetailKey(postId, options)); }
 export function readCommunityPost(postId, options = {}) { return postDetails.read(currentScope(), postDetailKey(postId, options), () => invokeCloud('readPost', { postId, paginateComments: true, includeComments: options.includeComments !== false })); }
@@ -170,31 +205,43 @@ export function resolveImage(value, variant = 'card', options) {
   if (!cloudMode) return mediaUrls.value[value] || '';
   const version = imageVersion(value, variant);
   const resolved = protectedImages.resolve(version, options);
-  return resolved || (variant === 'detail' ? protectedImages.peek(imageVersion(value, 'card')) : '');
+  return resolved || (variant === 'cover' ? protectedImages.peek(imageVersion(value, 'detail')) || protectedImages.peek(imageVersion(value, 'card')) : variant === 'detail' ? protectedImages.peek(imageVersion(value, 'card')) : '');
 }
 export function peekImage(value, variant = 'card') {
   if (typeof value !== 'string' || !value.startsWith('cloud://')) return value;
   if (!cloudMode) return mediaUrls.value[value] || '';
-  return protectedImages.peek(imageVersion(value, variant)) || (variant === 'detail' ? protectedImages.peek(imageVersion(value, 'card')) : '');
+  return protectedImages.peek(imageVersion(value, variant)) || (variant === 'cover' ? protectedImages.peek(imageVersion(value, 'detail')) || protectedImages.peek(imageVersion(value, 'card')) : variant === 'detail' ? protectedImages.peek(imageVersion(value, 'card')) : '');
 }
 export function loadImage(value, variant = 'card', options) {
   return cloudMode && typeof value === 'string' && value.startsWith('cloud://') ? protectedImages.load(imageVersion(value, variant), options) : Promise.resolve(resolveImage(value, variant));
 }
 
 export async function invokeCloud(action, payload = {}) {
+  payload = compatibleSpoonCommand(action, payload);
+  if (['updateProfile', 'createFamily', 'createFamilyWithAppearance', 'createFamilyWithSubtitle', 'joinFamily', 'joinFamilyWithProfile'].includes(action)) payload = compatibleDefaultProfilePayload(payload, profileBaseline?.userId === cloudStatus.value.userId ? profileBaseline : undefined);
   if (!cloudEnvironment) throw new Error('尚未配置云开发环境，请联系管理员');
   if (typeof wx === 'undefined' || !wx.cloud) throw new Error('请在微信小程序中使用云端家庭');
   if (!initialized) { wx.cloud.init({ env: cloudEnvironment, traceUser: false }); initialized = true; }
   const manifestContext = imageManifests.context();
+  const identityScope = currentScope();
   const includesManifests = ['feed', 'readPost'].includes(action);
   const imageAccess = ['mediaContent', 'mediaBatch'].includes(action) ? { ...(shareMediaToken ? { shareToken: shareMediaToken } : {}), ...(inviteMediaToken ? { inviteToken: inviteMediaToken } : {}) } : {};
-  const response = await wx.cloud.callFunction({ name: cloudFunction, data: { action, ...imageAccess, ...(includesManifests ? { includeImageManifests: true } : {}), ...payload, ingredientUnitsVersion: INGREDIENT_UNITS_VERSION } });
+  let response;
+  try { response = await wx.cloud.callFunction({ name: cloudFunction, data: { action, ...imageAccess, ...(includesManifests ? { includeImageManifests: true } : {}), ...payload, ...(['mealFeed', 'myMealPosts', 'publishMeal', 'finishMeal', 'setMealLike', 'setMealReaction', 'setMealVisibility'].includes(action) ? { identityPresentationVersion: 1 } : {}), defaultProfileVersion: DEFAULT_PROFILE_VERSION, ingredientUnitsVersion: INGREDIENT_UNITS_VERSION } }); }
+  catch (failure) { throw cloudTransportError(failure); }
   if (!response.result?.ok) {
     const error = new Error(response.result?.message || '服务暂不可用，请稍后重试');
     error.code = response.result?.code;
     error.serverRejected = response.result?.ok === false;
     throw error;
   }
+  if (response.result.data?.profile) {
+    const data = response.result.data;
+    const raw = data.profileBaseline || { name: data.profile.name || '', avatar: isDefaultAvatar(data.profile.avatar) ? '' : data.profile.avatar || '' };
+    response.result.data = { ...data, profileBaseline: raw, profile: profileWithDefaults(data.profile, data.userId || cloudStatus.value.userId) };
+  }
+  if (action === 'bootstrap' || action === 'switchWorkspace' || action === 'switchFamily') cloudStatus.value.mealSharingVersion = response.result.data.mealSharingVersion === 2 ? 2 : 0;
+  if (["mealFeed", "myMealPosts"].includes(action) && identityScope === currentScope()) rememberMedia(response.result.data.media);
   if (includesManifests) {
     const { imageManifests: manifests, ...result } = response.result.data;
     imageManifests.remember(manifests, manifestContext);
@@ -212,13 +259,22 @@ async function applyCloudResult(input, action, operationId) {
   const canRecordImport = operation?.name === 'addCollection' && Boolean(input.changes) && input.baseRevision === commandQueue.getRevision() && input.familyId === cloudStatus.value.familyId && (!input.userId || input.userId === cloudStatus.value.userId);
   if (result.unchanged && (!cloudStatus.value.familyId || (result.userId && result.userId !== cloudStatus.value.userId) || result.familyId !== cloudStatus.value.familyId)) {
     if (savedSnapshot?.familyId === result.familyId && savedSnapshot.userId === result.userId && savedSnapshot.revision === result.revision) result = { ...result, snapshot: savedSnapshot.snapshot };
-    else { clearPrivateCache(); result = await invokeCloud('bootstrap', { includeFeed: false }); }
+    else {
+      clearPrivateCache({ keepAppearance: rememberedAppearance(result.userId) });
+      result = await invokeCloud('bootstrap', { includeFeed: false });
+    }
   }
   if (result.changes && (result.familyId !== cloudStatus.value.familyId || (result.userId && result.userId !== cloudStatus.value.userId) || result.baseRevision !== commandQueue.getRevision())) {
     result = { ...await invokeCloud('bootstrap', { includeFeed: false }), value: result.value, ...(result.commentChanges ? { commentChanges: result.commentChanges } : {}) };
   }
   if (operationId && (result.familyId !== cloudStatus.value.familyId || (result.userId && result.userId !== cloudStatus.value.userId))) throw Object.assign(new Error('家庭已变化，操作结果保留在原家庭，请重新同步核对'), { code: 'SCOPE_CHANGED' });
-  if (result.profile) accountProfile.value = result.profile;
+  if (result.profile) {
+    accountProfile.value = result.profile;
+    profileBaseline = { userId: result.userId || cloudStatus.value.userId, raw: result.profileBaseline, displayed: { ...result.profile } };
+  } else if (result.userId && result.userId !== cloudStatus.value.userId) {
+    accountProfile.value = profileWithDefaults({}, result.userId);
+    profileBaseline = { userId: result.userId, raw: { name: '', avatar: '' }, displayed: { ...accountProfile.value } };
+  }
   const changedScope = Boolean(result.familyId !== cloudStatus.value.familyId || (result.userId && result.userId !== cloudStatus.value.userId));
   if (!changedScope && result.revision < commandQueue.getRevision()) {
     if (operationId) commandQueue.receive(commandQueue.getBase(), commandQueue.getRevision(), operationId);
@@ -242,13 +298,32 @@ async function applyCloudResult(input, action, operationId) {
     if (Array.isArray(next.sharedItems)) next.sharedItems = next.sharedItems.filter(item => !removed.includes(item.postId));
   }
   if (changedScope) {
-    if (cloudStatus.value.familyId || (savedSnapshot && (savedSnapshot.familyId !== result.familyId || savedSnapshot.userId !== result.userId))) clearPrivateCache();
-    activateImages(imageScope(`${cloudEnvironment}:${cloudFunction}:${result.userId}:${result.familyId}`));
+    // Keep only this account's unchanged avatar. Ordinary household media must
+    // still be cleared; a mode round-trip may also retain its known cover.
+    const sameUser = Boolean(result.userId && result.userId === cloudStatus.value.userId && !result.needsFamily);
+    const modeSwitch = sameUser && action === 'switchWorkspace';
+    const avatar = result.profile?.avatar ?? (sameUser ? accountProfile.value.avatar : '');
+    const retain = sameUser && avatar ? [imageVersion(avatar, 'avatar')] : [];
+    for (const [preview, kind] of [[familyModePreview.value, 'family'], [personalModePreview.value, 'personal']]) {
+      const destinationMatches = (next.family.kind === 'personal') !== (kind === 'personal') || next.family.id === preview?.id;
+      if (modeSwitch && preview?.userId === result.userId && destinationMatches && preview.cover) retain.push(imageVersion(preview.cover, 'cover'), imageVersion(preview.cover, 'detail'), imageVersion(preview.cover, 'card'));
+    }
+    const verifiedAppearance = !cloudStatus.value.userId && rememberedAppearance(result.userId);
+    const keepAppearance = !result.needsFamily && (sameUser || verifiedAppearance) && !['leaveFamilyWithCleanup', 'deleteFamilyWithCleanup', 'continueFamilyDeletion'].includes(action);
+    if (cloudStatus.value.familyId || (savedSnapshot && (savedSnapshot.familyId !== result.familyId || savedSnapshot.userId !== result.userId))) clearPrivateCache({ retain, keepAppearance });
+    activateImages(imageScope(`${cloudEnvironment}:${cloudFunction}:${result.userId}:${result.familyId}`), retain);
   }
   if (result.needsFamily) { next = emptySnapshot(); clearPrivateCache(); }
   observeFamilyDeletions(result, result.userId || cloudStatus.value.userId);
   const recoveryRequired = Boolean(pendingFamilyRecovery || pendingDeletions.length);
   cloudStatus.value = { ...cloudStatus.value, phase: result.needsFamily ? (recoveryRequired ? 'error' : 'onboarding') : 'ready', error: recoveryRequired ? familyRecoveryError().message : '', familyRecoveryRequired: recoveryRequired, pendingDeletions: [...pendingDeletions], revision: result.revision ?? cloudStatus.value.revision, userId: result.userId || cloudStatus.value.userId, familyId: result.familyId || '', lastSyncedAt: Date.now() };
+  if (!result.needsFamily) {
+    for (const [preview, cache] of [[familyModePreview, familyAppearanceCache], [personalModePreview, personalAppearanceCache]]) {
+      const cached = cache.get(cloudStatus.value.userId);
+      preview.value = cached?.userId === cloudStatus.value.userId ? cached : null;
+    }
+    rememberWorkspaceAppearance(cloudStatus.value.userId, next.family);
+  }
   if (canRecordImport && !changedScope && !result.needsFamily) {
     const collection = updates.find(post => post.id === operation.args[0]?.id) || operation.args[0];
     importProvenance.record(currentScope(), before, next, collection);
@@ -412,13 +487,14 @@ export async function manageFamily(action, payload = {}) {
   if (cloudStatus.value.busy) throw new Error('正在保存，请稍后再切换家庭');
   if (commandQueue.hasUnresolved()) throw new Error('还有待同步或失败的操作，请先重试或处理后再切换家庭');
   cloudStatus.value.busy = true;
+  if (action === 'switchWorkspace') rememberWorkspaceAppearance(cloudStatus.value.userId, stateRef.value.family);
   try {
     if (pendingRefresh) await pendingRefresh.catch(() => {});
     if (commandQueue.hasUnresolved()) throw new Error('还有待同步或失败的操作，请先处理后再变更家庭');
     const removesMembership = ['leaveFamily', 'deleteFamily'].includes(action);
     // Versioned actions make old services reject before detaching membership.
     // The server decides whether an exit is the last one, including concurrent exits.
-    const requestAction = removesMembership ? `${action}WithCleanup` : action === 'createFamily' ? ('coverSubtitle' in payload ? 'createFamilyWithSubtitle' : 'cover' in payload || 'coverTitle' in payload ? 'createFamilyWithAppearance' : action) : action;
+    const requestAction = action === 'joinFamily' && payload.expectedProfile !== undefined ? 'joinFamilyWithProfile' : removesMembership ? `${action}WithCleanup` : action === 'createFamily' ? ('coverSubtitle' in payload ? 'createFamilyWithSubtitle' : 'cover' in payload || 'coverTitle' in payload ? 'createFamilyWithAppearance' : action) : action;
     const request = { familyId: cloudStatus.value.familyId, ...payload };
     const userId = cloudStatus.value.userId;
     let response;
@@ -441,6 +517,8 @@ export async function manageFamily(action, payload = {}) {
         cloudStatus.value.error = error.message;
       }
       if (requestAction === 'createFamilyWithSubtitle' && /不支持.*(请求|操作)/.test(error.message)) error.message = '请更新家庭服务后再创建带主副标题的小家';
+      if (requestAction === 'joinFamilyWithProfile' && /不支持.*(请求|操作)/.test(error.message)) error.message = '请先更新家庭服务，再修改资料加入家庭';
+      if (action === 'switchWorkspace' && error.code === 'FAMILY_REQUIRED') { familyModePreview.value = null; familyAppearanceCache.clear(); }
       throw error;
     }
     if (response.deletion || action === 'deleteFamily') {
@@ -463,6 +541,26 @@ export async function manageFamily(action, payload = {}) {
     }
     return response;
   } finally { cloudStatus.value.busy = false; }
+}
+
+export function saveAccountProfile(payload, expectedProfile = accountProfile.value) {
+  const invalid = profileNameError(payload?.name);
+  if (invalid) return Promise.reject(new Error(invalid));
+  if (cloudStatus.value.phase !== 'ready' || !cloudStatus.value.userId) return Promise.reject(new Error('请先登录后修改资料'));
+  if (cloudStatus.value.busy || commandQueue.hasUnresolved() || cloudStatus.value.familyRecoveryRequired) return Promise.reject(new Error('还有操作正在同步，请稍后保存资料'));
+  const userId = cloudStatus.value.userId;
+  const preview = profileWithDefaults({ name: payload.name.trim(), avatar: payload.avatar || '' }, userId);
+  const operation = manageFamily('updateProfile', { ...preview, expectedProfile: { name: expectedProfile.name || '', avatar: expectedProfile.avatar || '' } });
+  accountProfilePreview.value = preview;
+  const pending = operation.then(result => {
+    if (cloudStatus.value.userId === userId && !result?.profile) {
+      accountProfile.value = preview;
+      profileBaseline = { userId, raw: compatibleDefaultProfilePayload(preview), displayed: { ...preview } };
+    }
+    return result;
+  }).finally(() => { if (cloudStatus.value.userId === userId) accountProfilePreview.value = null; });
+  pending.accepted = true;
+  return pending;
 }
 
 export async function uploadProfileAvatar(path, previews = {}) {
@@ -516,14 +614,14 @@ async function transferImage(path, ticketAction, confirmAction, familyId, previe
   }
 }
 
-async function primeUploadedPreview(fileId, { previewPath, cardPath }) {
-  await Promise.all([['detail', previewPath], ['card', cardPath]].filter(([, path]) => path).map(([variant, path]) => protectedImages.prime(imageVersion(fileId, variant), path).catch(() => {})));
+async function primeUploadedPreview(fileId, { previewPath, cardPath, coverPath }) {
+  await Promise.all([['detail', coverPath ? undefined : previewPath], ['card', cardPath], ['cover', coverPath]].filter(([, path]) => path).map(([variant, path]) => protectedImages.prime(imageVersion(fileId, variant), path).catch(() => {})));
 }
 
-export async function uploadCloudImage(path, previews = {}) {
+export async function uploadCloudImage(path, previews = {}, purpose = '') {
   if (cloudStatus.value.phase !== 'ready') throw new Error('请先加入家庭');
   const familyId = cloudStatus.value.familyId;
-  const confirmed = await transferImage(path, 'mediaTicket', 'mediaConfirm', familyId, previews.previewPath || previews.cardPath, previews.onStage);
+  const confirmed = await transferImage(path, purpose === 'meal' ? 'mealMediaTicket' : 'mediaTicket', purpose === 'meal' ? 'mealMediaConfirm' : 'mediaConfirm', familyId, previews.previewPath || previews.cardPath, previews.onStage);
   if (cloudStatus.value.familyId !== familyId || cloudStatus.value.phase !== 'ready') throw new Error('家庭已变更，请重新上传');
   if (confirmed.protected) {
     await primeUploadedPreview(confirmed.fileId, previews);

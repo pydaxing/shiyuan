@@ -8,10 +8,12 @@ import { afterNativeRender } from '../composables/nativeRender.js';
 const props = defineProps({ src: String, mode: { type: String, default: 'aspectFill' }, variant: { type: String, default: 'card' }, round: Boolean, thumbnail: Boolean, avatar: Boolean, fallback: String });
 const resizeSheet = useSheetContentResize(() => props.mode === 'widthFix');
 const sheetReady = inject('sheetReady', null);
+const imageViewActive = inject('imageViewActive', null);
 const visible = ref(false);
 const failed = ref(false);
 const retrying = ref(false);
 const lastImage = ref('');
+const displayedImage = ref('');
 const naturalRatio = ref(0);
 const frameStyle = computed(() => props.mode === 'widthFix' ? imageFrameStyle(naturalRatio.value) : {});
 let sequence = 0;
@@ -24,11 +26,17 @@ function imageDemand() {
   return () => !disposed && visible.value && token === sequence;
 }
 const image = computed(() => visible.value ? resolveImage(props.src, props.variant, { isNeeded: imageDemand() }) : peekImage(props.src, props.variant) || lastImage.value);
+// Keep the decoded cover mounted while its higher-resolution replacement loads.
+const coverLayers = computed(() => {
+  if (props.variant !== 'detail' || props.mode !== 'aspectFill') return [];
+  return [...new Set([displayedImage.value, failed.value ? '' : image.value].filter(Boolean))];
+});
 const imageLoaded = computed(() => {
   const path = image.value;
   const token = sequence;
   return event => {
     if (disposed || token !== sequence || path !== image.value) return;
+    displayedImage.value = path;
     const width = Number(event?.detail?.width);
     const height = Number(event?.detail?.height);
     if (props.mode === 'widthFix' && Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) naturalRatio.value = width / height;
@@ -52,12 +60,15 @@ const imageError = computed(() => {
   };
 });
 let observer;
+let observation = 0;
 function observe() {
   observer?.disconnect();
-  if (disposed || (sheetReady && !sheetReady.value)) return;
+  const revision = ++observation;
+  if (disposed || (sheetReady && !sheetReady.value) || (imageViewActive && !imageViewActive.value)) return;
   if (props.avatar || !uni.createIntersectionObserver) { visible.value = true; return; }
   observer = uni.createIntersectionObserver(instance.proxy, { nativeMode: !sheetReady });
   observer.relativeToViewport({ top: 240, bottom: 240 }).observe('.lazy-photo', result => {
+    if (disposed || revision !== observation || (imageViewActive && !imageViewActive.value)) return;
     visible.value = result.intersectionRatio > 0;
   });
 }
@@ -65,18 +76,24 @@ async function observeAfterRender() {
   await afterNativeRender();
   observe();
 }
-onMounted(() => { if (sheetReady?.value) void observeAfterRender(); else observe(); });
+onMounted(() => { if (sheetReady?.value || imageViewActive?.value) void observeAfterRender(); else observe(); });
 if (sheetReady) watch(sheetReady, ready => { if (ready) void observeAfterRender(); });
+if (imageViewActive) watch(imageViewActive, active => {
+  if (active) void observeAfterRender();
+  else { observation += 1; observer?.disconnect(); observer = undefined; visible.value = false; }
+}, { flush: 'sync' });
 async function resetImage() {
   const token = ++sequence;
+  const cached = peekImage(props.src, props.variant);
   visible.value = false;
-  lastImage.value = '';
+  lastImage.value = cached || '';
+  displayedImage.value = '';
   naturalRatio.value = 0;
   failed.value = false;
   retrying.value = false;
   automaticRetries = 0;
   brokenFile = false;
-  await nextTick();
+  if (imageViewActive) await afterNativeRender(); else await nextTick();
   if (!disposed && token === sequence) observe();
 }
 watch(() => [props.src, props.variant], resetImage, { flush: 'sync' });
@@ -106,7 +123,10 @@ onUnmounted(() => { disposed = true; sequence += 1; observer?.disconnect(); });
 
 <template>
   <view class="lazy-photo" :class="{ 'natural-photo': mode === 'widthFix', 'sized-photo': mode === 'widthFix' && naturalRatio, 'round-photo': round, 'thumbnail-photo': thumbnail, 'has-fallback': fallback || avatar }" :style="frameStyle">
-    <image v-if="image && !failed" :key="image" class="lazy-photo-image" :src="image" :mode="mode" :lazy-load="false" @load="imageLoaded" @error="imageError" />
+    <template v-if="coverLayers.length">
+      <image v-for="layer in coverLayers" :key="layer" class="lazy-photo-image" :src="layer" :mode="mode" :lazy-load="false" :style="{ opacity: displayedImage && layer !== displayedImage ? 0 : 1 }" @load="layer === image && imageLoaded($event)" @error="layer === image && imageError($event)" />
+    </template>
+    <image v-else-if="image && !failed" :key="image" class="lazy-photo-image" :src="image" :mode="mode" :lazy-load="false" @load="imageLoaded" @error="imageError" />
     <text v-else-if="fallback" class="lazy-photo-fallback">{{ fallback }}</text>
     <view v-else-if="!avatar" class="lazy-photo-placeholder" />
     <view v-if="avatarFallbackVisible" class="lazy-avatar-fallback" aria-hidden="true"><view class="lazy-avatar-head" /><view class="lazy-avatar-shoulders" /></view>

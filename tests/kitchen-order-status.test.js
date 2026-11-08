@@ -90,7 +90,7 @@ function context({ initialStatus = 'pending', fail = false, wait = Promise.resol
   const perform = new Function(...Object.keys(bindings), `let orderActionRevision = 0;\n${actionSource}\nreturn orderAction;`)(...Object.values(bindings));
   const orderAction = (...args) => { task = perform(...args); return task; };
   function drawNodes() {
-    const data = { orders: kitchenOrders(state.value.orders, today), state: state.value, today, features: state.value.family.features, kitchenOrderAnchor, mealDateLabel, statusNames, orderRows: order => order.items, orderAction, orderFailure: orderFailure.value, orderSavingId: orderSavingId.value, orderActionBusy: orderActionBusy.value, openedOrderId: openedOrderId.value, openPreparation: order => redirects.push(['preparation', order.id]), preparationByOrder: Object.fromEntries(preparationMeals(state.value, today).map(order => [order.id, order])), openIngredients: bindings.openIngredients, openAdditions() {}, orderRecipe: null, tab: 'menu' };
+    const data = { isPendingRecord, orders: kitchenOrders(state.value.orders, today), state: state.value, today, features: state.value.family.features, kitchenOrderAnchor, mealDateLabel, statusNames, orderRows: order => order.items, orderAction, orderFailure: orderFailure.value, orderSavingId: orderSavingId.value, orderActionBusy: orderActionBusy.value, openedOrderId: openedOrderId.value, openPreparation: order => redirects.push(['preparation', order.id]), preparationByOrder: Object.fromEntries(preparationMeals(state.value, today).map(order => [order.id, order])), openIngredients: bindings.openIngredients, openAdditions() {}, orderRecipe: null, tab: 'menu' };
     return nodes(renderTemplate(data, []));
   }
   const draw = () => drawNodes().filter(node => node.props?.class?.split(' ').includes('order-card'));
@@ -130,7 +130,7 @@ test('restoring through the cancelled card immediately returns the same meal to 
   assert.deepEqual(kitchen.redirects, []);
   const restored = kitchen.draw().find(node => node.key === 'lunch:accepted');
   assert.doesNotMatch(restored.props.class, /\bis-finished\b/);
-  assert.ok(nodes(restored).some(node => node.children === '已预订'));
+  assert.ok(nodes(restored).some(node => node.children === '已安排'));
   assert.ok(nodes(restored).some(node => node.props?.class?.includes('order-add-button')));
 });
 
@@ -193,7 +193,7 @@ test('add-dish whitespace is tightened without reducing the forty-four-pixel tap
   assert.equal(selectors.get('.order-add-button').get('min-width'), '44px');
 });
 
-for (const [initialStatus, label] of [['pending', '已预订'], ['accepted', '已预订'], ['completed', '已开饭'], ['cancelled', '已取消']]) {
+for (const [initialStatus, label] of [['pending', '已安排'], ['accepted', '已安排'], ['completed', '已开饭'], ['cancelled', '已取消']]) {
   test(`${initialStatus} meal renders a non-interactive status badge without an unused quantity toolbar`, () => {
     const kitchen = context({ initialStatus });
     const renderedCard = kitchen.draw().find(node => node.key === `lunch:${initialStatus}`);
@@ -320,79 +320,33 @@ for (const features of [{ fridge: false, shopping: false }, { fridge: true, shop
       assert.equal(nodes(add).find(node => node.type === 'AppIcon').props.name, 'plus');
       const progress = footer.children[1];
       assert.equal(progress.props.class, 'order-progress-actions');
-      const preparation = buttonWithLabel(progress, '备菜 0/0');
+      const preparation = buttonWithLabel(progress, '备菜清单');
       assert.ok(preparation);
       assert.equal(buttonWithLabel(progress, '采购'), undefined);
       const icon = nodes(preparation).find(node => node.type === 'AppIcon');
-      assert.equal(icon.props.name, 'chef');
-      assert.equal(icon.props.size, 16);
+      assert.equal(icon, undefined);
       preparation.props.onClick();
       assert.equal(kitchen.order().status, initialStatus);
       assert.deepEqual(kitchen.requests, []);
       assert.deepEqual(kitchen.redirects, [['preparation', 'lunch']]);
-      const serve = buttonWithLabel(progress, '开饭');
-      assert.match(serve.props.class, /primary-button/);
-      assert.equal(serve.props.disabled, false);
-      const serveIcon = nodes(serve).find(node => node.type === 'AppIcon');
-      assert.equal(serveIcon.props.name, 'menu-inverse');
-      assert.equal(serveIcon.props.size, 16);
+      assert.equal(buttonWithLabel(progress, '开饭'), undefined);
+      assert.equal(nodes(progress).filter(node => node.type === 'button').length, 2);
       assert.equal(kitchen.orderActionBusy.value, false);
     });
   }
 }
 
-test('pending and accepted meals can complete without visiting procurement', async () => {
+test('active meals never require a serving tap on any reservation day', () => {
   for (const initialStatus of ['pending', 'accepted']) {
-    const kitchen = context({ initialStatus });
-    const stock = JSON.stringify(kitchen.state.value.inventory);
-    const before = kitchen.draw()[0];
-    assert.ok(nodes(before).some(node => node.children === '开饭'));
-    await kitchen.orderAction(kitchen.order(), 'completed');
-    assert.equal(kitchen.order().status, 'completed');
-    const completed = kitchen.draw().find(node => node.key === 'lunch:completed');
-    assert.match(completed.props.class, /\bis-finished\b/);
-    assert.notEqual(completed.key, before.key);
-    assert.deepEqual(kitchen.redirects, []);
-    assert.deepEqual(kitchen.messages, []);
-    assert.equal(JSON.stringify(kitchen.state.value.inventory), stock);
-  }
-});
-
-test('tomorrow and the following day keep a tappable serve button that only shows a short toast', async () => {
-  for (const initialStatus of ['pending', 'accepted']) {
-    for (const mealDate of ['2026-10-22', '2026-10-23']) {
+    for (const mealDate of ['2026-10-21', '2026-10-22', '2026-10-23']) {
       const kitchen = context({ initialStatus, mealDate });
-      const before = structuredClone(Vue.toRaw(kitchen.state.value));
       const renderedCard = kitchen.draw().find(node => node.key === `lunch:${initialStatus}`);
-      const serve = buttonWithLabel(renderedCard, '开饭');
-      assert.equal(serve.props.disabled, false);
-      serve.props.onClick();
-      await kitchen.settled();
-      assert.deepEqual(kitchen.messages, ['只能当天开饭']);
-      assert.deepEqual(kitchen.modals, []);
+      assert.equal(buttonWithLabel(renderedCard, '开饭'), undefined);
+      assert.equal(kitchen.order().status, initialStatus);
       assert.deepEqual(kitchen.requests, []);
-      assert.deepEqual(kitchen.state.value, before);
-      assert.equal(kitchen.orderActionBusy.value, false);
-      assert.equal(kitchen.orderFailure.value, null);
+      assert.deepEqual(kitchen.messages, []);
     }
   }
-});
-
-test('serving refreshes the date before checking a kitchen left open across midnight', async () => {
-  const yesterday = context({ initialStatus: 'accepted' });
-  yesterday.advanceDay('2026-10-22');
-  await yesterday.orderAction(yesterday.order(), 'completed');
-  assert.deepEqual(yesterday.messages, ['只能当天开饭']);
-  assert.deepEqual(yesterday.requests, []);
-  assert.equal(yesterday.order().status, 'accepted');
-
-  const tomorrow = context({ initialStatus: 'accepted', mealDate: '2026-10-22' });
-  await tomorrow.orderAction(tomorrow.order(), 'completed');
-  tomorrow.advanceDay('2026-10-22');
-  await tomorrow.orderAction(tomorrow.order(), 'completed');
-  assert.equal(tomorrow.order().status, 'completed');
-  assert.equal(tomorrow.requests.length, 1);
-  assert.deepEqual(tomorrow.messages, ['只能当天开饭']);
 });
 
 test('the serving date guard does not block cancelling a future meal', async () => {
@@ -422,7 +376,7 @@ test('repeated taps while a kitchen update is pending cannot advance the same me
   await kitchen.orderAction(kitchen.order(), 'completed');
   assert.equal(kitchen.requests.length, 1);
   const footer = nodes(kitchen.draw()[0]).find(node => node.props?.class === 'order-actions');
-  for (const label of ['加菜', '备菜 0/0', '开饭']) assert.equal(buttonWithLabel(footer, label).props.disabled, true);
+  for (const label of ['加菜', '备菜清单']) assert.equal(buttonWithLabel(footer, label).props.disabled, true);
   finish();
   await pending;
   assert.equal(kitchen.order().status, 'completed');
@@ -566,7 +520,7 @@ for (const initialStatus of ['pending', 'accepted', 'completed', 'cancelled']) {
     assert.equal(kitchen.modals[0].confirmText, '删除');
     assert.equal(kitchen.modals[0].cancelText, '保留');
     assert.equal(kitchen.modals[0].confirmColor, NATIVE_UI_COLORS.danger);
-    assert.match(kitchen.modals[0].content, /所有家人.*备菜.*开火记录.*菜谱和冰箱不受影响.*重新预定/);
+    assert.match(kitchen.modals[0].content, /当前空间.*安排.*备菜清单.*菜谱.*分享保留.*重新安排/);
     assert.deepEqual(kitchen.requests, []);
     assert.deepEqual(kitchen.draw().map(node => node.key), before);
     kitchen.modals[0].success({ confirm: true });
@@ -611,7 +565,7 @@ test('pending deletion keeps its card visible and blocks a second mutation', asy
   const deletion = kitchen.orderAction(kitchen.order(), 'deleted');
   kitchen.modals[0].success({ confirm: true });
   await Vue.nextTick();
-  await kitchen.orderAction(kitchen.order(), 'completed');
+  await kitchen.orderAction(kitchen.order(), 'deleted');
   assert.equal(kitchen.requests.length, 1);
   assert.ok(kitchen.order());
   assert.equal(kitchen.orderActionBusy.value, true);

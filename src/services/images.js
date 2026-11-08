@@ -98,6 +98,18 @@ export function compressNativePhoto(path, variant) {
   return compressPreparedNativePhoto(path, setting, presets);
 }
 
+// Editing needs enough pixels for the 3x crop gesture. Display/upload budgets
+// still apply when exporting; do not recompress a saved crop merely to edit it.
+export async function prepareNativeEditorPhoto(path) {
+  const setting = { edge: 3072, maxBytes: 8 * 1024 * 1024 };
+  const info = await uni.getImageInfo({ src: path });
+  const file = await uni.getFileInfo({ filePath: path });
+  if (info.width > 0 && info.height > 0 && Math.max(info.width, info.height) <= setting.edge
+    && file.size > 0 && file.size <= setting.maxBytes
+    && ['jpg', 'jpeg', 'png'].includes(info.type) && (!info.orientation || info.orientation === 'up')) return path;
+  return compressPreparedNativePhoto(path, setting, [[3072, 95], [3072, 92], [2560, 90], [2048, 88]]);
+}
+
 async function compressPreparedNativePhoto(path, setting, presets) {
   let info;
   try { info = await uni.getImageInfo({ src: path }); }
@@ -129,8 +141,8 @@ export async function chooseLocalImage(sourceType = ['album', 'camera'], onProgr
   return (await persistSelectedImages(paths, onProgress, [preview], familyDraftRequest))[0] || '';
 }
 
-export async function chooseLocalImages(count = 9, sourceType = ['album', 'camera'], onProgress = () => {}) {
-  return persistSelectedImages(await selectImagePaths(count, sourceType), onProgress);
+export async function chooseLocalImages(count = 9, sourceType = ['album', 'camera'], onProgress = () => {}, purpose = '') {
+  return persistSelectedImages(await selectImagePaths(count, sourceType), onProgress, [], '', purpose);
 }
 
 export async function selectImagePaths(count = 1, sourceType = ['album', 'camera']) {
@@ -179,7 +191,7 @@ export async function selectImagePaths(count = 1, sourceType = ['album', 'camera
   }
 }
 
-export async function persistSelectedImages(paths, onProgress = () => {}, previews = [], familyDraftRequest = '') {
+export async function persistSelectedImages(paths, onProgress = () => {}, previews = [], familyDraftRequest = '', purpose = '') {
   const images = new Array(paths.length);
   let completed = 0;
   let failure;
@@ -190,7 +202,7 @@ export async function persistSelectedImages(paths, onProgress = () => {}, previe
       items[index].status = 'processing';
       progress();
       try {
-        images[index] = await persistImage(path, update => { Object.assign(items[index], update); progress(); }, previews[index], familyDraftRequest);
+        images[index] = await persistImage(path, update => { Object.assign(items[index], update); progress(); }, previews[index], familyDraftRequest, purpose);
         items[index] = { ...items[index], preview: peekImage(images[index]) || '', status: 'done', image: images[index], error: '' };
         completed += 1;
       }
@@ -201,7 +213,7 @@ export async function persistSelectedImages(paths, onProgress = () => {}, previe
   return images;
 }
 
-async function persistImage(path, onStage = () => {}, prepared = {}, familyDraftRequest = '') {
+async function persistImage(path, onStage = () => {}, prepared = {}, familyDraftRequest = '', purpose = '') {
   if (typeof document !== 'undefined') return persistBrowserImage(prepared.previewPath || path);
   if (cloudMode) {
     const file = await uni.getFileInfo({ filePath: path });
@@ -209,12 +221,12 @@ async function persistImage(path, onStage = () => {}, prepared = {}, familyDraft
     let previewPath;
     let cardPath;
     try {
-      previewPath = await compressNativePhoto(prepared.previewPath || path, 'detail');
+      previewPath = await compressNativePhoto(prepared.previewPath || path, prepared.variant === 'cover' ? 'cover' : 'detail');
       cardPath = await compressNativePhoto(previewPath, 'card');
       onStage({ preview: cardPath, status: 'uploading', progress: 0 });
       return familyDraftRequest
-        ? await uploadFamilyCoverDraft(path, familyDraftRequest, { previewPath, cardPath, onStage })
-        : await uploadCloudImage(path, { previewPath, cardPath, onStage });
+        ? await uploadFamilyCoverDraft(path, familyDraftRequest, { previewPath, cardPath, coverPath: prepared.variant === 'cover' ? previewPath : undefined, onStage })
+        : await uploadCloudImage(path, { previewPath, cardPath, coverPath: prepared.variant === 'cover' ? previewPath : undefined, onStage }, purpose);
     } finally {
       discardPhoto(cardPath, path);
       if (previewPath !== cardPath) discardPhoto(previewPath, path);

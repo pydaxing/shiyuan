@@ -33,6 +33,7 @@ test('an accepted set update returns immediately and stays silent after cloud co
   let finish;
   const operation = Object.assign(new Promise(resolve => { finish = resolve; }), { accepted: true });
   const view = mount(context, 'SetEditor', {}, { saveMealSet: () => operation });
+  view.api.image.value = 'cloud://test-env/chosen-cover.jpg';
   view.api.title.value = '家常菜';
   view.api.selected.value = ['first', 'second'];
   const saving = view.api.save();
@@ -81,6 +82,7 @@ function nodes(node) {
 
 test('a set without a name reveals the name control rather than a hidden page-bottom error', async context => {
   const view = mount(context, 'SetEditor');
+  view.api.image.value = 'cloud://test-env/chosen-cover.jpg';
   view.api.selected.value = ['first', 'second'];
   const reveals = [];
   view.api.fieldRefs.title = { reveal: () => reveals.push('title') };
@@ -94,7 +96,7 @@ test('a set without a name reveals the name control rather than a hidden page-bo
   assert.equal(field.props.error, view.api.fieldErrors.value.title);
   assert.match(field.props.error, /名称/);
   assert.equal(view.api.error.value, '');
-  assert.ok(!nodes(sheet.children.footer()).some(node => node.props?.role === 'alert'));
+  assert.ok(!nodes(sheet.children.default()).some(node => node.props?.role === 'alert'));
   view.api.title.value = '两人晚餐';
   await view.api.save();
   assert.equal(view.calls.length, 1);
@@ -104,6 +106,7 @@ test('a set without a name reveals the name control rather than a hidden page-bo
 
 test('set selection errors belong to the selection group and preserve the typed name', async context => {
   const view = mount(context, 'SetEditor');
+  view.api.image.value = 'cloud://test-env/chosen-cover.jpg';
   view.api.title.value = '两人晚餐';
   view.api.selected.value = ['first'];
   const reveals = [];
@@ -111,7 +114,7 @@ test('set selection errors belong to the selection group and preserve the typed 
   await view.api.save();
   assert.deepEqual(reveals, ['recipes']);
   assert.equal(view.api.fieldErrors.value.title, undefined);
-  const field = nodes(view.render().children.default()).find(node => node.type === view.api.FieldError);
+  const field = nodes(view.render().children.default()).find(node => node.type === view.api.FieldError && node.props.error === view.api.fieldErrors.value.recipeIds);
   assert.equal(field.props.error, view.api.fieldErrors.value.recipeIds);
   assert.ok(field.props.error);
   assert.equal(view.api.title.value, '两人晚餐');
@@ -120,6 +123,7 @@ test('set selection errors belong to the selection group and preserve the typed 
 
 test('set selection that references a removed recipe is blocked inline', async context => {
   const view = mount(context, 'SetEditor');
+  view.api.image.value = 'cloud://test-env/chosen-cover.jpg';
   view.api.title.value = '保留的套餐';
   view.api.selected.value = ['first', 'missing'];
   await view.api.save();
@@ -131,6 +135,7 @@ test('set saving is single-submit and preserves the form for server-error retry'
   let reject;
   let requests = 0;
   const view = mount(context, 'SetEditor', {}, { saveMealSet: () => { requests += 1; return new Promise((resolve, fail) => { reject = fail; }); } });
+  view.api.image.value = 'cloud://test-env/chosen-cover.jpg';
   view.api.title.value = '周末套餐';
   view.api.selected.value = ['first', 'second'];
   const saving = view.api.save();
@@ -140,7 +145,7 @@ test('set saving is single-submit and preserves the form for server-error retry'
   await saving;
   assert.equal(view.api.saving.value, false);
   assert.equal(view.api.title.value, '周末套餐');
-  const error = nodes(view.render().children.footer()).find(node => node.props?.role === 'alert');
+  const error = nodes(view.render().children.default()).find(node => node.props?.role === 'alert');
   assert.equal(error.children, '保存失败，请重试');
   assert.deepEqual(view.events, []);
 });

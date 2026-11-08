@@ -184,9 +184,9 @@ test('removing all ingredients is explicit and persists without changing the ori
 test('removing and readding a dish does not resurrect its meal-specific edits or note', () => {
   const context = fixture();
   edit(context, { ...draftOf(context.dish), note: '旧备注' });
-  context.actions.submitOrder({ broccoli: 1 }, { date: today, meal: '晚餐' });
+  context.actions.removeOrderDish(context.order.id, 'tomato');
   assert.deepEqual(context.order.preparationEdits, []);
-  context.actions.submitOrder({ tomato: 1, broccoli: 1 }, { date: today, meal: '晚餐' });
+  context.actions.addOrderDishes(context.order.id, { tomato: 1 });
   assert.equal(context.dish.note, '');
 });
 

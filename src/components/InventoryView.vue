@@ -7,7 +7,7 @@ import { expiryLabel, isExpired, localDate, formatAmount } from '../domain/kitch
 import { ingredientImage } from '../domain/presentation.js';
 import { coverFrameStyle } from '../domain/image-crop.js';
 import { isPendingRecord, presentMutation } from '../services/mutation-feedback.js';
-import StockEditor from './StockEditor.vue';
+import StockPicker from './StockPicker.vue';
 import Sheet from './Sheet.vue';
 import ImagePicker from './ImagePicker.vue';
 import LazyImage from './LazyImage.vue';
@@ -25,7 +25,7 @@ const expiring = computed(() => state.value.inventory.filter((batch) => batch.ex
 const expired = computed(() => state.value.inventory.filter((batch) => isExpired(batch, props.today)).length);
 const countAt = (place) => state.value.inventory.filter((batch) => place === '全部' || batch.location === place).length;
 function locationTone(place) { return locations.find((zone) => zone.name === place)?.tone || 'all'; }
-function addAt(place) { initialStock.value = { location: place === '全部' ? '冷藏' : place }; editing.value = true; }
+function addAt(place) { initialStock.value = { location: place === '全部' ? '冷藏' : place, useCatalogLocation: place === '全部' }; editing.value = true; }
 function remove(batch) { if (isPendingRecord(batch.id)) { notify('食材正在同步，请稍等'); return; } uni.showModal({ confirmColor: NATIVE_UI_COLORS.danger, cancelColor: NATIVE_UI_COLORS.muted, title: `删除${batch.name}？`, content: '这会移除冰箱中的整个食材批次，不影响餐单和备菜状态。', confirmText: '删除', success: (result) => { if (result.confirm) runAction(() => removeStock(batch.id)); } }); }
 function editPhoto(batch) { if (isPendingRecord(batch.id)) { notify('食材正在同步，请稍等'); return; } photoBatch.value = batch; photo.value = batch.image || ''; }
 function savePhoto() { runAction(async () => { await presentMutation(changeStockImage(photoBatch.value.id, photo.value), () => { photoBatch.value = null; }); }); }
@@ -67,7 +67,7 @@ function savePhoto() { runAction(async () => { await presentMutation(changeStock
         </view>
       </view>
     </view>
-    <StockEditor v-if="editing" :initial="initialStock" @close="editing = false" @saved="editing = false" />
+    <StockPicker v-if="editing" :initial="initialStock" @close="editing = false" @saved="editing = false" />
     <Sheet v-if="photoBatch" :title="`${photoBatch.name}的图片`" @close="photoBatch = null"><ImagePicker v-model="photo" label="拍照或更换食材图片" :fallback="ingredientImage(photoBatch.name)" @busy="busy = $event" /><template #footer><button role="button" class="primary-button full" :disabled="busy" @click="savePhoto" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">保存图片</button></template></Sheet>
   </view>
 </template>

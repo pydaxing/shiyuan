@@ -5,17 +5,27 @@ import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc';
 import postcss from 'postcss';
 import * as Vue from 'vue';
 import { profileNameError } from '../src/domain/family.js';
+import { presentMutation } from '../src/services/mutation-feedback.js';
 
 const source = name => readFileSync(new URL(`../src/components/${name}.vue`, import.meta.url), 'utf8');
 
 function mount(name, overrides = {}, props = {}) {
   const events = [];
   const notices = [];
+  const unmounted = [];
   const modules = {
     ...Vue,
     profileNameError,
+    presentMutation,
+    onUnmounted: callback => unmounted.push(callback),
+    NATIVE_UI_COLORS: { primary: '#304d60', muted: '#69777a' },
+    dismissFocusedKeyboard() {},
     cloudMode: true,
     accountProfile: Vue.ref({ name: '原来的昵称', avatar: 'cloud://saved-avatar' }),
+    accountProfilePreview: Vue.ref(null),
+    state: Vue.ref({ family: { id: 'family', kind: 'family', name: '我们的小家', cover: '', members: [] } }),
+    cloudStatus: Vue.ref({ userId: 'me', busy: false }),
+    saveAccountProfile: payload => overrides.manageFamily?.('updateProfile', payload),
     activeMember: Vue.ref({ name: '家人', avatar: '' }),
     notify: message => notices.push(message),
     uni: { getSystemInfoSync: () => ({ uniPlatform: 'mp-weixin' }) },
@@ -26,7 +36,7 @@ function mount(name, overrides = {}, props = {}) {
   script = script.replace(/import (\{[^}]+\}|\w+) from '[^']+';/g, (_, binding) => `const ${binding} = ${binding.startsWith('{') ? 'modules' : '{}'};`);
   const component = new Function('modules', 'uni', script.replace('export default', 'return'))(modules, modules.uni);
   const api = component.setup(props, { expose() {}, emit: (...args) => events.push(args) });
-  return { api, events, notices };
+  return { api, events, notices, unmount: () => unmounted.forEach(callback => callback()) };
 }
 
 function render(name, api, props = {}) {
@@ -41,7 +51,8 @@ function render(name, api, props = {}) {
 
 function nodes(node) {
   if (!node || typeof node !== 'object') return [];
-  return [node, ...(Array.isArray(node.children) ? node.children.flatMap(nodes) : [])];
+  const children = Array.isArray(node.children) ? node.children : Object.values(node.children || {}).filter(value => typeof value === 'function').flatMap(slot => slot());
+  return [node, ...children.flatMap(nodes)];
 }
 
 test('the avatar is the single native picker entry without separate photo or WeChat actions', async () => {
@@ -160,7 +171,45 @@ test('profile fields center the avatar without a visible label and preserve the 
   assert.equal(rules.get('.profile-avatar-frame').height, '64px');
   assert.equal(rules.get('.profile-photo-actions .profile-avatar-button')['min-height'], '72px');
   const editor = mount('ProfileEditor');
-  assert.equal(render('ProfileEditor', editor.api).props['preferred-height'], undefined);
+  assert.equal(nodes(render('ProfileEditor', editor.api)).find(node => node.props?.title === '我的资料').props['preferred-height'], undefined);
+});
+
+test('the profile overview groups the cover with native avatar and nickname controls, opening only one editor at a time', () => {
+  const { api, events } = mount('ProfileEditor');
+  const overview = nodes(render('ProfileEditor', api));
+  const appearance = overview.find(node => node.type === api.FamilyAppearanceDetails);
+  assert.equal(appearance.props.family.name, '我们的小家');
+  assert.deepEqual(nodes(appearance).filter(node => node.type === 'button').map(node => node.props['aria-label']), ['查看和更换头像', '编辑昵称']);
+  appearance.props.onEdit('cover');
+  assert.equal(api.appearanceSection.value, 'cover');
+  const editor = nodes(render('ProfileEditor', api)).find(node => node.type === api.FamilyEditor);
+  assert.equal(editor.props['initial-tab'], 'cover');
+  api.openEditor('nickname');
+  api.close();
+  assert.equal(api.section.value, '');
+  assert.deepEqual(events, []);
+  editor.props.onClose();
+  api.openEditor('nickname');
+  api.openAppearance('name');
+  assert.equal(api.section.value, 'nickname');
+  assert.equal(api.appearanceSection.value, '');
+});
+
+test('personal appearance allows cover editing without exposing household name or obsolete menu title', () => {
+  const state = Vue.ref({ family: { id: 'personal', kind: 'personal', cover: 'cloud://personal-cover' } });
+  const cloudStatus = Vue.ref({ userId: 'me', busy: false });
+  const { api } = mount('ProfileEditor', { state, cloudStatus });
+  for (const field of ['name', 'coverTitle', 'unknown']) {
+    api.openAppearance(field);
+    assert.equal(api.appearanceSection.value, '');
+  }
+  cloudStatus.value.busy = true;
+  api.openAppearance('cover');
+  assert.equal(api.appearanceSection.value, '');
+  cloudStatus.value.busy = false;
+  api.openAppearance('cover');
+  assert.equal(api.appearanceSection.value, 'cover');
+  assert.equal(nodes(render('ProfileEditor', api)).find(node => node.type === api.FamilyAppearanceDetails).props.family.cover, 'cloud://personal-cover');
 });
 
 test('onboarding and profile editing reuse the same centered avatar field', () => {
@@ -187,29 +236,35 @@ test('the camera stays small at the lower-right without inheriting the avatar im
   assert.match(styles.toString(), /:deep\(\.app-icon\)\s*\{\s*border-radius: 0; background: transparent;/);
 });
 
-test('the profile sheet removes its footer explanation but preserves upload guards and single-submit saving', async () => {
+test('saving a nickname preserves the confirmed avatar, guards uploads and duplicate submits, then returns to the list', async () => {
   const calls = [];
   let finish;
   const { api, events, notices } = mount('ProfileEditor', { manageFamily: (...args) => { calls.push(args); return new Promise(resolve => { finish = resolve; }); } });
   assert.doesNotMatch(source('ProfileEditor'), /由你主动选择|实名认证|class="hint"/);
+  api.openEditor('nickname');
   api.name.value = '新的昵称';
-  api.avatar.value = 'cloud://new-avatar';
+  api.avatar.value = 'cloud://unrelated-draft';
   api.uploading.value = true;
   await api.save();
   assert.equal(calls.length, 0);
   api.uploading.value = false;
   const saving = api.save();
   await api.save();
-  assert.deepEqual(calls, [['updateProfile', { name: '新的昵称', avatar: 'cloud://new-avatar' }]]);
+  assert.deepEqual(calls, [['updateProfile', { name: '新的昵称', avatar: 'cloud://saved-avatar' }]]);
   finish();
   await saving;
   assert.equal(api.busy.value, false);
+  assert.equal(api.section.value, '');
+  assert.equal(api.saved.value.name, '新的昵称');
+  assert.deepEqual(events, []);
+  api.close();
   assert.deepEqual(events, [['close']]);
   assert.deepEqual(notices, []);
 });
 
 test('profile saving failures leave the selected avatar and nickname available for retry', async () => {
   const { api, events } = mount('ProfileEditor', { manageFamily: async () => { throw new Error('网络暂时不可用'); } });
+  api.openEditor('avatar');
   api.name.value = '保留的昵称';
   api.avatar.value = 'cloud://selected-avatar';
   await api.save();
@@ -218,4 +273,138 @@ test('profile saving failures leave the selected avatar and nickname available f
   assert.equal(api.error.value, '网络暂时不可用');
   assert.equal(api.busy.value, false);
   assert.deepEqual(events, []);
+});
+
+test('an accepted profile edit immediately returns to the updated list and restores its draft on failure', async () => {
+  let reject;
+  const { api } = mount('ProfileEditor', { saveAccountProfile: () => Object.assign(new Promise((resolve, fail) => { reject = fail; }), { accepted: true }) });
+  api.openEditor('nickname'); api.name.value = '马上显示';
+  const pending = api.save();
+  assert.equal(api.section.value, '');
+  assert.equal(api.saved.value.name, '马上显示');
+  api.openEditor('avatar'); assert.equal(api.section.value, '', 'no second save can race the pending one');
+  reject(new Error('保存失败')); await pending;
+  assert.equal(api.section.value, 'nickname');
+  assert.equal(api.saved.value.name, '原来的昵称');
+  assert.equal(api.name.value, '马上显示');
+  assert.equal(api.error.value, '保存失败');
+  assert.equal(api.dirty.value, true);
+});
+
+test('users can leave the accepted profile save and still receive a failure message after unmount', async () => {
+  let reject;
+  const { api, events, notices, unmount } = mount('ProfileEditor', { saveAccountProfile: () => Object.assign(new Promise((resolve, fail) => { reject = fail; }), { accepted: true }) });
+  api.openEditor('avatar'); api.avatar.value = 'cloud://new';
+  const pending = api.save();
+  api.close(); assert.deepEqual(events, [['close']]);
+  unmount(); reject(new Error('头像未保存，请重试')); await pending;
+  assert.deepEqual(notices, ['头像未保存，请重试']);
+  assert.equal(api.section.value, '');
+});
+
+test('profile overview opens separate editors while native WeChat controls remain owned by ProfileFields', () => {
+  const { api } = mount('ProfileEditor');
+  const list = nodes(render('ProfileEditor', api));
+  assert.ok(list.some(node => node.props?.['aria-label'] === '查看和更换头像'));
+  assert.ok(list.some(node => node.props?.['aria-label'] === '编辑昵称'));
+  assert.ok(!list.some(node => node.type === api.ProfileFields));
+  api.openEditor('nickname');
+  const edit = nodes(render('ProfileEditor', api));
+  assert.ok(edit.some(node => node.type === api.ProfileFields && node.props.mode === 'nickname'));
+  assert.equal(edit.find(node => node.props?.['aria-label'] === '完成编辑').props.disabled, false);
+  api.name.value = '改后的昵称';
+  assert.equal(nodes(render('ProfileEditor', api)).find(node => node.props?.['aria-label'] === '完成编辑').props.disabled, false);
+});
+
+test('avatar page keeps native chooseAvatar, large original preview, and no nickname field', () => {
+  const props = { mode: 'avatar', avatar: 'cloud://original' };
+  const { api } = mount('ProfileFields', {}, props);
+  const tree = nodes(render('ProfileFields', api, props));
+  assert.equal(tree.filter(node => node.props?.['open-type'] === 'chooseAvatar').length, 1);
+  assert.ok(tree.some(node => node.type === api.LazyImage && node.props.variant === 'original'));
+  assert.ok(!tree.some(node => node.type === api.FormField));
+});
+
+test('nickname page retains native nickname entry and accessible clear without an avatar picker', async () => {
+  const props = { mode: 'nickname', name: '原昵称' };
+  const { api, events } = mount('ProfileFields', {}, props);
+  const tree = nodes(render('ProfileFields', api, props));
+  assert.ok(tree.some(node => node.type === api.FormField && node.props.type === 'nickname'));
+  assert.ok(!tree.some(node => node.props?.['open-type'] === 'chooseAvatar'));
+  const clear = tree.find(node => node.props?.['aria-label'] === '清空昵称');
+  clear.props.onClick({ stopPropagation() {} });
+  await Vue.nextTick();
+  assert.deepEqual(events, [['update:name', '']]);
+  assert.equal(api.nicknameFocused.value, true);
+});
+
+test('avatar completion uses the newest confirmed nickname and never changes the service contract', async () => {
+  const calls = [];
+  const accountProfile = Vue.ref({ name: '旧昵称', avatar: 'cloud://old' });
+  const { api } = mount('ProfileEditor', { accountProfile, manageFamily: async (...args) => calls.push(args) });
+  api.openEditor('avatar');
+  api.avatar.value = 'cloud://new';
+  accountProfile.value = { name: '已同步昵称', avatar: 'cloud://old' };
+  await api.save();
+  assert.deepEqual(calls, [['updateProfile', { name: '已同步昵称', avatar: 'cloud://new' }]]);
+  assert.equal(api.saved.value.avatar, 'cloud://new');
+});
+
+for (const section of ['nickname', 'avatar']) test(`unchanged ${section} can be saved while preserving the other confirmed field and blocking duplicate saves`, async () => {
+  const calls = []; let finish;
+  const accountProfile = Vue.ref({ name: '原昵称', avatar: 'cloud://original' });
+  const { api } = mount('ProfileEditor', { accountProfile, manageFamily: (...args) => { calls.push(args); return new Promise(resolve => { finish = resolve; }); } });
+  api.openEditor(section);
+  assert.equal(api.dirty.value, false);
+  const button = nodes(render('ProfileEditor', api)).find(node => node.props?.['aria-label'] === '完成编辑');
+  assert.equal(button.props.disabled, false);
+  accountProfile.value[section === 'nickname' ? 'avatar' : 'name'] = section === 'nickname' ? 'cloud://latest' : '已同步昵称';
+  const pending = button.props.onClick({ stopPropagation() {} });
+  assert.equal(nodes(render('ProfileEditor', api)).find(node => node.props?.['aria-label'] === '完成编辑').props.disabled, true);
+  await api.save();
+  assert.deepEqual(calls, [['updateProfile', { ...accountProfile.value }]]);
+  finish(); await pending;
+  assert.equal(api.section.value, '');
+});
+
+test('invalid nickname stays in the editor and a network failure can be retried', async () => {
+  let attempts = 0;
+  const { api } = mount('ProfileEditor', { manageFamily: async () => { if (++attempts === 1) throw new Error('网络断开'); } });
+  api.openEditor('nickname');
+  api.name.value = '   ';
+  await api.save();
+  assert.equal(attempts, 0);
+  assert.equal(api.nameError.value, '昵称需要 1～16 个字');
+  api.name.value = '小厨师';
+  await api.save();
+  assert.equal(api.error.value, '网络断开');
+  assert.equal(api.section.value, 'nickname');
+  await api.save();
+  assert.equal(attempts, 2);
+  assert.equal(api.section.value, '');
+});
+
+test('cancel preserves drafts when requested and discards only after confirmation; upload prevents leaving', async () => {
+  let decision = false;
+  let dialogs = 0;
+  const { api, events } = mount('ProfileEditor', { uni: { showModal(options) { dialogs++; options.success({ confirm: decision }); } } });
+  api.openEditor('nickname');
+  api.name.value = '未保存昵称';
+  api.uploading.value = true;
+  await api.cancelEditing();
+  api.close();
+  assert.equal(dialogs, 0);
+  assert.deepEqual(events, []);
+  api.uploading.value = false;
+  await api.cancelEditing();
+  assert.equal(api.section.value, 'nickname');
+  assert.equal(api.name.value, '未保存昵称');
+  decision = true;
+  await api.cancelEditing();
+  assert.equal(api.section.value, '');
+  assert.equal(api.name.value, '原来的昵称');
+  assert.equal(dialogs, 2);
+  api.openEditor('avatar');
+  await api.cancelEditing();
+  assert.equal(dialogs, 2);
 });

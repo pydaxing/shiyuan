@@ -13,7 +13,7 @@ function fixture() {
   const props = reactive({ order: { id: 'dinner', status: 'pending', date: '2026-10-20', meal: '晚餐', items: [], selections: [{ memberId: 'me', items: [{ recipe: { id: 'rice' } }] }] }, memberId: 'me', entries: [{ key: 'rice', title: '米饭', label: '主食', recipes: [{ id: 'rice' }] }, { key: 'dish', title: '青菜', label: '素菜', recipes: [{ id: 'dish' }] }], today: '2026-10-20', saving: false, error: '' });
   const events = [];
   let keyboardDismissals = 0;
-  const component = scope.run(() => runInNewContext(`${script}\n;({ sheet, selected, search, options, cart, count, filtered, locked, notice, toggle, save, clearSearch });`, { computed, ref, watch, mealDateLabel, reservationDays, mealAdditionOptions, mealAdditionCart, mealAdditionCount, dismissFocusedKeyboard: () => { keyboardDismissals += 1; }, defineProps: () => props, defineEmits: () => (...args) => events.push(args) }));
+  const component = scope.run(() => runInNewContext(`${script}\n;({ sheet, selected, search, options, cart, count, totalCount, filtered, locked, notice, toggle, save, clearSearch });`, { computed, ref, watch, mealDateLabel, reservationDays, mealAdditionOptions, mealAdditionCart, mealAdditionCount, dismissFocusedKeyboard: () => { keyboardDismissals += 1; }, defineProps: () => props, defineEmits: () => (...args) => events.push(args) }));
   return { ...component, props, events, keyboardDismissals: () => keyboardDismissals, stop: () => scope.stop() };
 }
 
@@ -66,7 +66,7 @@ test('available add-dishes sheet omits the explanatory lines and their empty spa
   const current = fixture();
   assert.equal(current.locked.value, false);
   assert.equal(current.notice.value, '');
-  assert.match(source, /<text v-if="notice" class="meal-addition-notice" role="status">/);
+  assert.match(source, /<view v-if="notice" class="meal-addition-summary"><text class="meal-addition-notice" role="status">/);
   assert.doesNotMatch(source, /仅记录选菜|不生成采购清单或扣减库存|家人点过的菜|同一道菜只做一份|加菜后自动更新采购|做好时按这餐|meal-addition-hint|props\.features/);
   assert.match(source, /v-if="error" class="error-message" role="alert"/);
   current.stop();
@@ -111,7 +111,7 @@ test('unavailable meals keep actionable warnings and cannot be submitted after t
   for (const status of ['completed', 'cancelled']) {
     current.props.order.status = status;
     assert.equal(current.locked.value, true);
-    assert.match(current.notice.value, /请返回厨房查看/);
+    assert.match(current.notice.value, /请返回小灶查看/);
     current.save();
     assert.equal(current.events.length, 0);
   }
@@ -121,5 +121,21 @@ test('unavailable meals keep actionable warnings and cannot be submitted after t
   assert.match(current.notice.value, /不在可点餐日期内/);
   current.save();
   assert.equal(current.events.length, 0);
+  current.stop();
+});
+
+ test('title count updates with picks and deduplicates existing dishes and overlapping sets', () => {
+  const current = fixture();
+  current.props.order.items = [{ recipe: { id: 'rice' } }];
+  assert.equal(current.totalCount.value, 1);
+  current.toggle(current.options.value[1]);
+  assert.equal(current.totalCount.value, 2);
+  current.props.entries.push({ key: 'set', title: '套餐', label: '套餐', recipes: [{ id: 'rice' }, { id: 'dish' }, { id: 'soup' }] });
+  current.toggle(current.options.value[2]);
+  assert.equal(current.totalCount.value, 3);
+  current.toggle(current.options.value[1]);
+  assert.equal(current.totalCount.value, 3);
+  current.toggle(current.options.value[2]);
+  assert.equal(current.totalCount.value, 1);
   current.stop();
 });

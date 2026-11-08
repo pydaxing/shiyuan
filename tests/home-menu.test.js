@@ -146,7 +146,7 @@ test('outer scrolling still stops when categories fit without shifting the colum
   const menu = setupMenu();
   try {
     await menu.settle();
-    assert.equal(menu.model.scrollEnabled.value, false);
+    assert.equal(menu.model.scrollEnabled.value, true);
     assert.deepEqual(renderedRailGeometry(menu), { top: 280, height: 384, bottom: 664 });
     menu.pageScroll(40);
     assert.equal(menu.maximumPage(), 40);
@@ -449,8 +449,8 @@ test('switching to kitchen keeps the mounted list position and ignores hidden ge
     menu.props.active = true;
     await menu.settle();
     assert.equal(menu.scrollTop(), 290);
-    assert.match(homeSource, /<view v-show="tab === 'menu'" class="menu-view">/);
-    assert.match(homeSource, /<HomeMenu[^>]*:active="tab === 'menu'"/);
+    assert.match(homeSource, /<view v-show="tab === 'menu'" class="menu-home">/);
+    assert.match(homeSource, /<HomeMenu[^>]*:active="menuActive"/);
   } finally { menu.destroy(); }
 });
 
@@ -469,9 +469,12 @@ test('native list scrolling tracks cached section boundaries without queries per
   try {
     await menu.settle();
     const before = menu.measurements();
-    for (let top = 0; top < 600; top += 1) menu.scroll(top);
+    for (let top = 0; top < 600; top += 20) { menu.scroll(top); await menu.settle(); }
     assert.equal(menu.measurements(), before);
     assert.ok(menu.events.filter(([name]) => name === 'update:category').length < 10);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    await menu.settle();
+    assert.equal(menu.measurements(), before + 1);
     menu.sheetOpen.value = true;
     const category = menu.props.category;
     menu.scroll(0);
@@ -503,8 +506,8 @@ test('the plus opens creation choices without an edit mode, preserves selection 
 });
 
 test('new home view retains original order, sharing, editor, delete and page locking owners', () => {
-  assert.match(homeSource, /pageLock\.onScroll\(event\); homeMenu\.value\?\.onScroll\(event\)/);
-  assert.match(homeSource, /onReachBottom\(\(\) => \{ if \(tab.value === 'community'\) communityView\.value\?\.loadMore\(\); \}\)/);
+  assert.match(homeSource, /pageLock\.onScroll\(event\); if \(menuActive\.value\) homeMenu\.value\?\.onScroll\(event\)/);
+  assert.match(homeSource, /onReachBottom\(\(\) => \{ if \(sheetOpen\.value\) return; if \(tab.value === 'community'\) communityView\.value\?\.loadMore\(\);/);
   assert.match(homeSource, /await presentMutation\(submitOrder\(cart\.value, selection\.value, note\.value\)/);
   assert.match(homeSource, /await presentMutation\(removeFamilyEntry\(entry\.id, entry\.kind\)/);
   assert.match(homeSource, /@open="openEntry" @toggle="toggleSelection"/);
@@ -535,14 +538,14 @@ test('menu actions close on scrolling, category changes, search and sheets witho
   } finally { menu.destroy(); }
 });
 
-test('sharing preserves the source swipe through preparation, nested sheets and dismissal without moving the list', async () => {
+test('sharing closes the source swipe through preparation, nested sheets and dismissal without moving the list', async () => {
   const menu = setupMenu();
   try {
     await menu.settle();
     const entry = menu.props.entries.find(item => item.key === 'chicken');
     menu.model.openedKey.value = entry.key;
     menu.model.performEntryAction('share-entry', entry);
-    assert.equal(menu.model.openedKey.value, entry.key);
+    assert.equal(menu.model.openedKey.value, '');
     assert.deepEqual(menu.events.at(-1), ['share-entry', entry]);
     menu.props.sharing = true;
     menu.props.busy = true;
@@ -553,12 +556,12 @@ test('sharing preserves the source swipe through preparation, nested sheets and 
     menu.props.busy = false;
     menu.props.entries = [...menu.props.entries];
     await menu.settle();
-    assert.equal(menu.model.openedKey.value, entry.key);
+    assert.equal(menu.model.openedKey.value, '');
     assert.equal(menu.model.scrollEnabled.value, false);
     menu.props.sharing = false;
     menu.sheetOpen.value = false;
     await menu.settle();
-    assert.equal(menu.model.openedKey.value, entry.key);
+    assert.equal(menu.model.openedKey.value, '');
     assert.equal(menu.scrollTop(), originalScroll);
     assert.equal(menu.pageTop(), originalPage);
     menu.sheetOpen.value = true;
@@ -609,5 +612,37 @@ test('category headings belong only to populated groups and follow search withou
     assert.deepEqual(menu.props.selected, { chicken: 1, 'set:dinner': 1 });
     assert.match(menuSource, /v-for="group in visibleGroups"[^>]*>\s*<view class="home-menu-group-heading" role="heading" aria-level="2">\{\{ group\.category \}\}<\/view>\s*<MenuSwipeRow/);
     assert.equal((menuSource.match(/class="home-menu-group-heading"/g) || []).length, 1);
+  } finally { menu.destroy(); }
+});
+
+
+test('scrolling reconciles category positions after native row heights settle', async () => {
+  const menu = setupMenu();
+  try {
+    await menu.settle();
+    menu.layout.groupHeight = 100;
+    menu.scroll(300);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    await menu.settle();
+    assert.equal(menu.props.category, '套餐');
+    menu.scroll(100);
+    await new Promise(resolve => setTimeout(resolve, 150));
+    await menu.settle();
+    assert.equal(menu.props.category, '素菜');
+  } finally { menu.destroy(); }
+});
+
+test('bottom reconciliation selects the last populated category and does not override a reverse scroll', async () => {
+  const menu = setupMenu();
+  try {
+    await menu.settle();
+    menu.scroll(600);
+    await menu.api.onListBottom();
+    assert.equal(menu.props.category, '套餐');
+    const pendingBottom = menu.api.onListBottom();
+    menu.scroll(0);
+    await pendingBottom;
+    await menu.settle();
+    assert.equal(menu.props.category, '荤菜');
   } finally { menu.destroy(); }
 });

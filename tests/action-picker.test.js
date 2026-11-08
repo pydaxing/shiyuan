@@ -26,7 +26,7 @@ function declarations(selector) {
   return result;
 }
 
-test('menu creation uses three labelled circle actions with the original destinations', () => {
+test('menu creation uses three labelled navigation rows with the original destinations', () => {
   const nodes = nodesFor('src/pages/index/index.vue');
   const sheet = nodes.find(node => node.tag === 'Sheet' && directive(node, 'if')?.exp?.content === 'createMenuOpen');
   assert.equal(attribute(sheet, 'title'), '添加到菜单');
@@ -46,7 +46,8 @@ test('menu creation uses three labelled circle actions with the original destina
     assert.ok(button.children.some(node => node.type === 1 && hasClass(node, 'sheet-action-icon')));
     assert.ok(button.children.some(node => node.type === 1 && hasClass(node, 'sheet-action-label') && node.children[0].content === label));
   }
-  assert.doesNotMatch(options.loc.source, /chevron|记下食材|把家里的|把喜欢的/);
+  assert.match(options.loc.source, /menu-create-description/);
+  assert.match(options.loc.source, /menu-create-chevron/);
 });
 
 test('create set uses a compartmented meal tray instead of the two-column grid icon', () => {
@@ -81,23 +82,29 @@ test('sharing keeps its native share card, public confirmation entry and privacy
   const emitted = [];
   new Function('$feedback', '$emit', directive(publish, 'on', 'click').exp.content)(() => {}, event => emitted.push(event));
   assert.deepEqual(emitted, ['publish']);
-  const privacy = nodes.find(node => hasClass(node, 'share-privacy-note'));
+  const privacy = options;
   assert.match(privacy.loc.source, /仅分享菜品与做法，不含家庭信息/);
   assert.match(privacy.loc.source, /发布到美食后，所有人可见/);
-  assert.doesNotMatch(options.loc.source, /chevron/);
+  assert.match(options.loc.source, /chevron/);
 });
 
-test('unprepared friend shares disable during loading and retry in cloud mode', () => {
+test('unprepared friend shares keep stable styling, block duplicate preparation and allow retry', () => {
   const nodes = nodesFor('src/components/FriendShareSheet.vue');
   const fallback = nodes.find(node => node.tag === 'button' && directive(node, 'else'));
-  const notices = [];
-  const events = [];
-  const click = new Function('$feedback', 'notify', 'cloudMode', '$emit', directive(fallback, 'on', 'click').exp.content);
-  click(() => {}, message => notices.push(message), false, event => events.push(event));
+  const source = readFileSync(new URL('../src/components/FriendShareSheet.vue', import.meta.url), 'utf8');
+  const retrySource = source.slice(source.indexOf('function retry()'), source.indexOf('</script>'));
+  const notices = [], events = [];
+  const props = { preparing: false };
+  const retry = cloudMode => new Function('props', 'cloudMode', 'notify', 'emit', retrySource + '; return retry;')(props, cloudMode, message => notices.push(message), event => events.push(event))();
+  retry(false);
   assert.deepEqual(notices, ['请在微信小程序中分享给好友']);
-  click(() => {}, message => notices.push(message), true, event => events.push(event));
+  props.preparing = true;
+  retry(true);
+  assert.deepEqual(events, []);
+  props.preparing = false;
+  retry(true);
   assert.deepEqual(events, ['retry']);
-  assert.equal(directive(fallback, 'bind', 'disabled').exp.content, 'preparing');
+  assert.equal(directive(fallback, 'bind', 'disabled'), undefined);
   assert.equal(directive(fallback, 'bind', 'aria-busy').exp.content, 'preparing');
   assert.equal(attribute(fallback, 'open-type'), undefined);
 });
@@ -129,7 +136,7 @@ test('the compact sheet variant does not alter forms, details or safe-area owner
   assert.match(sheet, /'is-preparation': variant === 'preparation'/);
   assert.match(sheet, /'is-food-detail': immersive/);
   assert.equal(declarations('.sheet.is-action-picker .sheet-header').get('border-bottom'), '0');
-  assert.equal(declarations('.sheet.is-action-picker .sheet-content').get('padding-top'), '8px');
+  assert.equal(declarations('.sheet.is-action-picker .sheet-content').get('padding-top'), '0');
   assert.match(sheet, /class="sheet-safe-space"/);
   assert.equal(declarations('.sheet.is-action-picker .sheet-safe-space').size, 0);
 });
@@ -146,4 +153,10 @@ test('menu plus hover recolors its inset circle without expanding the visible ta
     assert.ok(rule.selectors.every(selector => selector.endsWith('::before')));
     rule.walkDecls(declaration => assert.equal(declaration.prop, 'background'));
   });
+});
+
+test('share navigation rows remove the old circular action width limit', () => {
+  assert.equal(declarations('.friend-share-options .sheet-action-cell').get('max-width'), 'none');
+  assert.equal(declarations('.friend-share-options .sheet-action-cell').get('width'), '100%');
+  assert.equal(declarations('.friend-share-options .sheet-action-option').get('grid-template-columns'), '42px minmax(0, 1fr) 16px');
 });

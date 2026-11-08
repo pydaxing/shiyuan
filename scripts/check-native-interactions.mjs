@@ -1,10 +1,10 @@
+import { isUnchangedCommunityRecipe } from '../src/domain/recipe-identity.js';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { runInNewContext } from 'node:vm';
 import { transformSync } from '@babel/core';
 import * as Vue from 'vue';
-import solarLunar from 'solarlunar';
 import { baseParse } from '@vue/compiler-dom';
 import { foodMinutesLabel, mealVoterRows, DEFAULT_SET_COVER, validateImage, stepImages } from '../src/domain/presentation.js';
 import { coverFrameStyle } from '../src/domain/image-crop.js';
@@ -12,7 +12,8 @@ import { communityPublisherName } from '../src/domain/community-policy.js';
 import { foodDetailToolbarOpacity } from '../src/domain/food-detail.js';
 import { createMediaCache } from '../src/services/media-cache.js';
 import { imageVersion } from '../src/domain/image-variants.js';
-import { familyAppearance, familyPublicId } from '../src/domain/family.js';
+import { FAMILY_APPEARANCE_DEFAULTS, familyAppearance, familyAppearanceFieldErrors, familyPublicId } from '../src/domain/family.js';
+import { NATIVE_UI_COLORS } from '../src/domain/ui-theme.js';
 import { emptySnapshot } from '../src/domain/empty.js';
 
 const directory = resolve(process.argv[2] || 'dist/build/mp-weixin');
@@ -266,21 +267,28 @@ const avatarProfiles = Vue.ref([
   { id: 'anonymous-member', name: '未设置', avatar: '' },
 ]);
 const avatarStore = {
-  state: Vue.computed(() => ({ family: { name: '验收家庭', cover: '', headMemberId: 'wechat-member', members: avatarProfiles.value }, orders: [] })),
+  state: Vue.computed(() => ({ family: { id: 'avatar-family', kind: 'family', ownerId: 'avatar-user', name: '验收家庭', cover: '', headMemberId: 'wechat-member', members: avatarProfiles.value }, orders: [] })),
   activeMember: Vue.computed(() => avatarProfiles.value[0]),
   familyFeatures: Vue.ref({ fridge: false, shopping: false }),
   preferencePending: Vue.ref(false),
+  cloudMode: false,
+  cloudStatus: Vue.ref({ busy: false, familyId: 'avatar-family', userId: 'avatar-user' }),
 };
 function avatarComponent(name) {
   let component;
   const modules = {
-    '../common/vendor.js': { ...Vue, _export_sfc: (component, properties) => Object.assign(component, Object.fromEntries(properties)), e: (...values) => Object.assign({}, ...values), f: (items, render) => items.map((item, index) => render(item, index, index)), t: Vue.toDisplayString, n: Vue.normalizeClass, s: value => value, p: value => value, o: handler => handler },
+    '../common/vendor.js': { ...Vue, onMounted() {}, onUnmounted() {}, sr() {}, nextTick$1: Vue.nextTick, _export_sfc: (component, properties) => Object.assign(component, Object.fromEntries(properties)), e: (...values) => Object.assign({}, ...values), f: (items, render) => items.map((item, index) => render(item, index, index)), t: Vue.toDisplayString, n: Vue.normalizeClass, s: value => value, p: value => value, o: handler => handler },
     '../domain/presentation.js': { foodMinutesLabel, mealVoterRows },
+    '../domain/recipe-identity.js': { isUnchangedCommunityRecipe },
     '../domain/image-crop.js': { coverFrameStyle },
-    '../domain/family.js': { familyAppearance, familyPublicId },
+    '../domain/ui-theme.js': { NATIVE_UI_COLORS },
+    '../composables/useNavigationAppearance.js': { useNavigationAppearance() {} },
+    '../composables/useSheetSizing.js': { useSheetContentResize() {} },
+    '../composables/sheetStack.js': { sheetOpen: Vue.ref(false) },
+    '../domain/family.js': { FAMILY_APPEARANCE_DEFAULTS, familyAppearance, familyAppearanceFieldErrors, familyPublicId },
     '../domain/kitchen.js': { localDate: () => '2026-10-27' },
     '../store.js': avatarStore,
-    '../services/cloud.js': { cloudMode: false },
+    '../services/cloud.js': { cloudMode: false, cloudStatus: avatarStore.cloudStatus, familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null) },
   };
   runInNewContext(readFileSync(resolve(directory, `components/${name}.js`), 'utf8'), {
     require: specifier => { assert.ok(modules[specifier], `${name}: expected native dependency ${specifier}`); return modules[specifier]; },
@@ -288,8 +296,12 @@ function avatarComponent(name) {
   });
   assert.ok(component?.setup, `${name}: native setup is available`);
   const markup = readFileSync(resolve(directory, `components/${name}.wxml`), 'utf8');
-  if (name === 'FamilyView') assert.match(markup, /<lazy-image\b[^>]*class="member-avatar-image(?:\s[^"]*)?"/, 'family native avatar host receives the sizing class');
-  else {
+  if (name === 'FamilyManagement') {
+    assert.match(markup, /<lazy-image\b[^>]*class="member-avatar-image(?:\s[^"]*)?"/, 'family management owns the sized native member avatar hosts');
+  } else if (name === 'FamilyView') {
+    assert.match(markup, /class="[^"]*\baccount-avatar\b[^"]*"[^>]*><lazy-image\b/, 'profile keeps its persistent native avatar host');
+    assert.doesNotMatch(markup, /member-avatar-image/, 'member avatars are rendered in family management');
+  } else {
     assert.doesNotMatch(markup, /<lazy-image\b|dish-avatar/, 'kitchen has no voter avatar renderer or reserved column');
     assert.match(markup, /<food-thumbnail\b[^>]*class="meal-dish-photo"/, 'kitchen keeps the shared food thumbnail');
   }
@@ -304,19 +316,26 @@ const avatarRows = Vue.reactive({ rows: [{ recipe: { id: 'dish', title: '同一�
 const renderKitchenDishes = avatarComponent('MealDishList').setup(avatarRows);
 const kitchenDishMarkup = readFileSync(resolve(directory, 'components/MealDishList.wxml'), 'utf8');
 const kitchenDishListKey = kitchenDishMarkup.match(/wx:for="{{(\w+)}}" wx:for-item="item"/)?.[1];
-const kitchenVoterCountKey = kitchenDishMarkup.match(/class="dish-voters"[^>]*>{{item\.(\w+)}} 人想吃/)?.[1];
+assert.doesNotMatch(kitchenDishMarkup, /人想吃/);
+assert.match(kitchenDishMarkup, /meal-dish-origin/);
 const kitchenOpenHandlerKey = kitchenDishMarkup.match(/class="meal-dish-open"[^>]*bindtap="{{item\.(\w+)}}"/)?.[1];
 const kitchenRemoveHandlerKey = kitchenDishMarkup.match(/class="cart-remove"[^>]*bindtap="{{item\.(\w+)}}"/)?.[1];
-assert.ok(kitchenDishListKey && kitchenVoterCountKey && kitchenOpenHandlerKey && kitchenRemoveHandlerKey, 'kitchen counts and checkout actions remain inspectable');
-const renderFamilyAvatars = avatarComponent('FamilyView').setup({});
+assert.ok(kitchenDishListKey && kitchenOpenHandlerKey && kitchenRemoveHandlerKey, 'kitchen rows and checkout actions remain inspectable');
+const renderFamilyAvatars = avatarComponent('FamilyView').setup({}, { emit() {}, expose() {} });
+const renderFamilyMembers = avatarComponent('FamilyManagement').setup({ active: true }, { emit() {}, expose() {} });
+const nativeFamilyMarkup = readFileSync(resolve(directory, 'components/FamilyView.wxml'), 'utf8');
+const openFamilyKey = nativeFamilyMarkup.match(/<button\b[^>]*class="[^"]*family-members-entry[^>]*catchtap="{{(\w+)}}"/)?.[1];
+assert.ok(openFamilyKey, 'family members have a native isolated entry');
+renderFamilyAvatars({}, [])[openFamilyKey]();
+
 for (const avatar of ['https://example.com/wechat-avatar.png', 'cloud://family/updated-avatar.png', '']) {
   avatarProfiles.value[0].avatar = avatar;
   const expected = avatarProfiles.value.map(member => member.avatar);
   const kitchenDishes = renderKitchenDishes({}, []);
   assert.equal(renderedAvatarProps(kitchenDishes).length, 0, 'native kitchen rows omit all voter avatars, including anonymous members');
   assert.equal(kitchenDishes[kitchenDishListKey].length, 1, 'one dish is not duplicated for multiple voters');
-  assert.equal(kitchenDishes[kitchenDishListKey][0][kitchenVoterCountKey], String(expected.length), 'hiding avatars does not change the voter count');
-  assert.deepEqual(renderedAvatarProps(renderFamilyAvatars({}, [])).map(photo => photo.src), expected, 'native family list retains current avatars and anonymous fallback');
+  assert.deepEqual(renderedAvatarProps(renderFamilyAvatars({}, [])).map(photo => photo.src), [expected[0]], 'native profile retains the round current avatar and anonymous fallback');
+  assert.deepEqual(renderedAvatarProps(renderFamilyMembers({}, [])).map(photo => photo.src), expected, 'native family management retains all round current avatars and anonymous fallback');
 }
 avatarRows.removable = true;
 const checkoutDishEvents = [];
@@ -406,7 +425,9 @@ for (const selector of ['lazy-avatar-head', 'lazy-avatar-shoulders']) {
 }
 assert.match(avatarSheet, /border-bottom:0/);
 const menuMarkup = readFileSync(resolve(directory, 'components/HomeMenu.wxml'), 'utf8');
-const kitchenMarkup = readFileSync(resolve(directory, 'pages/index/index.wxml'), 'utf8');
+// Scoped CSS adds compiler-owned class tokens; normalize only those tokens so
+// structural checks keep validating the actual native controls and handlers.
+const kitchenMarkup = readFileSync(resolve(directory, 'pages/index/index.wxml'), 'utf8').replace(/\sdata-v-[a-f\d]+/g, '');
 const kitchenScript = readFileSync(resolve(directory, 'pages/index/index.js'), 'utf8');
 const kitchenNodes = [];
 function collectKitchenNodes(node) { if (node.type === 1) { kitchenNodes.push(node); node.children.forEach(collectKitchenNodes); } }
@@ -439,18 +460,24 @@ const kitchenFooter = kitchenNodes.find(node => node.props.some(prop => prop.nam
 const footerChildren = kitchenFooter.children.filter(node => node.type === 1);
 assert.match(footerChildren[0].loc.source, /^<button\b[^>]*class="text-button order-add-button"[^>]*disabled=[^>]*bindtap=/, 'add dishes is the first action in the same footer');
 assert.match(footerChildren[1].loc.source, /^<view\b[^>]*class="order-progress-actions"/);
-for (const label of ['备菜', '开饭']) {
-  const button = footerChildren[1].children.find(node => node.tag === 'button' && node.loc.source.includes(label === '备菜' ? '>备菜 ' : `>${label}</text>`));
+for (const label of ['备菜清单']) {
+  const button = footerChildren[1].children.find(node => node.tag === 'button' && node.loc.source.includes(`>${label}<`));
   assert.ok(button, `native ${label} keeps a visible text label`);
-  assert.match(button.loc.source, /<app-icon\b/, `native ${label} includes its icon`);
   assert.match(button.loc.source, /disabled="\{\{[^}]+\}\}"/);
 }
-assert.match(kitchenScript, /name:"chef",active:[^,]+,size:16/);
-assert.match(kitchenScript, /name:"menu-inverse",size:16/);
+assert.equal(footerChildren[1].children.filter(node => node.tag === 'button').length, 2, 'preparation and completion remain separate from adding dishes');
+assert.match(footerChildren[1].loc.source, /class="[^"]*meal-record-button[^"]*"[^>]*aria-busy="\{\{[^}]+\}\}"[^>]*disabled="\{\{[^}]+\}\}"[^>]*aria-label="\{\{[^}]+\}\}"[^>]*bindtap=/);
+assert.match(footerChildren[1].loc.source, /<text class="meal-record-label"[^>]*>记下这餐<\/text>/, 'the record action label is present in the first native render');
+assert.match(readFileSync(resolve(directory, 'pages/index/index.js'), 'utf8'), /记下这餐/);
+const recordButtonStyle = readFileSync(resolve(directory, 'pages/index/index.wxss'), 'utf8').match(/\.order-progress-actions[^{}]*\.primary-button\.meal-record-button[^{}]*\{([^}]+)\}/)?.[1] || '';
+for (const declaration of ['background:var(--green)', 'color:var(--white)', 'opacity:1', 'transition:none']) assert.ok(recordButtonStyle.includes(declaration), `native pending record button preserves ${declaration}`);
+
+assert.doesNotMatch(kitchenCard.loc.source, />开饭</);
+assert.doesNotMatch(kitchenCard.loc.source, />备菜</);
 assert.doesNotMatch(kitchenCard.loc.source, /class="order-tools"/);
 assert.match(styles, /\.order-date-tag\{background:var\(--green-light\);color:var\(--green\)/);
 assert.match(styles, /\.order-meal-tag\{background:var\(--meal-light\);color:var\(--meal\)/);
-console.log('微信厨房底栏检查通过：左侧加菜与右侧带图标的备菜进度、开饭同栏，日期与餐次固定独立配色。');
+console.log('微信餐食底栏检查通过：加菜、备菜清单与记录入口同栏，日期与餐次固定独立配色。');
 assert.doesNotMatch(kitchenCard.loc.source, /取消这一餐/, 'cancel is no longer duplicated in the card footer');
 assert.match(orderMenuStyles, /\.order-more-button[^{}]*\{[^}]*width:44px;height:44px;min-width:44px;min-height:44px/);
 assert.match(orderMenuStyles, /\.app-shell\.order-menu-root[^{}]*\{[^}]*position:fixed;[^}]*z-index:90/);
@@ -471,12 +498,12 @@ assert.match(finishedVeil, /z-index:1;border-radius:inherit;background:var\(--pa
 assert.doesNotMatch(styles, /\.order-card\.is-finished\s+\.(?:order-tag|order-status|dish-set-tags|meal-dish-photo|dish-avatar)/);
 assert.match(styles, /\.order-status\.completed\{[^}]*background:var\(--success-light\);[^}]*color:var\(--success\)/);
 assert.match(styles, /\.order-status\.cancelled\{[^}]*background:var\(--danger-light\);[^}]*color:var\(--danger\)/);
-console.log('微信厨房状态检查通过：开饭与取消后整卡叠加浅灰蒙层，保留标签色彩、菜品图片原色及详情点击；无持续高亮边框。');
+console.log('微信餐食状态检查通过：历史完成与取消后整卡叠加浅灰蒙层，保留标签色彩、菜品图片原色及详情点击；无持续高亮边框。');
 const menuNodes = [];
 function collectMenuNodes(node) { if (node.type === 1) { menuNodes.push(node); node.children.forEach(collectMenuNodes); } }
 baseParse(menuMarkup).children.forEach(collectMenuNodes);
 const menuStyles = readFileSync(resolve(directory, 'components/HomeMenu.wxss'), 'utf8');
-assert.doesNotMatch(styles, /\.home-menu-panel\.is-orders|--home-menu-tabs-height/, 'split navigation removes the old sticky mode bar and its reserved height');
+assert.doesNotMatch(styles, /\.home-menu-panel\.is-orders|--home-menu-tabs-height/, 'the shared meal header does not restore the retired sticky mode bar or its reserved height');
 assert.match(menuStyles, /\.home-menu-tools[^{}]*\{[^}]*position:\s*relative/);
 assert.match(menuStyles, /\.home-menu-layout[^{}]*\{[^}]*height:var\(--home-menu-viewport-height\)/, 'the dish workspace owns the full available viewport');
 assert.match(menuStyles, /\.home-menu-rail[^{}]*\{[^}]*height:var\(--home-menu-rail-height\)/, 'the category rail keeps its own bounded height');
@@ -493,7 +520,7 @@ assert.match(menuStyles, /--home-menu-rail-height:\s*max\(48px,\s*min\(var\(--ho
 assert.match(menuStyles, /--home-menu-viewport-height:\s*max\(var\(--home-menu-rail-height\),\s*calc\(100vh - var\(--home-menu-origin-top,\s*100vh\) - var\(--home-menu-bottom-inset\)\)\)/, 'the dish list fills remaining space below short category rails without forcing extra outer scrolling');
 for (const name of ['scroll-y', 'enhanced', 'bounces', 'scroll-top']) assert.ok(railScrollers[1].props.some(prop => prop.name === name), `right list retains ${name}`);
 assert.ok(railScrollers[1].props.some(prop => prop.name === 'bindscroll' && prop.value?.content === '{{railGesture.listScroll}}'), 'right list scroll updates category tracking through WXS');
-assert.match(menuMarkup, /owner.callMethod\('scrollPage'/, 'pulling down at the list top can return to the family cover');
+assert.match(menuMarkup, /owner.callMethod\('scrollPage'/, 'pulling down at the list top can return to the shared meal section header');
 for (const name of ['home-menu-category', 'home-menu-add', 'search-clear']) {
   const button = menuNodes.find(node => node.tag === 'button' && node.props.some(prop => prop.name === 'class' && prop.value?.content.includes(name)));
   assert.ok(button, `${name}: native button is present`);
@@ -588,15 +615,16 @@ assert.ok(!gestures.some(event => ['open', 'toggle'].includes(event.name)), 'a s
 gestures.length = 0;
 rowContext.opened = true;
 compiledRow.methods.dispatchAction.call(rowContext, { action: 'share' });
-assert.deepEqual(gestures.map(event => event.name), ['share'], 'native sharing does not close its source row');
+assert.deepEqual(gestures.map(event => event.name), ['close', 'share'], 'native sharing closes its source row before opening the picker');
 rowContext.busy = true;
 rowContext.sharing = true;
-assert.equal(compiledRow.computed.swipeState.call(rowContext), 3);
-gesture.sync(3, 1, owner);
-assert.equal(gestureState.offset, -180, 'pending share preparation preserves the visible row translation');
+rowContext.opened = false;
+assert.equal(compiledRow.computed.swipeState.call(rowContext), 2);
+gesture.sync(2, 1, owner);
+assert.equal(gestureState.offset, 0, 'pending share preparation leaves the row closed');
 assert.equal(gestureState.disabled, true);
 gesture.tap({ currentTarget: { dataset: { action: 'open' } } }, owner);
-assert.equal(gestures.length, 1, 'share preparation prevents duplicate actions');
+assert.equal(gestures.length, 2, 'share preparation prevents duplicate actions');
 rowContext.busy = false;
 gesture.sync(1, 3, owner);
 assert.equal(gestureState.offset, -180);
@@ -645,29 +673,12 @@ assert.match(uploadProgressStyles, /\.image-upload-progress[^}]*position:absolut
 assert.match(uploadProgressStyles, /\.image-upload-progress[^}]*align-items:flex-end;justify-content:flex-end/, 'large upload frames place progress at bottom-right');
 assert.match(uploadProgressStyles, /\.image-upload-progress\.is-compact[^}]*align-items:center;justify-content:center/, 'small upload frames center progress');
 assert.match(uploadProgressStyles, /pointer-events:none/, 'upload progress never intercepts taps');
-const purchaseTemplate = readFileSync(resolve(directory, 'components/StockEditor.wxml'), 'utf8');
-const purchaseScript = readFileSync(resolve(directory, 'components/StockEditor.js'), 'utf8');
-assert.equal((purchaseTemplate.match(/<image-picker\b/g) || []).length, 1, 'purchase and inventory reuse one native image picker');
-assert.match(purchaseScript, /frame:"recipe",label:"拍照或上传食材图片"/, 'purchase photos use the shared golden-ratio cover frame');
-assert.match(purchaseScript, /title:\w+\.purchase\?\w+\.value\.name\|\|"确认采购":"记录食材"/, 'the native purchase title is the ingredient name');
-assert.doesNotMatch(purchaseScript, /compact:|preferredHeight:/, 'native component props do not restore the compact frame or fixed height');
-assert.doesNotMatch(purchaseTemplate, /<image-picker\b[^>]*compact=|purchase-summary|preferred-height=/, 'purchase photos are full-width and the sheet follows its content height');
-assert.match(purchaseTemplate, /class="image-picker stock-cover-fallback[^"]*"/, 'fridge-off purchases retain a non-interactive cover');
-assert.match(purchaseTemplate, /<view class="image-upload(?: data-v-[\da-f]+)?"[^>]*style="\{\{/, 'the static cover uses the same native ratio placeholder');
-assert.match(styles, /\.image-upload\{[^}]*width:100%/, 'native purchase photos fill the shared content width');
-assert.doesNotMatch(styles, /\.purchase-summary/, 'the old 60px purchase row cannot constrain the cover');
-assert.match(styles, /\.compact-image-picker \.upload-caption\{[^}]*top:50%;left:50%;right:auto;bottom:auto;transform:translate\(-50%,-50%\);width:28px;height:28px;min-height:28px/, 'small uploader variants retain their centered camera');
-console.log('微信采购图片检查通过：全宽黄金比例大图、右下角百分比、内容自适应弹窗；保留冰箱开关、上传锁定和失败反馈。');
-const stockFooter = purchaseTemplate.match(/<view slot="footer">([\s\S]*)<\/view><\/sheet>/)?.[1];
-assert.ok(stockFooter, 'stock save controls stay in the fixed sheet footer');
-assert.match(stockFooter, /<text wx:if="\{\{\w+\}\}" class="error-message stock-save-error[^\"]*" role="alert"/, 'stock server errors remain visible above the save button');
-assert.ok(stockFooter.indexOf('role="alert"') < stockFooter.indexOf('<button'), 'stock errors precede the confirmation action');
-for (const field of ['name', 'quantity']) {
-  assert.match(purchaseScript, new RegExp(`"error-id":"stock-${field}-error"`), `${field} forwards its error description to the native input`);
+// Retired flows stay source-tested for legacy data compatibility, but must not
+// be reachable or packaged in the new mini-program navigation.
+for (const retired of ['StockEditor', 'InventoryView', 'ShoppingView', 'DishReadyButton']) {
+  assert.equal(existsSync(resolve(directory, `components/${retired}.wxml`)), false, `${retired} is not packaged in the new meal flow`);
 }
-assert.match(purchaseScript, /ingredientFieldErrors/, 'stock validates with the shared ingredient rules before saving');
-const stockStyles = readFileSync(resolve(directory, 'components/StockEditor.wxss'), 'utf8');
-assert.match(stockStyles, /\.stock-save-error[^}]*margin:0 0 10px/, 'stock error feedback keeps spacing from the save button');
+assert.doesNotMatch(kitchenMarkup, /<stock-editor\b|<inventory-view\b|<shopping-view\b/);
 const stockFieldTemplate = readFileSync(resolve(directory, 'components/FormField.wxml'), 'utf8');
 assert.match(stockFieldTemplate, /<text wx:if="\{\{\w+\}\}" id="\{\{\w+\}\}" class="field-error" role="alert"/, 'the shared field owns error text immediately beneath its native control');
 for (const tag of ['input', 'textarea']) {
@@ -675,126 +686,24 @@ for (const tag of ['input', 'textarea']) {
 }
 console.log('微信食材校验检查通过：共享数量规则、字段下方原生错误关联；仅网络失败提示留在保存按钮旁。');
 const nativePrep = readFileSync(resolve(directory, 'components/MealPreparationSheet.wxml'), 'utf8');
-const nativeReady = readFileSync(resolve(directory, 'components/DishReadyButton.wxml'), 'utf8');
-const nativeShopping = readFileSync(resolve(directory, 'components/ShoppingView.wxml'), 'utf8');
-const nativePrepEditor = readFileSync(resolve(directory, 'components/DishPreparationEditor.wxml'), 'utf8');
-const nativePrepEditorScript = readFileSync(resolve(directory, 'components/DishPreparationEditor.js'), 'utf8');
-assert.match(nativeReady, /role="button"[^>]*aria-pressed="\{\{\w+\}\}"[^>]*aria-label="\{\{\w+\}\}"/);
-assert.match(nativeReady, /<app-icon\b[^>]*\/>\s*<text\b/, 'ready controls have a leading icon and visible text');
-assert.doesNotMatch(nativeReady, /dish-ready-face|role="checkbox"/);
-assert.match(nativeReady, /secondary-button/);
-const nativeReadyScript = readFileSync(resolve(directory, 'components/DishReadyButton.js'), 'utf8');
-const readyTextBinding = nativeReady.match(/<text\b[^>]*>{{(\w+)}}<\/text>/)?.[1];
-const readyPressedBinding = nativeReady.match(/aria-pressed="{{(\w+)}}"/)?.[1];
-assert.ok(readyTextBinding && readyPressedBinding, 'ready text and pressed state both use reactive native bindings');
-let nativeReadyComponent;
-runInNewContext(nativeReadyScript, {
-  require: specifier => {
-    assert.equal(specifier, '../common/vendor.js');
-    return { ...Vue, _export_sfc: (component, properties) => Object.assign(component, Object.fromEntries(properties)), t: Vue.toDisplayString, p: value => value, o: handler => handler };
-  },
-  wx: { createComponent: component => { nativeReadyComponent = component; } },
-});
-const readyProps = Vue.reactive({ prepared: false, busy: false, disabled: false, label: '标记食材已备齐' });
-const renderReady = nativeReadyComponent.setup(readyProps);
-for (const prepared of [false, true, false]) {
-  readyProps.prepared = prepared;
-  const rendered = renderReady({ $emit() {} }, []);
-  assert.equal(rendered[readyTextBinding], prepared ? '已备齐' : '备齐');
-  assert.equal(rendered[readyPressedBinding], prepared);
-}
-assert.doesNotMatch(nativeReady + nativeReadyScript, /保存中/);
-assert.match(nativePrep, /<dish-ready-button\b/);
-assert.match(nativePrep, /class="[^\"]*prep-cart-button[^\"]*primary-button[^\"]*"[^>]*aria-label=[^>]*bindtap=/);
-assert.match(nativePrep, /class="prep-card-actions[^\"]*"/);
-assert.match(nativePrep, /class="prep-card-toolbar[^\"]*"/);
-assert.doesNotMatch(nativePrep, /prep-edit-button|>调整</);
-assert.match(nativePrep, />按需调整</);
-assert.match(nativePrep, />去采购</);
-assert.match(nativePrep, /<view\b[^>]*class="prep-cart-icon[^"]*"/);
-assert.match(nativePrep, /<text\b[^>]*wx:if="\{\{\w+\}\}"[^>]*class="[^"]*prep-cart-count[^"]*nav-count[^"]*is-overflow[^"]*"[^>]*role="status"/);
-assert.match(styles, /\.nav-count\{--count-size:\s*20px;[^}]*width:var\(--count-size\);height:var\(--count-size\);padding:0;border-radius:50%/);
-assert.match(styles, /\.nav-count\.is-overflow\{--count-size:\s*26px\}/);
-assert.match(styles, /\.nav-count\{[^}]*display:inline-flex;align-items:center;justify-content:center/);
-assert.doesNotMatch(nativePrep, />已加购（/);
-assert.match(readFileSync(resolve(directory, 'components/MealPreparationSheet.js'), 'utf8'), /已加购/);
-assert.doesNotMatch(nativePrep + readFileSync(resolve(directory, 'components/MealPreparationSheet.js'), 'utf8'), /加购中/);
-assert.doesNotMatch(nativePrep, /shopping-draft-editor|prep-progress/);
-assert.doesNotMatch(nativePrepEditor, /<sheet\b|<select-field\b/);
-assert.match(nativePrep, /<dish-preparation-editor\b/);
-assert.match(nativePrepEditor, /u-r="ingredientFields"/);
-assert.match(nativePrepEditor, /u-r="ingredientErrors"/);
-assert.match(nativePrepEditor, /class="preparation-edit-errors/);
-assert.match(nativePrepEditorScript, /"external-error":(?:true|!0)/);
-assert.doesNotMatch(nativePrepEditor, /u-r="\{\{/);
-assert.doesNotMatch(nativePrepEditor, /以上仅调整本餐，不影响原菜谱|preparation-edit-scope/);
-assert.match(nativePrepEditor, /class="preparation-unit-options[^\"]*"[^>]*role="listbox"/);
-assert.match(nativePrepEditor, /<button[^>]*aria-label="恢复本餐默认食材和用量"[^>]*class="[^\"]*'text-button', 'preparation-reset'[^\"]*"[^>]*><app-icon[^>]*\/><text[^>]*>恢复默认<\/text>/);
-assert.match(nativePrepEditor, /class="text-button preparation-add[^\"]*"[^>]*aria-label="添加食材或配料"[^>]*><app-icon[^>]*\/><text[^>]*>添加食材\/配料<\/text>/);
-assert.match(nativePrepEditorScript, /name:"restore",active:(?:true|!0),size:16/);
-assert.match(nativePrepEditorScript, /name:"plus",active:(?:true|!0),size:16/);
-assert.match(readFileSync(resolve(directory, 'components/DishPreparationEditor.wxss'), 'utf8'), /\.preparation-reset[^}]*text-decoration:none/, 'restore uses the shared text action without an underline');
-assert.doesNotMatch(nativePrepEditor + nativePrepEditorScript, /保存本餐调整|撤销修改/);
-assert.doesNotMatch(nativePrepEditor + nativePrepEditorScript, /正在同步|等待同步|已自动保存/);
-assert.doesNotMatch(readFileSync(resolve(directory, 'components/MutationSyncStatus.wxml'), 'utf8'), /mutation-progress/);
-assert.match(nativePrepEditorScript, /"field-class":"input preparation-material-input"/);
-assert.match(nativePrepEditorScript, /input preparation-material-input preparation-material-quantity/);
-assert.match(nativePrepEditorScript, /"empty-value":0/);
-assert.match(nativePrepEditorScript, /quantity-zero/);
-assert.match(nativePrepEditor, /class="preparation-unit-chevron/);
-assert.match(nativePrep, /class="prep-disclosure-chevron/);
-assert.match(readFileSync(resolve(directory, 'components/DishPreparationEditor.wxss'), 'utf8'), /grid-template-columns:repeat\(5,minmax\(0,1fr\)\)/);
-assert.match(styles, /\.input\.preparation-material-input\{[^}]*margin:0;[^}]*padding:0;[^}]*border:0;[^}]*font-size:var\(--type-meta\)/);
-assert.match(styles, /\.input\.preparation-material-quantity\{text-align:right/);
-assert.match(nativePrepEditor, /role="button"[^>]*class="icon-button preparation-remove[^\"]*"[^>]*aria-label=[^>]*bindtap=/);
-assert.match(nativePrepEditor + nativePrepEditorScript, /trash-danger/);
-assert.doesNotMatch(nativePrepEditor, /role="switch"|preparation-needed-toggle/);
-assert.match(nativePrepEditor, /class="preparation-edit-actions[^\"]*"/);
-assert.match(nativePrepEditor, /class="preparation-edit-footer[^\"]*"[^>]*><view class="preparation-edit-actions/);
-assert.match(readFileSync(resolve(directory, 'components/DishPreparationEditor.wxss'), 'utf8'), /\.preparation-edit-footer[^}]*gap:0;[^}]*margin:0;[^}]*padding:0/);
-assert.match(readFileSync(resolve(directory, 'components/DishPreparationEditor.wxss'), 'utf8'), /\.preparation-edit-actions[^}]*justify-content:space-between;[^}]*gap:0 16px/, 'material actions align with opposite sides of the list');
-assert.match(readFileSync(resolve(directory, 'components/DishPreparationEditor.wxss'), 'utf8'), /\.preparation-reset[^}]*margin:0 0 0 auto/, 'restore remains right aligned');
-assert.doesNotMatch(readFileSync(resolve(directory, 'components/DishPreparationEditor.wxss'), 'utf8'), /preparation-edit-scope|preparation-scope-size|preparation-scope-ink/);
-assert.match(nativePrepEditor, /class="meal-material-items[^\"]*"[^>]*role="list"/);
-assert.doesNotMatch(nativePrepEditor, /meal-material-group|meal-material-label/);
-assert.match(nativePrepEditor, /class="meal-material-items[^\"]*"[^>]*aria-label="本餐食材和配料"/);
-assert.match(styles, /\.meal-material-items\{[^}]*flex-direction:column/);
-assert.match(nativePrepEditor, /class="meal-material-header preparation-material-header[^\"]*"/);
-assert.match(nativePrepEditor, />用量</);
-assert.match(nativePrepEditor, />操作</);
-assert.match(styles, /\.meal-material-item\{[^}]*border-bottom:1px solid var\(--line\);[^}]*background:transparent/);
+assert.equal(existsSync(resolve(directory, 'components/DishPreparationEditor.wxml')), false, 'the retired ingredient editor is not packaged');
+assert.doesNotMatch(nativePrep, /<dish-ready-button\b|prep-cart-button|prep-cart-count|>去采购</);
+assert.match(readFileSync(resolve(directory, 'components/MealPreparationSheet.js'), 'utf8'), /title:"备菜清单"/);
+assert.doesNotMatch(nativePrep, /shopping-draft-editor|prep-progress|<form-field|<input/);
+assert.match(nativePrep, /<ingredient-table\b/);
+const ingredientTableMarkup = readFileSync(resolve(directory, 'components/IngredientTable.wxml'), 'utf8');
+assert.match(ingredientTableMarkup, /ingredient-row/);
+assert.match(ingredientTableMarkup, /aria-expanded="\{\{[^}]+\}\}"[^>]*bindtap=/);
 assert.match(styles, /\.sheet\.is-preparation \.sheet-header\{[^}]*border-bottom:0/);
 assert.match(styles, /\.sheet\.is-preparation \.sheet-footer\{[^}]*border-top:0/);
-assert.match(styles, /\.sheet\.is-preparation\{background:var\(--white\)/);
-assert.match(styles, /\.sheet\.is-preparation \.sheet-header\{[^}]*background:var\(--white\)/);
-assert.match(styles, /\.sheet\.is-preparation \.sheet-footer\{[^}]*background:var\(--white\)/);
-assert.match(readFileSync(resolve(directory, 'components/MealPreparationSheet.wxss'), 'utf8'), /\.prep-card[^}]*border:1px solid var\(--line\)/);
+assert.match(styles, /\.sheet\.is-preparation\{background:var\(--paper\)/);
+assert.match(styles, /\.sheet\.is-preparation \.sheet-header\{[^}]*background:var\(--paper\)/);
+assert.match(styles, /\.sheet\.is-preparation \.sheet-footer\{[^}]*background:var\(--paper\)/);
+assert.match(readFileSync(resolve(directory, 'components/MealPreparationSheet.wxss'), 'utf8'), /\.prep-card[^}]*background:var\(--white\)/);
 assert.doesNotMatch(nativePrep, />查看做法<|>备注<|>在别处备齐</);
-assert.match(nativeShopping, /class="shopping-package/);
-assert.match(nativeShopping, /class="[^"]*shopping-package-disclosure[^"]*"[^>]*aria-expanded=[^>]*aria-controls=[^>]*bindtap=/);
-assert.match(nativeShopping, /id="[^"]*"[^>]*class="shopping-package-ingredients/);
-assert.match(nativeShopping, /<meal-ingredient-list\b/);
-assert.match(readFileSync(resolve(directory, 'components/MealIngredientList.wxml'), 'utf8'), /role="listitem"/);
-assert.match(readFileSync(resolve(directory, 'components/MealIngredientList.wxml'), 'utf8'), /class="meal-material-header[^\"]*"/);
-assert.doesNotMatch(readFileSync(resolve(directory, 'components/MealIngredientList.wxml'), 'utf8'), /meal-material-group|meal-material-label/);
-assert.match(nativeShopping, />看看美食</);
-assert.doesNotMatch(nativeShopping, />没有待买食材<|shopping-empty-title/);
-assert.doesNotMatch(nativeShopping, /确认收货|物流|立即支付|购买订单/);
-assert.doesNotMatch(nativeShopping, /dish-ready-button|shopping-draft-editor|调整清单|shopping-review/);
-assert.match(nativeShopping, /role="checkbox"[^>]*class="shopping-dish-select[^"]*"[^>]*aria-checked=[^>]*aria-label=[^>]*bindtap=/);
-assert.match(nativeShopping, /role="checkbox"[^>]*class="shopping-meal-select[^"]*"[^>]*aria-checked=[^>]*bindtap=/);
-assert.match(nativeShopping, /class="[^"]*order-card[^"]*shopping-meal[^"]*has-expanded-tail/);
-assert.match(readFileSync(resolve(directory, 'components/ShoppingView.wxss'), 'utf8'), /\.shopping-package\.is-expanded[^}]*:last-child\{padding-bottom:0\}/, 'only the final expanded package removes its extra bottom padding');
-assert.match(readFileSync(resolve(directory, 'components/ShoppingView.wxss'), 'utf8'), /\.shopping-meal\.has-expanded-tail[^}]*\{padding-bottom:var\(--material-card-bottom-padding\)\}/);
-assert.match(readFileSync(resolve(directory, 'components/MealPreparationSheet.wxss'), 'utf8'), /\.prep-card\.is-expanded[^}]*\{padding-bottom:var\(--material-card-bottom-padding\)\}/);
-assert.match(nativeShopping, /class="shopping-meal-count[^"]*"[^>]*>\{\{[^}]+\}\}道菜</);
-assert.match(nativeShopping, /class="shopping-purchase-count[^"]*"[^>]*>\{\{[^}]+\}\}道菜</);
-assert.match(nativeShopping, /class="selection-dock shopping-purchase/);
-assert.match(nativeShopping, /class="primary-button selection-submit/);
-assert.match(nativeShopping, />下单</);
-assert.doesNotMatch(nativeShopping, />下单购买</);
-assert.match(readFileSync(resolve(directory, 'components/ShoppingView.js'), 'utf8'), /接入中，敬请期待/);
-console.log('微信备菜与采购产物检查通过：备齐与加购沿用共享主次按钮、底部购物车数字角标；采购配料按菜独立收起，按菜或餐选择下单，材料只读，无交易流程。');
+assert.match(readFileSync(resolve(directory, 'components/IngredientTable.js'), 'utf8'), /展开全部/);
+assert.doesNotMatch(nativePrep, /<dish-preparation-editor|按需调整|prep-disclosure/);
+console.log('微信备菜清单产物检查通过：按菜复用食材折叠表展示本餐用量，无编辑与采购操作。');
 const nativeAddition = readFileSync(resolve(directory, 'components/AddDishesSheet.wxml'), 'utf8');
 const nativeAdditionScript = readFileSync(resolve(directory, 'components/AddDishesSheet.js'), 'utf8');
 const nativeAdditionStyles = readFileSync(resolve(directory, 'components/AddDishesSheet.wxss'), 'utf8');
@@ -813,10 +722,21 @@ const foodThumbnail = readFileSync(resolve(directory, 'components/FoodThumbnail.
 assert.match(foodThumbnail, /variant:"card",mode:"aspectFill",thumbnail:!0/, 'all food list thumbnails fill the frame without leaving blank bars');
 assert.doesNotMatch(foodThumbnail, /aspectFit|fill:Boolean/, 'food thumbnails do not require page-specific filling opt-ins');
 assert.match(foodThumbnail, /coverFrameStyle\)\("recipe"\)/, 'food list thumbnails use the same golden frame as recipe and set covers');
-for (const component of ['MenuSwipeRow', 'MealDishList', 'SetSheet', 'CommunityView', 'SetEditor', 'ShareSheet', 'AddDishesSheet', 'CookingDiary']) {
+for (const component of ['MenuSwipeRow', 'MealDishList', 'SetSheet', 'CommunityView', 'SetEditor', 'ShareSheet', 'AddDishesSheet']) {
   const registration = JSON.parse(readFileSync(resolve(directory, `components/${component}.json`), 'utf8'));
   assert.equal(registration.usingComponents['food-thumbnail'], './FoodThumbnail', `${component} registers the shared native food thumbnail`);
 }
+for (const [component, frame, height] of [['MealTimeline', 'meal-history-dish', 70]]) {
+  const registration = JSON.parse(readFileSync(resolve(directory, `components/${component}.json`), 'utf8'));
+  assert.equal(registration.usingComponents['lazy-image'], './LazyImage', `${component} keeps shared cached thumbnails`);
+  const css = readFileSync(resolve(directory, `components/${component}.wxss`), 'utf8');
+  assert.match(css, new RegExp(`\\.${frame}[^,{]*\\{[^}]*height:${height}px`), `${component} gives its grid image an explicit native height`);
+}
+const mealComposerRegistration = JSON.parse(readFileSync(resolve(directory, 'components/MealPublishSheet.json'), 'utf8'));
+assert.equal(mealComposerRegistration.usingComponents['step-image-picker'], './StepImagePicker', 'meal records reuse the upload, thumbnail and retry picker');
+const mealComposerScript = readFileSync(resolve(directory, 'components/MealPublishSheet.js'), 'utf8');
+assert.match(mealComposerScript, /variant:"meal"/, 'the meal-only square grid does not alter recipe-step pickers');
+assert.match(mealComposerScript, /"fallback-images":/, 'arranged dishes remain a preview fallback rather than uploaded meal attachments');
 const sharedRegistration = JSON.parse(readFileSync(resolve(directory, 'pages/shared/index.json'), 'utf8'));
 assert.equal(sharedRegistration.usingComponents['food-thumbnail'], '../../components/FoodThumbnail', 'friend-shared set details use the same thumbnail');
 assert.match(styles, /\.step-photo-tile,[^{]*\.step-photo-add\{[^}]*width:var\(--step-photo-size\);height:var\(--step-photo-size\)/, 'native add and attachment tiles share square geometry');
@@ -827,133 +747,70 @@ assert.match(menuStyles, /\.home-menu-group-heading[^{}]*\{padding:2px 0 8px;/, 
 assert.match(menuStyles, /\.home-menu-rail[^{}]*\{[^}]*background:var\(--white\)/, 'native category rail ends naturally on the white page');
 assert.match(menuStyles, /\.home-menu-category\.active[^}]*background:var\(--green-light\)/, 'only the selected native category has a soft blue-gray background');
 assert.match(menuStyles, /\.home-menu-category\.active[^{}]*:before[^}]*width:3px/, 'native selected categories retain a visible short marker');
-const welcomeMarkup = readFileSync(resolve(directory, 'components/HomeWelcome.wxml'), 'utf8');
-const welcomeStyles = readFileSync(resolve(directory, 'components/HomeWelcome.wxss'), 'utf8');
-assert.match(styles, /\.orders-view\s*\{[^}]*padding-top:0(?:;|\})/, 'native kitchen content aligns with the menu without extra spacing below the shared page header');
-assert.match(welcomeMarkup, /mode="aspectFill"/, 'native empty-state illustrations fill their reserved golden-ratio frame');
-assert.match(welcomeMarkup, /<family-cover-image\b/, 'compact headers reuse the family cover image pipeline');
-assert.match(welcomeMarkup, /class="primary-button home-welcome-button[^>]+catchtap=/, 'native welcome actions stop bubbling and use a real tap handler');
-assert.match(welcomeStyles, /min-height:88px/, 'compact native headers remain lightweight rather than restoring the full-size cover');
-assert.match(welcomeStyles, /\.home-welcome\.is-kitchen[^{}]*\{[^}]*flex-direction:row;[^}]*align-items:center/, 'native compact kitchen keeps the copy and cover in one row');
-assert.match(welcomeStyles, /\.is-kitchen[^{}]*\.home-welcome-actions[^{}]*\{[^}]*align-items:flex-start;[^}]*margin-top:4px/, 'native idle kitchen places the menu action under the left-aligned title');
-assert.match(welcomeStyles, /\.is-kitchen[^{}]*\.home-welcome-button[^{}]*\{[^}]*padding-left:0;[^}]*background:transparent;[^}]*border:0/, 'native idle kitchen keeps its menu entry subtle and flush with the title');
-assert.doesNotMatch(kitchenMarkup, /再安排一餐|kitchen-plan-another/);
-const nativeWelcomeNodes = [];
-function collectWelcomeNodes(node) { if (node.type === 1) { nativeWelcomeNodes.push(node); node.children.forEach(collectWelcomeNodes); } }
-baseParse(welcomeMarkup).children.forEach(collectWelcomeNodes);
-const nativeWelcomeCopy = nativeWelcomeNodes.find(node => node.props.some(prop => prop.name === 'class' && prop.value?.content.split(' ').includes('home-welcome-copy')));
-const nativeWelcomeActions = nativeWelcomeNodes.find(node => node.props.some(prop => prop.name === 'class' && prop.value?.content.split(' ').includes('home-welcome-actions')));
-assert.ok(nativeWelcomeActions.loc.start.offset > nativeWelcomeCopy.loc.start.offset && nativeWelcomeActions.loc.end.offset < nativeWelcomeCopy.loc.end.offset, 'native welcome actions stay inside the copy column, not beside it');
-function welcomeVisibility(className) {
-  const node = nativeWelcomeNodes.find(node => node.props.some(prop => prop.name === 'class' && prop.value?.content.split(' ').includes(className)));
-  const binding = node?.props.find(prop => prop.name === 'wx:if')?.value?.content.match(/^\{\{(\w+)\}\}$/)?.[1];
-  assert.ok(binding, `${className}: conditional native rendering is explicit`);
-  return binding;
+assert.match(menuMarkup, /<home-welcome/, 'the empty menu restores the shared illustrated welcome');
+assert.equal((menuMarkup.match(/<home-welcome\b/g) || []).length, 1, 'only the empty menu retains its illustrated welcome; populated menus use the shared section header');
+assert.equal((kitchenMarkup.match(/<home-welcome\b/g) || []).length, 1, 'only empty reservations retain their original illustrated welcome');
+const nativeNavigation = loadFile(resolve(directory, 'domain/navigation.js'));
+assert.deepEqual(Array.from(nativeNavigation.mainNavigation(), item => `${item.id}:${item.label}`), ['menu:小灶', 'community:美食', 'square:发现', 'family:我的']);
+assert.equal(nativeNavigation.mainNavigationTab('activity'), 'menu', 'reservations select the same bottom navigation item as the menu');
+const mealsHost = kitchenNodes.find(node => node.props.some(prop => prop.name === 'class' && prop.value?.content === 'meals-home'));
+assert.ok(mealsHost, 'the shared meal container is present in the native page');
+assert.match(mealsHost.loc.source, /class="menu-home"/, 'the menu stays inside the combined meal page');
+assert.match(mealsHost.loc.source, /class="activity-view"/, 'reservations stay inside the combined meal page');
+const mealSections = kitchenNodes.filter(node => node.tag === 'button' && node.props.some(prop => prop.name === 'class' && prop.value?.content.includes('meal-section-button')));
+assert.deepEqual(mealSections.map(node => node.props.find(prop => prop.name === 'aria-label')?.value?.content), ['菜单', '安排'], 'the previous banner position contains the two meal section controls');
+for (const section of mealSections) {
+  assert.ok(section.props.some(prop => prop.name === 'bindtap'), 'both meal sections use native taps');
+  assert.ok(section.props.some(prop => prop.name === 'aria-selected'), 'native meal sections expose their current selection');
 }
-const welcomeArtKey = welcomeVisibility('home-welcome-art');
-const welcomeCoverKey = welcomeVisibility('home-welcome-cover');
-const welcomeActionsKey = welcomeVisibility('home-welcome-actions');
-let nativeWelcome;
-const welcomeModules = {
-  '../common/vendor.js': { ...Vue, _export_sfc: (component, properties) => Object.assign(component, Object.fromEntries(properties)), e: (...values) => Object.assign({}, ...values), t: Vue.toDisplayString, n: Vue.normalizeClass, s: value => value, p: value => value, o: handler => handler, f: (entries, render) => entries.map(render) },
-  '../domain/image-crop.js': { coverFrameStyle },
-  '../domain/presentation.js': { DEFAULT_SET_COVER },
-};
-const { code: nativeWelcomeCode } = transformSync(readFileSync(resolve(directory, 'components/HomeWelcome.js'), 'utf8'), { presets: [['@babel/preset-env', { targets: { ie: '11' } }]], babelrc: false, configFile: false });
-runInNewContext(nativeWelcomeCode, {
-  require: specifier => { assert.ok(welcomeModules[specifier], `welcome dependency: ${specifier}`); return welcomeModules[specifier]; },
-  wx: { createComponent: component => { nativeWelcome = component; } },
-});
-for (const kitchen of [false, true]) for (const compact of [false, true]) for (const primaryLabel of ['', '看看菜单']) {
-  const events = [];
-  const props = { kitchen, compact, title: '今天还没安排餐食', description: '', cover: 'cloud://family-cover', illustration: DEFAULT_SET_COVER, primaryLabel, primaryIcon: kitchen ? 'menu' : 'menu-inverse', secondaryLabel: '', secondaryIcon: '', busy: false };
-  const rendered = nativeWelcome.setup(props)({ $emit: event => events.push(event) }, []);
-  assert.equal(rendered[welcomeArtKey], !compact && !kitchen);
-  assert.equal(rendered[welcomeCoverKey], compact);
-  assert.equal(Boolean(rendered[welcomeActionsKey]), Boolean(primaryLabel));
-  assert.equal(Object.values(rendered).some(value => value?.variant === 'card' && value.src === props.cover), compact, 'all nonempty native kitchen headers and populated menus use the same saved family cover');
-  if (primaryLabel) {
-    assert.ok(Object.values(rendered).some(value => value?.name === props.primaryIcon && value.size === (kitchen ? 16 : 18) && value.active === kitchen));
-    const callbacks = Object.values(rendered).filter(value => typeof value === 'function');
-    assert.equal(callbacks.length, 1);
-    callbacks[0]({});
-    assert.deepEqual(events, ['primary']);
-  }
-}
-const compiledKitchen = { exports: {} };
-const nativeDateProps = { calendar: true, kitchen: true, compact: true, title: '有餐食预定，快来准备吧！', description: '10月23日 · 九月十四 · 周五', cover: '', primaryLabel: '', secondaryLabel: '' };
-const nativeDateRender = nativeWelcome.setup(nativeDateProps)({}, []);
-const nativeDateParts = Object.values(nativeDateRender).find(Array.isArray);
-assert.equal(nativeDateParts.length, 3, 'native headers render solar date, lunar date and weekday as three intact segments');
-for (const [index, part] of ['10月23日', '九月十四', '周五'].entries()) assert.ok(Object.values(nativeDateParts[index]).includes(part));
-assert.match(welcomeStyles, /\.home-welcome-date-part[^{}]*\{[^}]*white-space:nowrap/, 'native lunar dates cannot leave a single character on a new line');
-const { code: nativeKitchenCode } = transformSync(readFileSync(resolve(directory, 'domain/kitchen.js'), 'utf8'), { presets: [['@babel/preset-env', { targets: { ie: '11' } }]], babelrc: false, configFile: false });
-runInNewContext(nativeKitchenCode, { exports: compiledKitchen.exports, module: compiledKitchen, require: specifier => { assert.equal(specifier, './presentation.js'); return { validateImage, stepImages }; } });
+assert.doesNotMatch(mealsHost.loc.source, /kitchen-heading|kitchen-plan-date/, 'populated reservations no longer retain the old cover title or date header');
+assert.doesNotMatch(kitchenMarkup, /slot="utility"/, 'meal covers no longer contain the old timeline text button');
+assert.match(readFileSync(resolve(directory, 'components/FamilyView.wxml'), 'utf8'), /class="account-row diary-entry[^>]*aria-label="打开饮食日记"[^>]*catchtap=/, 'my home owns the diary entry');
+assert.doesNotMatch(kitchenMarkup, /meal-diary-button|section-page-header|plans-view/, 'kitchen no longer contains social tabs, diary shortcuts or plans');
+assert.doesNotMatch(kitchenMarkup, /meal-diary-handle/, 'the abandoned edge-swipe diary entry is removed');
+assert.match(kitchenMarkup, /bindreachBottom=/, 'the history popup owns its native scroll pagination');
+assert.doesNotMatch(kitchenMarkup, /再安排一餐|kitchen-plan-another/, 'meal plans do not add a duplicate arrange-another footer');
+const pageStyles = readFileSync(resolve(directory, 'pages/index/index.wxss'), 'utf8');
+assert.match(pageStyles, /\.orders-view[^{}]*\{[^}]*padding-top:0/, 'reservations follow the shared meal controls without an extra top inset');
+const nativeSectionVendor = { ...Vue, _export_sfc: (component, properties) => Object.assign(component, Object.fromEntries(properties)), e: (...values) => Object.assign({}, ...values), t: Vue.toDisplayString, n: Vue.normalizeClass, s: value => value, p: value => value, o: handler => handler, f: (entries, render) => entries.map(render) };
+const compiledKitchen = { exports: loadFile(resolve(directory, 'domain/kitchen.js')) };
 let nativeMealBar;
-const nativeMealBarModules = { '../common/vendor.js': welcomeModules['../common/vendor.js'], '../domain/kitchen.js': compiledKitchen.exports };
+const nativeMealBarModules = { '../common/vendor.js': nativeSectionVendor, '../domain/kitchen.js': compiledKitchen.exports };
 runInNewContext(readFileSync(resolve(directory, 'components/MealBar.js'), 'utf8'), {
   require: specifier => { assert.ok(nativeMealBarModules[specifier], `meal date dependency: ${specifier}`); return nativeMealBarModules[specifier]; },
   wx: { createComponent: component => { nativeMealBar = component; } },
 });
 const mealBarMarkup = readFileSync(resolve(directory, 'components/MealBar.wxml'), 'utf8');
-assert.match(mealBarMarkup, /class="reservation-day-label"/);
-assert.match(mealBarMarkup, /class="reservation-day-date"/);
+assert.match(mealBarMarkup, /class="arrangement-setting[^"]*" aria-expanded=/);
+assert.match(mealBarMarkup, /class="arrangement-date/);
 for (const today of ['2026-10-26', '2026-12-31', '2024-02-28']) {
   const days = compiledKitchen.exports.reservationDays(today);
   const events = [];
-  const bindings = nativeMealBar.setup({ today, date: days[1].date, meal: '晚餐' })({ $feedback() {}, $emit: (...args) => events.push(args) }, []);
+  const renderMeal = nativeMealBar.setup({ today, date: days[1].date, meal: '晚餐' }, { emit: (...args) => events.push(args) });
+  const context = { $feedback() {} };
+  const collapsed = renderMeal(context, []);
+  assert.equal(collapsed.d, false);
+  collapsed.e({});
+  const bindings = renderMeal(context, []);
+  assert.equal(bindings.d, true);
   const dates = Object.values(bindings).find(value => Array.isArray(value) && value.length === 3);
   assert.equal(dates.length, 3);
   dates.forEach((row, index) => {
     const values = Object.values(row);
     const calendar = compiledKitchen.exports.calendarDateLabel(days[index].date);
     assert.ok(values.includes(days[index].label) && values.includes(calendar), 'native date buttons show the relative name and actual month/day');
-    assert.ok(values.includes(`选择${days[index].label}，${calendar}`));
+    assert.ok(values.includes(`选择${days[index].label}，${calendar}${index === 1 ? '，已选择' : ''}`));
     values.find(value => typeof value === 'function')({});
   });
   assert.deepEqual(events, Array.from(days, day => ['update:date', day.date]));
+  assert.equal(renderMeal(context, []).d, false, 'selection collapses the date list');
 }
-const inventoryMarkup = readFileSync(resolve(directory, 'components/InventoryView.wxml'), 'utf8');
-assert.match(inventoryMarkup, /class="stock-photo" style="\{\{/);
-assert.match(inventoryMarkup, /class="stock-photo-image" style="position:absolute;inset:0;background:var\(--white\)"/);
-assert.match(inventoryMarkup, /class="supplies-empty-art"/);
-assert.doesNotMatch(inventoryMarkup, />冰箱空空如也<|inventory-empty-title/);
-assert.match(readFileSync(resolve(directory, 'components/ShoppingView.wxml'), 'utf8'), /class="shopping-empty-art supplies-empty-art(?: [^"]*)?"/);
-assert.match(styles, /\.supplies-empty-art\{[^}]*border:0;[^}]*border-radius:0;[^}]*background:transparent;[^}]*box-shadow:none/, 'native empty fridge and shopping keep only the large icon, with no circular background or shadow');
-assert.match(styles, /\.supplies-empty-art\{width:64px;height:64px;[^}]*margin:0 0 16px/, 'native empty-state artwork removes the old oversized spacer');
-assert.match(styles, /\.stock-card\{display:flex;flex-direction:column;align-items:stretch/);
-assert.doesNotMatch(styles, /\.stock-grid\{grid-template-columns:minmax\(0,1fr\)/);
-assert.match(readFileSync(resolve(directory, 'components/ShoppingView.wxss'), 'utf8'), /\.shopping-empty-button[^{}]*\{[^}]*border-radius:var\(--radius-control\)/);
-console.log('微信日期与冰箱产物检查通过：选餐日期双行与实际日期一致，采购空态为圆角矩形；冰箱保持手机端双列白色图片卡片。');
+console.log('微信日期检查通过：展开列表显示实际日期，选后收起。');
 const scheduledNativeMeals = ['2026-10-22', '2026-10-23', '2026-10-24'].flatMap(date => ['早餐', '午餐', '晚餐', '宵夜'].map((meal, index) => ({ id: `${date}-${meal}`, date, meal, status: ['pending', 'accepted'][index % 2] })));
 const finishedNativeMeals = scheduledNativeMeals.map((order, index) => ({ ...order, id: `finished-${order.id}`, status: index % 2 ? 'cancelled' : 'completed', [index % 2 ? 'cancelledAt' : 'completedAt']: new Date(Date.parse('2026-10-22T00:00:00Z') + index * 60000).toISOString() }));
 const expectedNativeMeals = [...scheduledNativeMeals, ...finishedNativeMeals.reverse()];
 assert.deepEqual(Array.from(compiledKitchen.exports.kitchenOrders([...expectedNativeMeals].reverse(), '2026-10-22'), order => order.id), expectedNativeMeals.map(order => order.id));
-const compiledKitchenWelcome = { exports: {} };
-const { code: nativeKitchenWelcomeCode } = transformSync(readFileSync(resolve(directory, 'domain/home-welcome.js'), 'utf8'), { presets: [['@babel/preset-env', { targets: { ie: '11' } }]], babelrc: false, configFile: false });
-const welcomeDomainModules = { './kitchen.js': compiledKitchen.exports, '../common/vendor.js': { solarLunar } };
-runInNewContext(nativeKitchenWelcomeCode, { exports: compiledKitchenWelcome.exports, module: compiledKitchenWelcome, Intl: undefined, require: specifier => { assert.ok(welcomeDomainModules[specifier], `welcome domain dependency: ${specifier}`); return welcomeDomainModules[specifier]; } });
-assert.equal(compiledKitchenWelcome.exports.homeDateLabel('2026-10-23'), '10月23日 · 九月十四 · 周五', 'native menu and kitchen omit year and lunar prefix and put the weekday last');
-assert.equal(compiledKitchenWelcome.exports.homeDateLabel('2025-07-25'), '07月25日 · 闰六月初一 · 周五', 'native calendar preserves leap-month names');
-assert.equal(compiledKitchenWelcome.exports.homeDateLabel('2026-02-30'), '', 'native calendar never displays an invalid date');
-assert.equal(compiledKitchenWelcome.exports.kitchenWelcome([], '2026-10-22').mode, 'empty', 'an empty native kitchen uses the full illustrated welcome');
-assert.equal(compiledKitchenWelcome.exports.kitchenWelcome([], '2026-10-22').title, '今天还没安排餐食', 'the empty kitchen keeps its original title');
-for (const status of ['pending', 'accepted', 'completed', 'cancelled']) {
-  const historicalMeal = { id: 'past-meal', date: '2026-09-01', meal: '晚餐', status };
-  const welcome = compiledKitchenWelcome.exports.kitchenWelcome([historicalMeal], '2026-10-22');
-  assert.equal(welcome.mode, 'empty', 'past orders do not keep the current three-day kitchen from displaying its empty state');
-  assert.equal(welcome.title, '今天还没安排餐食');
-  assert.equal(welcome.recordTitle, '', 'out-of-window history has no visible heading');
-  assert.equal(compiledKitchen.exports.kitchenOrders([historicalMeal], '2026-10-22').length, 0);
-  for (const date of ['2026-10-22', '2026-10-23', '2026-10-24']) {
-    const visibleMeal = { ...historicalMeal, date };
-    const visibleWelcome = compiledKitchenWelcome.exports.kitchenWelcome([visibleMeal], '2026-10-22');
-    const active = ['pending', 'accepted'].includes(status);
-    assert.equal(visibleWelcome.mode, active ? 'active' : 'idle');
-    assert.equal(visibleWelcome.title, active ? '有餐食预定，快来准备吧！' : '还没有餐食，快来预订吧！');
-  }
-}
-console.log('微信厨房页头与排序检查通过：仅今天、明天、后天全部状态的餐单可见，旧记录不删除；待做餐按日期餐次在前，开饭与取消统一后置并按操作时间倒序。');
+console.log('微信导航检查通过：餐食合并菜单与安排，底栏保留小灶、美食、发现、我的；两种空态与餐单日期排序保留。');
 assert.doesNotMatch(swipeStyles, /\.menu-swipe[^{}]*\{[^}]*border-bottom/, 'native menu rows use spacing rather than divider lines');
 for (const name of ['RecipeSheet', 'SetSheet']) {
   const detail = readFileSync(resolve(directory, `components/${name}.wxml`), 'utf8');
@@ -962,12 +819,12 @@ for (const name of ['RecipeSheet', 'SetSheet']) {
 }
 console.log('微信交互产物经 ES5 二次转译后验证通过：首次加载、返回缓存、即时开关、连续点击排队与失败回退。');
 console.log('微信分享产物检查通过：预备卡片去重、编辑后失效、原生分享、圆形操作单击与无障碍标签。');
-console.log('微信头像产物检查通过：厨房不显示点餐人头像且不预留占位，人数与选菜操作保留；家庭成员头像更新、匿名图标和圆形容器正常。');
+console.log('微信头像产物检查通过：厨房不显示点餐人头像且不预留占位，菜品来源与选菜操作保留；家庭成员头像更新、匿名图标和圆形容器正常。');
 console.log('微信美食署名检查通过：美食详情独有标题下作者与封面右下角无单位家庭数，其他详情不展示；卡片署名、透明渐变顶栏和加入入口保留，未知计数仍隐藏。');
 console.log('微信菜品图片检查通过：菜单、厨房、加菜、套餐、分享和日记统一铺满黄金比例框；保留缩略图缓存、步骤原比例与瀑布流。');
 console.log('微信首页产物检查通过：类别与烹饪时间／套餐道数、分类小标题与无横线菜单、三项新增入口、WXS 左滑编辑/分享/删除与点击隔离、沉浸详情工具栏及标题旁选菜；保留原编辑及删除确认。');
 const sharePickerMarkup = readFileSync(resolve(directory, 'components/FriendShareSheet.wxml'), 'utf8');
-const createPickerMarkup = readFileSync(resolve(directory, 'pages/index/index.wxml'), 'utf8');
+const createPickerMarkup = kitchenMarkup;
 for (const markup of [sharePickerMarkup, createPickerMarkup]) {
   assert.match(markup, /class="sheet-action-options /, 'both native pickers use the shared horizontal action row');
   assert.match(markup, /class="sheet-action-icon"/, 'both native pickers retain their circular icon surfaces');
@@ -984,7 +841,7 @@ assert.match(sharePickerMarkup, /发布美食/);
 assert.match(sharePickerMarkup, /不含家庭信息/);
 assert.match(sharePickerMarkup, /所有人可见/);
 assert.match(styles, /\.sheet-action-icon\{[^}]*width:56px;height:56px;border-radius:50%/);
-assert.match(styles, /\.sheet\.is-action-picker \.sheet-header\{border-bottom:0\}/);
+assert.match(styles, /\.sheet\.is-action-picker \.sheet-header(?:,[^{]+)?\{border-bottom:0;min-height:56px;padding-top:6px;padding-bottom:6px\}/);
 assert.match(styles, /\.home-menu-add::?before\{[^}]*background:var\(--paper\)/, 'menu plus uses the same background token as the search field');
 assert.match(styles, /\.home-menu-add:not\(\[disabled\]\):hover::?before\{background:var\(--control-hover\)\}/);
 assert.doesNotMatch(styles, /\.home-menu-add:hover[,\{]/, 'hover does not paint the full 44px touch target');

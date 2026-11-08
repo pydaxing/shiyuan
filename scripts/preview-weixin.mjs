@@ -19,7 +19,12 @@ export async function verifyPreviewTarget(root, config) {
   assert.ok(backend.functions?.some(entry => entry.name === functionName), '前端与后端云函数名称不一致');
   const client = await readFile(join(project, 'miniprogram/services/cloud.js'), 'utf8');
   assert.ok(client.includes(JSON.stringify(config.VITE_CLOUD_ENV)) && client.includes(JSON.stringify(functionName)), '预览包的云配置已过期，请重新构建正式包');
-  assert.match(client, /exports\.cloudMode\s*=\s*(?:!0|true)\s*[,;]/, '本地演示包不能作为云端手机预览');
+  const mode = client.match(/exports\.cloudMode\s*=\s*(!0|true|[A-Za-z_$][\w$]*)\s*[,;]/)?.[1];
+  // The minifier may export a shared constant instead of repeating true.
+  const literalCloud = mode === '!0' || mode === 'true';
+  const escapedMode = mode?.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const constantCloud = mode && !literalCloud && new RegExp(`\\bconst\\s+(?:[^;]*?,\\s*)?${escapedMode}\\s*=\\s*(?:!0|true)\\s*[,;]`).test(client);
+  assert.ok(literalCloud || constantCloud, '本地演示包不能作为云端手机预览');
   return { project, appid: settings.appid, environment: config.VITE_CLOUD_ENV, functionName };
 }
 

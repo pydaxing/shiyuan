@@ -6,7 +6,7 @@ import { parse } from '@vue/compiler-sfc';
 import { baseParse } from '@vue/compiler-dom';
 import postcss from 'postcss';
 import sharp from 'sharp';
-import { mainNavigation, hasIngredientManagement } from '../src/domain/navigation.js';
+import { mainNavigation, mainNavigationTab, hasIngredientManagement } from '../src/domain/navigation.js';
 
 const read = path => readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8');
 const source = read('pages/index/index.vue');
@@ -28,18 +28,18 @@ function declarationsFor(selector) {
   return declarations;
 }
 
-test('five navigation entries always retain procurement while only fridge controls its label and icon', () => {
+test('four navigation entries merge menu and reservations independently of retired stock preferences', () => {
   for (const features of [{}, { fridge: false, shopping: false }, { fridge: true, shopping: false }, { fridge: false, shopping: true }, { fridge: true, shopping: true }]) {
     const enabled = Boolean(features.fridge || features.shopping);
     const before = { ...features };
     assert.equal(hasIngredientManagement(features), enabled);
-    assert.deepEqual(mainNavigation(features).map(item => item.label), ['菜单', '厨房', '美食', features.fridge ? '食材' : '采购', '我家']);
-    assert.deepEqual(mainNavigation(features).map(item => item.icon), ['menu', 'chef', 'community', features.fridge ? 'inventory' : 'shopping', 'family']);
+    assert.deepEqual(mainNavigation(features).map(item => item.label), ['小灶', '美食', '发现', '我的']);
+    assert.deepEqual(mainNavigation(features).map(item => item.icon), ['menu', 'community', 'moments', 'family']);
     assert.deepEqual(features, before, 'reading navigation must not migrate or save old feature settings');
   }
 });
 
-test('menu and kitchen are peer bottom buttons with fixed page titles and no family row', () => {
+test('menu and reservations share one page header and one accessible bottom navigation entry', () => {
   const button = nodes.find(node => hasClass(node, 'nav-item'));
   assert.equal(button.tag, 'button');
   assert.equal(attribute(button, 'role'), 'button');
@@ -48,27 +48,36 @@ test('menu and kitchen are peer bottom buttons with fixed page titles and no fam
   assert.equal(binding(button.children[0].children.find(node => node.tag === 'AppIcon'), 'name'), 'item.icon');
   for (const item of mainNavigation({ fridge: true })) {
     assert.equal(evaluate(binding(button, 'aria-label'), { item }), item.label);
-    assert.equal(evaluate(binding(button, 'aria-pressed'), { item, tab: item.id }), true);
+    assert.equal(evaluate(binding(button, 'aria-pressed'), { item, activeNavigation: mainNavigationTab(item.id) }), true);
   }
-  assert.deepEqual(nodes.filter(node => node.tag === 'PageHeader').map(node => attribute(node, 'title')), ['我家菜单', '我家厨房']);
+  const mealNavigation = mainNavigation()[0];
+  assert.equal(evaluate(binding(button, 'aria-pressed'), { item: mealNavigation, activeNavigation: mainNavigationTab('activity') }), true);
+  assert.deepEqual(nodes.filter(node => node.tag === 'PageHeader').map(node => attribute(node, 'title')), ['']);
+  const sections = nodes.filter(node => hasClass(node, 'meal-section-button'));
+  assert.deepEqual(sections.map(node => attribute(node, 'aria-label')), ['菜单', '安排']);
+  for (const [tab, selected] of [['menu', 0], ['activity', 1]]) {
+    assert.deepEqual(sections.map(node => evaluate(binding(node, 'aria-selected'), { tab })), sections.map((_, index) => index === selected));
+  }
+  const square = readFileSync(new URL('../src/components/MealSquare.vue', import.meta.url), 'utf8');
+  assert.match(square, /<PageHeader title="发现" action-side="left"/);
   assert.ok(!nodes.some(node => hasClass(node, 'menu-segments') || hasClass(node, 'hero')));
   assert.doesNotMatch(source, /menuMode|switchMenu|familyDisplay|editable @edit/);
 });
 
-test('menu remains mounted and all kitchen redirects use the new navigation entry', () => {
-  assert.match(source, /<view v-show="tab === 'menu'" class="menu-view">/);
-  assert.match(source, /<HomeMenu[^>]+:active="tab === 'menu'"/);
-  assert.match(source, /useKitchenFocus\(orders, computed\(\(\) => tab.value === 'kitchen'\)/);
+test('menu stays mounted and existing orders route to the daily meal-list section', () => {
+  assert.match(source, /<view v-show="tab === 'menu'" class="menu-home">/);
+  assert.match(source, /<HomeMenu[^>]+:active="menuActive"/);
+  assert.match(source, /useKitchenFocus\(orders, computed\(\(\) => tab.value === 'activity'\)/);
   const reveal = source.match(/function revealOrder\(orderId\) \{[\s\S]*?\n\}/)[0];
-  assert.match(reveal, /tab.value = 'kitchen';/);
+  assert.match(reveal, /tab.value = 'activity';/);
   assert.match(reveal, /kitchenFocus.focus\(orderId\)/);
-  assert.match(source, /mealDraft.clear\(\); cartOpen.value = false; tab.value = 'kitchen';/);
+  assert.match(source, /mealDraft.clear\(\); cartOpen.value = false; tab.value = 'activity';/);
   assert.match(source, /@click="openPreparation\(order\)"/);
-  assert.match(source, /if \(!items.some\(\(item\) => item.id === tab.value\)\) tab.value = 'family'/);
+  assert.match(source, /if \(!items.some\(\(item\) => item.id === activeNavigation.value\)\) tab.value = 'family'/);
 });
 
 test('navigation badges hide at zero and use a larger circle for 99+ without losing the true count', () => {
-  for (const [id, countKey, label] of [['kitchen', 'pendingOrderCount', count => `待准备${count}餐`], ['ingredients', 'missingCount', count => `待采购${count}道菜`]]) {
+  for (const [id, countKey, label] of [['menu', 'pendingOrderCount', count => `已安排${count}餐`]]) {
     const badge = nodes.find(node => hasClass(node, 'nav-count') && node.props.some(prop => prop.name === 'if' && prop.exp.content.includes(`'${id}'`)));
     const visibility = badge.props.find(prop => prop.name === 'if').exp.content;
     const text = badge.children.find(node => node.type === 5).content.content;
@@ -78,13 +87,13 @@ test('navigation badges hide at zero and use a larger circle for 99+ without los
       assert.equal(evaluate(text, context), count > 99 ? '99+' : count);
       assert.equal(evaluate(binding(badge, 'class'), context)['is-overflow'], count > 99);
       assert.equal(evaluate(binding(badge, 'aria-label'), context), label(count));
-      assert.equal(Boolean(evaluate(visibility, { ...context, item: { id: 'menu' } })), false);
+      assert.equal(Boolean(evaluate(visibility, { ...context, item: { id: 'community' } })), false);
     }
   }
 });
 
 test('menu and kitchen reuse readable original PNG icons without filters', async () => {
-  for (const name of ['menu', 'chef', 'menu-active', 'chef-active']) {
+  for (const name of ['menu', 'camera', 'menu-active', 'camera-active']) {
     const { data, info } = await sharp(readFileSync(new URL(`../src/static/icon-${name}.png`, import.meta.url))).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
     assert.equal(info.width, 96);
     assert.equal(info.height, 96);
@@ -119,25 +128,14 @@ test('ingredients embed the original fridge and shopping behind the existing equ
   assert.doesNotMatch(ingredients, /库存|familyDisplay|FamilyCover|切换家庭/);
 });
 
-test('my home has a compact management entry and one shared ingredient and help card', () => {
+test('my home groups diary and family entries and moves the family mode switch into settings', () => {
   const family = read('components/FamilyView.vue');
   const items = nodesOf(family);
-  assert.match(family, /computed\(\(\) => familyAppearance\(state.value.family\)\)/);
-  assert.equal(binding(items.find(node => node.tag === 'PageHeader'), 'title'), 'familyDisplay.name');
-  assert.ok(items.some(node => hasClass(node, 'family-banner')));
-  assert.ok(!items.some(node => hasClass(node, 'hero')));
-  assert.ok(family.indexOf('class="family-banner"') < family.indexOf('<CookingDiary'));
+  assert.equal(binding(items.find(node => node.tag === 'PageHeader'), 'title'), 'pageTitle');
+  assert.ok(items.some(node => hasClass(node, 'account-profile')));
+  assert.equal(items.filter(node => hasClass(node, 'diary-entry')).length, 1);
   assert.equal(items.filter(node => attribute(node, 'role') === 'switch').length, 1);
-  assert.equal(items.filter(node => hasClass(node, 'family-management-entry')).length, 1);
-  const preferences = items.find(node => hasClass(node, 'family-preferences'));
-  const rows = preferences.children.filter(node => node.type === 1);
-  assert.equal(rows.length, 2);
-  assert.ok(hasClass(rows[0], 'feature-row'));
-  assert.ok(hasClass(rows[1], 'family-help-entry'));
-  assert.equal(attribute(items.find(node => attribute(node, 'role') === 'switch'), 'aria-label'), '冰箱');
-  assert.equal(declarationsFor('.feature-copy .stock-name').get('font-weight'), '400');
-  assert.equal(declarationsFor('.feature-copy .stock-name').get('font-size'), declarationsFor('.family-info-row').get('font-size'));
-  assert.equal(declarationsFor('.stock-name').get('font-weight'), '500');
-  assert.match(family, /setFridgeEnabled\(!familyFeatures.fridge\)/);
-  assert.doesNotMatch(family, /我是大厨|按你家的习惯来|family-tools|食材管理|setFeature\(/);
+  for (const sheet of items.filter(node => node.tag === 'Sheet')) assert.ok(sheet.props.some(prop => prop.name === 'page'));
+  assert.match(family, /manageFamily\('switchWorkspace'/);
+  assert.doesNotMatch(family, /<CookingDiary|setFeature\(/);
 });

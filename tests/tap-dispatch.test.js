@@ -33,13 +33,20 @@ test('native event reuse can close a new editor when its opening tap reaches an 
 });
 
 test('all family editor launch controls stop native taps before the page can rerender its ancestor binding', () => {
-  const entries = [['components/PageHeader.vue', 'page-heading-edit'], ['components/FamilyView.vue', 'family-banner-edit'], ['components/FamilyView.vue', 'family-banner-main family-management-entry']];
+  const entries = [
+    ['components/PageHeader.vue', 'page-heading-edit'],
+    ['components/FamilyAppearanceDetails.vue', 'family-full-cover'],
+    ['components/FamilyAppearanceDetails.vue', 'family-detail-row'],
+    ['components/FamilyView.vue', 'account-profile'],
+    ['components/FamilyView.vue', 'family-members-entry'],
+  ];
   for (const [filename, className] of entries) {
     const template = parse(readFileSync(new URL(`../src/${filename}`, import.meta.url), 'utf8')).descriptor.template.content;
     const nodes = [];
     function collect(node) { if (node.type === 1) { nodes.push(node); node.children.forEach(collect); } }
     baseParse(template).children.forEach(collect);
-    const button = nodes.find((node) => node.props.some((prop) => prop.name === 'class' && prop.value?.content === className));
+    const button = nodes.find((node) => node.tag === 'button' && node.props.some((prop) => prop.name === 'class' && prop.value?.content.split(/\s+/).includes(className)));
+    assert.ok(button, `${filename}: ${className} remains an actual launch button`);
     assert.ok(button.props.some((prop) => prop.name === 'on' && prop.arg?.content === 'click' && prop.modifiers.includes('stop')), `${filename}: opening tap must not reach the page's changing event table`);
   }
 });
@@ -110,7 +117,7 @@ test('procurement controls use independent native taps without an interactive ca
   assert.ok(card);
   assert.ok(!card.props.some(prop => ['bindtap', 'catchtap'].includes(prop.name)));
   const buttons = nodes.filter(node => node.tag === 'button');
-  assert.equal(buttons.length, 8);
+  assert.equal(buttons.length, 5);
   for (const button of buttons) {
     assert.ok(button.props.some(prop => prop.name === 'bindtap'));
     assert.ok(!button.props.some(prop => prop.name === 'catchtap'));

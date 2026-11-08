@@ -11,6 +11,8 @@ const optionalId = value => value ? id(value) : '';
 function normalizeRecipeFields(input) {
   const recipe = pick(object(input), ['title', 'category', 'minutes', 'image', 'guideImage', 'nutrition', 'ingredients', 'steps', 'provenance']);
   if (recipe.provenance !== undefined) recipe.provenance = pick(object(recipe.provenance), ['source', 'url', 'license', 'attribution', 'note']);
+  // New recipes use two portions. Editing restores the stored value after
+  // loading the authoritative recipe; incoming values cannot change portions.
   recipe.servings = 2;
   if (!Array.isArray(recipe.ingredients) || !Array.isArray(recipe.steps)) invalid('请填写食材和做法');
   recipe.ingredients = recipe.ingredients.map(item => pick(object(item), ['name', 'quantity', 'unit', 'amountText']));
@@ -22,6 +24,9 @@ function normalizeRecipeFields(input) {
 // their own title requirements below and never accept a client bypass flag.
 export function normalizeImportedRecipe(input) {
   const recipe = normalizeRecipeFields(structuredClone(input));
+  // An archived source already has an identity; preserve its reviewed portions
+  // rather than changing its content to the default for newly created recipes.
+  recipe.servings = input.servings ?? 2;
   validateRecipe(recipe);
   return recipe;
 }
@@ -44,7 +49,7 @@ export function normalizeCommand(name, input, today) {
   try {
     if (name === 'saveRecipe') {
       const recipe = normalizeRecipeFields(args[0]);
-      validateRecipe(recipe, { requireStepTitles: true });
+      validateRecipe(recipe, { requireStepTitles: true, requireCover: true });
       return [recipe, optionalId(args[1])];
     }
     if (name === 'saveMealSet') {

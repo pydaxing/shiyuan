@@ -35,10 +35,10 @@ test('all notification count badges share readable red and white without changin
   assert.equal(declarationsFor('.app-shell').get('--danger'), '#9a5145');
   const prepSource = source('src/components/MealPreparationSheet.vue');
   const prepStyles = postcss.parse(prepSource.match(/<style scoped>([\s\S]*?)<\/style>/)[1]);
-  assert.match(prepSource, /class="prep-cart-count nav-count"/);
+  assert.doesNotMatch(prepSource, /prep-cart-count/);
   assert.equal(declarationsFor('.prep-cart-count', prepStyles).get('background'), undefined);
   assert.equal(declarationsFor('.prep-cart-count', prepStyles).get('color'), undefined);
-  assert.equal((source('src/pages/index/index.vue').match(/class="nav-count"/g) || []).length, 2);
+  assert.equal((source('src/pages/index/index.vue').match(/class="nav-count"/g) || []).length, 1);
   assert.match(source('DESIGN.md'), /notification: "#e02e2e"/);
   const channels = declarationsFor('.app-shell').get('--notification').slice(1).match(/../g).map(channel => parseInt(channel, 16) / 255).map(channel => channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4);
   const luminance = channels[0] * .2126 + channels[1] * .7152 + channels[2] * .0722;
@@ -139,19 +139,14 @@ test('selection toolbar contrasts with categories and aligns clearing beside che
   assert.equal(declarationsFor('.recipe-section-heading').get('justify-content'), 'flex-start');
 });
 
-test('procurement reuses the menu checkout surface and action instead of defining its own frame', () => {
+test('procurement omits the inactive checkout surface while the menu keeps its shared dock', () => {
   const component = source('src/components/ShoppingView.vue');
   const styles = postcss.parse(component.match(/<style scoped>([\s\S]*?)<\/style>/)[1]);
-  assert.match(component, /class="selection-dock shopping-purchase"/);
-  assert.match(component, /class="primary-button selection-submit"/);
-  assert.deepEqual([...declarationsFor('.shopping-purchase', styles)], [['height', 'auto']]);
-  assert.equal(declarationsFor('.shopping-purchase .primary-button', styles).size, 0);
+  assert.doesNotMatch(component, /shopping-purchase|selection-dock|selection-submit|>下单</);
+  assert.equal(declarationsFor('.shopping-purchase', styles).size, 0);
+  assert.equal(declarationsFor('.shopping-purchase-count', styles).size, 0);
   assert.equal(declarationsFor('.selection-dock').get('border'), '1px solid var(--line)');
   assert.equal(declarationsFor('.selection-dock').get('padding'), '10px');
-  assert.equal(declarationsFor('.selection-dock .selection-submit').get('gap'), '6px');
-  assert.equal(declarationsFor('.selection-dock .selection-submit').get('white-space'), 'nowrap');
-  assert.equal(declarationsFor('.shopping-purchase-count', styles).get('line-height'), '20px');
-  assert.equal(declarationsFor('.shopping-purchase-meta', styles).get('line-height'), '16px');
   assert.ok(existsSync(new URL('../src/static/icon-menu-inverse.png', import.meta.url)));
 });
 
@@ -165,17 +160,16 @@ test('procurement uses the kitchen card frame with slightly relaxed top-aligned 
   assert.equal(frame.get('border-radius'), 'var(--radius-card)');
   assert.equal(frame.get('padding'), 'var(--panel-padding)');
   assert.equal(frame.get('margin-bottom'), '12px');
-  assert.equal(declarationsFor('.shopping-view.has-packages', styles).get('padding'), '2px var(--page-gutter) 88px');
+  assert.equal(declarationsFor('.shopping-view.has-packages', styles).get('padding'), '2px var(--page-gutter) 24px');
   assert.equal(declarationsFor('.shopping-meal-heading', styles).get('margin'), '0 0 2px');
   assert.equal(declarationsFor('.shopping-package', styles).get('padding'), '8px 0');
   assert.equal(declarationsFor('.shopping-package', styles).get('margin'), '0');
   assert.equal(declarationsFor('.shopping-package-ingredients', styles).get('margin-top'), '10px');
-  for (const selector of ['.shopping-meal-select', '.shopping-dish-select', '.shopping-remove']) assert.equal(declarationsFor(selector, styles).get('min-height'), '44px');
+  for (const selector of ['.shopping-meal-info', '.shopping-remove']) assert.equal(declarationsFor(selector, styles).get('min-height'), '44px');
   assert.equal(declarationsFor('.shopping-view', styles).get('--shopping-column-gap'), '10px');
-  assert.equal(declarationsFor('.shopping-meal-select', styles).get('gap'), 'var(--shopping-column-gap)');
   assert.equal(declarationsFor('.shopping-package-heading', styles).get('gap'), 'var(--shopping-column-gap)');
   assert.equal(declarationsFor('.shopping-package-heading', styles).get('align-items'), 'flex-start');
-  for (const selector of ['.shopping-dish-select', '.shopping-remove']) assert.equal(declarationsFor(selector, styles).get('align-self'), 'center');
+  assert.equal(declarationsFor('.shopping-remove', styles).get('align-self'), 'center');
   assert.equal(declarationsFor('.shopping-dish-open', styles).get('align-items'), 'flex-start');
   assert.equal(declarationsFor('.shopping-dish-open .meal-ingredient-title', styles).get('line-height'), '20px');
   assert.equal(declarationsFor('.shopping-dish-copy', styles).get('flex-direction'), 'column');
@@ -268,7 +262,7 @@ test('community waterfall keeps two stable lanes, detail-only cards and the orig
   assert.match(component, /class="feed-body"[^>]*@click="open\(entry.post\)"/);
   assert.doesNotMatch(component, /class="feed-join"|@click="add\(entry.post\)"/);
   assert.match(component, /class="feed-meta"[^]*?<CommunityFamilyCount[^>]*inline/);
-  assert.match(component, /class="recipe-detail-button menu-detail-order"[^>]*:disabled="imported\(current\) \|\| removingPost \|\| addingPosts.includes\(current.id\)"[^>]*@click="add\(current\)"/);
+  assert.match(component, /class="recipe-detail-button menu-detail-order"[^>]*:disabled="!detailReady \|\| imported\(current\) \|\| removingPost \|\| addingPosts.includes\(current.id\)"[^>]*@click="add\(current\)"/);
   assert.match(component, /createCommunityFeed/);
   assert.match(component, /loadMore/);
   assert.doesNotMatch(component, /class="community-list"/);
@@ -277,11 +271,11 @@ test('community waterfall keeps two stable lanes, detail-only cards and the orig
 test('family settings retain cloud management and explicitly identify the limited local preview', () => {
   const editor = source('src/components/FamilyEditor.vue');
   const management = source('src/components/FamilyManagement.vue');
-  assert.match(editor, /v-if="cloudMode" class="family-settings-tabs"/);
-  assert.match(editor, /<FamilyManagement v-if="cloudMode && managementVisited"/);
+  assert.doesNotMatch(editor, /family-settings-tabs/);
+  assert.match(editor, /<FamilyManagement v-if="isManagement"/);
   assert.match(editor, /v-if="!cloudMode" class="preview-mode-note" role="status"/);
-  for (const action of ['create()', 'leave(family)', 'deleteFamily(family)']) assert.ok(management.includes(action), action);
-  for (const label of ['新建', '确认退出', '删除家庭']) assert.ok(management.includes(label), label);
+  for (const action of ['create()', 'leave(family)', 'exitFamily(family)']) assert.ok(management.includes(action), action);
+  for (const label of ['创建并切换', '确认退出', '删除家庭']) assert.ok(management.includes(label), label);
 });
 
 test('editor action icons exist for both native visual states', () => {

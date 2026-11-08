@@ -9,48 +9,13 @@ import { createSeed } from '../src/data/seed.js';
 import { normalizeSnapshot } from '../src/domain/kitchen.js';
 
 const flush = () => new Promise(resolve => setTimeout(resolve, 5));
-function navigationFixture(currentTab = 'menu') {
-  const source = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
-  assert.match(source, /@click="selectNavigation\(item\.id\)"/);
-  const handlers = ['selectNavigation', 'openIngredients'].map(name => source.match(new RegExp(`function ${name}\\([^]*?\\n\\}`))[0]).join('\n');
-  const tab = ref(currentTab);
-  const ingredientSection = ref('inventory');
-  const shoppingFocusRequest = ref({ id: 'previous-meal' });
-  const preparingOrderId = ref('');
-  const scrolls = [];
-  const actions = new Function('tab', 'ingredientSection', 'shoppingFocusRequest', 'preparingOrderId', 'tapFeedback', 'dismissFocusedKeyboard', 'uni', `${handlers}; return { selectNavigation, openIngredients };`)(tab, ingredientSection, shoppingFocusRequest, preparingOrderId, () => {}, () => {}, { pageScrollTo: options => scrolls.push(options) });
-  return { ...actions, tab, ingredientSection, shoppingFocusRequest, scrolls };
-}
-
-test('the bottom ingredients entry always opens shopping instead of the last fridge section', () => {
-  for (const previousTab of ['menu', 'kitchen', 'community', 'family', 'ingredients']) {
-    const current = navigationFixture(previousTab);
-    current.selectNavigation('ingredients');
-    assert.equal(current.tab.value, 'ingredients');
-    assert.equal(current.ingredientSection.value, 'shopping');
-    assert.equal(current.shoppingFocusRequest.value, null);
-    if (previousTab === 'ingredients') assert.deepEqual(current.scrolls, [{ scrollTop: 0, duration: 0 }]);
+test('retired inventory and procurement never appear in navigation for any stored preference', () => {
+  for (const fridge of [true, false]) for (const shopping of [true, false]) {
+    assert.deepEqual(mainNavigation({ fridge, shopping }).map(item => item.id), ['menu', 'community', 'square', 'family']);
   }
-});
-
-test('ordinary navigation leaves fridge state untouched until the ingredients entry is tapped', () => {
-  const current = navigationFixture('ingredients');
-  current.selectNavigation('kitchen');
-  assert.equal(current.tab.value, 'kitchen');
-  assert.equal(current.ingredientSection.value, 'inventory');
-  current.selectNavigation('ingredients');
-  assert.equal(current.ingredientSection.value, 'shopping');
-});
-
-test('explicit ingredient navigation retains the requested section and meal focus', () => {
-  const current = navigationFixture('kitchen');
-  current.openIngredients('shopping', 'selected-meal');
-  assert.equal(current.tab.value, 'ingredients');
-  assert.equal(current.ingredientSection.value, 'shopping');
-  assert.deepEqual(current.shoppingFocusRequest.value, { id: 'selected-meal' });
-  current.openIngredients('inventory');
-  assert.equal(current.ingredientSection.value, 'inventory');
-  assert.equal(current.shoppingFocusRequest.value, null);
+  const source = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /IngredientsView|openIngredients|ingredientSection|shoppingFocusRequest/);
+  assert.match(source, /<MealSquare/);
 });
 
 function fixture() {
@@ -72,7 +37,7 @@ test('one ingredient switch updates both visible features immediately and saves 
   const current = fixture();
   const saving = current.updates.updateMany({ fridge: true, shopping: true });
   assert.deepEqual(current.features(), { fridge: true, shopping: true });
-  assert.equal(mainNavigation(current.features()).length, 5);
+  assert.equal(mainNavigation(current.features()).length, 4);
   assert.deepEqual(current.saved, { fridge: false, shopping: false });
   await flush();
   assert.equal(current.requests.length, 1);
@@ -91,8 +56,8 @@ test('a failed legacy grouped preference change restores both values without hid
   current.requests[0].reject(new Error('保存失败'));
   await failed;
   assert.deepEqual(current.features(), { fridge: false, shopping: false });
-  assert.equal(mainNavigation(current.features()).length, 5);
-  assert.equal(mainNavigation(current.features())[3].label, '采购');
+  assert.equal(mainNavigation(current.features()).length, 4);
+  assert.equal(mainNavigation(current.features()) .find(item => item.id === 'square').label, '发现');
   assert.deepEqual(current.updates.pending.value, {});
 });
 
@@ -107,8 +72,8 @@ test('turning off while turning on is in flight never splits the grouped feature
   await turningOn;
   assert.equal(current.requests.length, 2);
   assert.deepEqual(current.requests[1].values, { fridge: false, shopping: false });
-  assert.equal(mainNavigation(current.features()).length, 5);
-  assert.equal(mainNavigation(current.features())[3].label, '采购');
+  assert.equal(mainNavigation(current.features()).length, 4);
+  assert.equal(mainNavigation(current.features()) .find(item => item.id === 'square').label, '发现');
   current.requests[1].resolve();
   await turningOff;
   assert.deepEqual(current.saved, { fridge: false, shopping: false });

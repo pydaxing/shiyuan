@@ -159,7 +159,7 @@ function community(context) {
     runAction: action => action(), uni: { showModal: options => modals.push(options) },
   };
   const script = parse(source('src/components/CommunityView.vue')).descriptor.scriptSetup.content.replace(/^import .*;\s*$/gm, '');
-  const api = scope.run(() => new Function(...Object.keys(bindings), `${script}\nreturn { feed, current, open, add, imported, loadMore, feedViewport, feedLocked, search, mode, category };`)(...Object.values(bindings)));
+  const api = scope.run(() => new Function(...Object.keys(bindings), `${script}\nreturn { feed, current, open, add, imported, loadMore, feedViewport, feedLocked, search, mode, category, searchExpanded, searchFocus, searchFocused, navigationHidden, openSearch };`)(...Object.values(bindings)));
   context.after(() => { scope.stop(); invalidateCommunityFeed(); });
   return { ...api, props, sheetOpen, state, cloudStatus, calls, finishImport: imported.resolve, modals };
 }
@@ -218,5 +218,24 @@ test('page retains one lazily mounted feed per identity and mutations never call
   assert.doesNotMatch(component.slice(component.indexOf('async function removePost()')), /await loadFeed\(/);
   assert.match(component, /hiddenPosts.value = \[\.\.\.new Set/);
   assert.match(source('src/services/cloud.js'), /\['publishToCommunity', 'deleteCommunityPost', 'addCollection'\]\.includes\(operation\?\.name\)\) invalidateCommunityFeed\(\{ reset: false \}\)/);
-  assert.match(source('src/services/cloud.js'), /function clearPrivateCache\(\)[^\n]*invalidateCommunityFeed\(\)/);
+  assert.match(source('src/services/cloud.js'), /function clearPrivateCache\([^\n]*\)\s*\{\s*[^\n]*invalidateCommunityFeed\(\)/);
+});
+
+
+test('scrolling hides navigation and collapses a focused search without clearing the query', async context => {
+  const view = community(context);
+  await tick();
+  view.search.value = '牛肉';
+  await tick();
+  await view.openSearch();
+  view.searchFocused.value = true;
+  view.feedViewport.onScroll({ detail: { scrollTop: 120 } });
+  assert.equal(view.navigationHidden.value, true);
+  assert.equal(view.searchExpanded.value, false);
+  assert.equal(view.searchFocus.value, false);
+  assert.equal(view.searchFocused.value, false);
+  assert.equal(view.search.value, '牛肉');
+  view.feedViewport.onScroll({ detail: { scrollTop: 90 } });
+  assert.equal(view.navigationHidden.value, false);
+  assert.equal(view.searchExpanded.value, false);
 });

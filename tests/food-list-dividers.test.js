@@ -39,8 +39,8 @@ test('menu, selection and order rows have no separators in base, selected, or re
   }
 });
 
-test('menu and food set details share separators only between their member dishes', () => {
-  assert.equal(declarationsFor('.community-recipe + .community-recipe').get('border-top'), '1px solid var(--line)');
+test('menu and food set details keep member dishes compact without separators', () => {
+  assert.equal(declarationsFor('.community-recipe + .community-recipe').get('border-top'), '0');
   assert.equal(declarationsFor('.community-recipe').get('border-top'), undefined);
   assert.equal(declarationsFor('.community-recipe').get('border-bottom'), undefined);
   for (const component of ['SetSheet', 'CommunityView']) {
@@ -58,7 +58,7 @@ test('home, add-dishes, and sharing lists do not restore row separators locally'
 
 test('add-dishes adopts compact shared row spacing while detail and checkout spacing stay unchanged', () => {
   assert.equal(declarationsFor('.cart-item').get('padding'), '18px 0');
-  assert.equal(declarationsFor('.community-recipe').get('padding-bottom'), '10px');
+  assert.equal(declarationsFor('.community-recipe').get('padding-bottom'), '0');
   assert.equal(declarationsFor('.meal-dish-row').get('padding'), '10px 0');
   assert.equal(declarationsFor('.set-pick-row').get('padding'), 'var(--food-row-padding) 0');
   const addition = declarationsFor('.meal-addition-row', componentStyles('AddDishesSheet'));

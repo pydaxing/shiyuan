@@ -100,13 +100,19 @@ test('editor switches between numeric and fixed text amounts, saves and reopens'
 
 function ingredientFields(form) {
   const template = parse(readFileSync(new URL('../src/components/RecipeEditor.vue', import.meta.url), 'utf8')).descriptor.template.content;
-  const section = baseParse(template).children[0].children.find(node => node.type === 1 && node.props.some(prop => prop.name === 'class' && prop.value?.content === 'ingredient-editor'));
+  function findIngredient(node) {
+    if (node.type === 1 && node.props.some(prop => prop.name === 'class' && prop.value?.content === 'ingredient-editor')) return node;
+    return node.children?.map(findIngredient).find(Boolean);
+  }
+  const section = findIngredient(baseParse(template));
   const render = new Function('Vue', compile(section.loc.source, { mode: 'function' }).code)({ ...Vue, resolveComponent: name => name });
   const fields = [];
   function visit(node) {
     if (node?.type === 'FormField') fields.push(node.props['aria-label']);
     if (Array.isArray(node?.children)) node.children.forEach(visit);
-    else if (node?.children?.default) node.children.default().forEach(visit);
+    else if (node?.children && typeof node.children === 'object') {
+      for (const slot of Object.values(node.children)) if (typeof slot === 'function') slot().forEach(visit);
+    }
   }
   visit(render(Vue.proxyRefs(form), []));
   return fields;
@@ -115,7 +121,8 @@ function ingredientFields(form) {
 test('new ingredient offers fixed 适量 and 少许, with an amount input only for numeric units', async () => {
   const context = fixture();
   const form = component('RecipeEditor', {}, { saveRecipe: context.actions.saveRecipe });
-  assert.deepEqual(form.ingredientUnitOptions, ['适量', '少许', ...kitchen.SELECTABLE_UNITS]);
+  assert.deepEqual(form.ingredientUnitOptions, ['适量', '少许', ...kitchen.SELECTABLE_UNITS.filter(unit => unit !== '汤匙').map(unit => unit === '茶匙' ? '匙' : unit)]);
+  form.addIngredient(); form.steps.value.push(form.newStep());
   const ingredient = form.ingredients.value[0];
   assert.deepEqual(ingredient, textIngredient('适量', ''));
   assert.equal(form.ingredientInput(ingredient).unit, '适量');
@@ -159,7 +166,7 @@ test('legacy amount and row identity survive deleting a preceding row and adding
   assert.equal(custom.amountText, '一小把');
   assert.deepEqual(ingredientFields(form), ['食材1名称']);
   form.removeIngredient(0);
-  assert.equal(form.ingredients.value.length, 1);
+  assert.equal(form.ingredients.value.length, 0);
   for (let index = 0; index < 35; index += 1) form.addIngredient();
   assert.equal(form.ingredients.value.length, 30);
   assert.equal(form.ingredientInputs.value.size, 30);
@@ -189,6 +196,7 @@ test('existing community numeric and text ingredients retain exact values throug
 
 test('removed custom and spoon choices cannot create an input or overwrite an ingredient', () => {
   const form = component('RecipeEditor');
+  form.addIngredient();
   const ingredient = form.ingredients.value[0];
   for (const unsupported of ['自定义', '文字', '原用量', '一小把', '小勺', '大勺', '铲勺']) {
     form.changeIngredientUnit(ingredient, unsupported);
@@ -274,7 +282,7 @@ test('merged member choices do not multiply text amounts or drop them from order
   const dish = context.state.recipes[0];
   context.actions.submitOrder({ [dish.id]: 1 }, selection());
   context.actions.switchMember('partner');
-  context.actions.submitOrder({ [dish.id]: 1 }, selection());
+  context.actions.addOrderDishes(context.state.orders[0].id, { [dish.id]: 1 });
   assert.equal(context.state.orders[0].items.length, 1);
   assert.equal(context.state.orders[0].items[0].chosenBy.length, 2);
   assert.deepEqual(context.state.orders[0].items[0].recipe.ingredients, [textIngredient()]);
@@ -329,11 +337,11 @@ test('new meals or additional dishes invalidate only the relevant text confirmat
   context.actions.submitOrder({ [first.id]: 1 }, selection());
   context.actions.recordPurchase({ kind: 'confirmation', ...textIngredient() });
   context.actions.switchMember('partner');
-  context.actions.submitOrder({ [first.id]: 1 }, selection());
+  context.actions.addOrderDishes(context.state.orders[0].id, { [first.id]: 1 });
   assert.equal(kitchen.needsShopping(context.requirements()[0]), false);
   context.actions.saveRecipe({ ...recipe(), title: '另一道盐适量的菜' });
   const second = context.state.recipes[0];
-  context.actions.submitOrder({ [first.id]: 1, [second.id]: 1 }, selection());
+  context.actions.addOrderDishes(context.state.orders[0].id, { [second.id]: 1 });
   assert.equal(kitchen.needsShopping(context.requirements()[0]), true);
   context.actions.recordPurchase({ kind: 'confirmation', ...textIngredient() });
   assert.equal(kitchen.needsShopping(context.requirements()[0]), false);

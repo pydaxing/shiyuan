@@ -1,4 +1,4 @@
-import { clone, hasTextAmount, localDate, shoppingDraftFieldErrors, round } from './kitchen.js';
+import { clone, hasTextAmount, localDate, shoppingDraftFieldErrors, shoppingOrders, round } from './kitchen.js';
 import { dishPreparationSignature, preparationIngredients, preparationMeals } from './meal-preparation.js';
 
 export function shoppingSourceIngredients(ingredients) {
@@ -50,7 +50,8 @@ export function assertShoppingSources(order, recipeId, draft) {
 }
 
 export function shoppingCartMeals(snapshot, today = localDate()) {
-  return preparationMeals(snapshot, today).map(meal => {
+  const activeOrderIds = new Set(shoppingOrders(snapshot.orders, today).map(order => order.id));
+  return preparationMeals(snapshot, today).filter(meal => activeOrderIds.has(meal.id)).map(meal => {
     const order = snapshot.orders.find(entry => entry.id === meal.id);
     const dishes = meal.dishes.flatMap(dish => {
       const draft = order.shoppingDrafts?.find(entry => entry.recipeId === dish.recipe.id);

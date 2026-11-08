@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { createApplication } from './application.mjs';
 import { encryptImage, decryptImage } from './media-encryption.mjs';
 import { diagnose, measure } from './performance.mjs';
-import { createDisplayImage } from './image-processing.mjs';
+import { createDisplayImage, isHighResolutionPreview } from './image-processing.mjs';
 import { createImageDelivery, createImageSigner, imageContentType } from './image-delivery.mjs';
 import { createImageMaintenance } from './image-maintenance.mjs';
 import { createWechatRepository } from './wechat-repository.mjs';
@@ -83,6 +83,7 @@ async function saveImageWithVariants(bytes, ticket, preview) {
   const variants = {};
   try {
     for (const variant of (ticket.profile ? ['card', 'detail', 'avatar'] : ['card', 'detail'])) variants[variant] = await saveVariant(preview || bytes, variant, ticket);
+    if (preview && await isHighResolutionPreview(preview)) variants.cover = await saveVariant(preview, 'cover', ticket);
     return { ...saved, variants, contentType: imageContentType(bytes), bytes: bytes.length };
   } catch (error) {
     await removeTrackedFiles(options => cloud.deleteFile(options), [saved.fileId, ...Object.values(variants).flatMap(item => [item.fileId, item.delivery?.fileId])], ticket);
@@ -144,8 +145,9 @@ const delivery = createImageDelivery({
 });
 
 async function readImage(fileId, record, variant = 'original', { transport, preparedOnly = false } = {}) {
+  if (variant === 'cover' && !record.variants?.cover && record.variants?.detail?.formatVersion === 1) variant = 'detail';
   if (preparedOnly) {
-    if (!privateDeliveryEnabled || transport !== 'url' || !['card', 'detail', 'avatar'].includes(variant) || record.variants?.[variant]?.formatVersion !== 1 || record.variants[variant].delivery?.version !== 1) return null;
+    if (!privateDeliveryEnabled || transport !== 'url' || !['card', 'detail', 'avatar', 'cover'].includes(variant) || record.variants?.[variant]?.formatVersion !== 1 || record.variants[variant].delivery?.version !== 1) return null;
     return delivery.manifest(fileId, record, variant);
   }
   if (transport === 'url' && privateDeliveryEnabled) return delivery.manifest(fileId, record, variant);

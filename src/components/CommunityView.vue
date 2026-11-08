@@ -1,10 +1,11 @@
 <script setup>
+import { workspaceDisplayName } from '../domain/workspace-identity.js';
 import { NATIVE_UI_COLORS } from '../domain/ui-theme.js';
 import FormField from './FormField.vue';
 import SelectField from './SelectField.vue';
 import { computed, ref, watch, nextTick, onUnmounted } from 'vue';
 import { communityPosts } from '../data/seed.js';
-import { state, cloudMode, cloudStatus, addCollection, addComment, toggleCommentLike, deleteCommunityPost, runAction, notify } from '../store.js';
+import { state, activeMember, workspaceName, cloudMode, cloudStatus, addCollection, addComment, toggleCommentLike, deleteCommunityPost, runAction, notify } from '../store.js';
 import { invokeCloud, rememberMedia, peekCommunityPost, readCommunityPost, resolveImage, mergeCloudCommunity } from '../services/cloud.js';
 import { presentMutation } from '../services/mutation-feedback.js';
 import { createCommunityFeed, communityFeedRevision } from '../services/community-feed.js';
@@ -17,6 +18,7 @@ import { dismissFocusedKeyboard } from '../services/keyboard.js';
 import FoodDetailSheet from './FoodDetailSheet.vue';
 import AppIcon from './AppIcon.vue';
 import RecipeContent from './RecipeContent.vue';
+import RecipeDetailLoading from './RecipeDetailLoading.vue';
 import CommunityByline from './CommunityByline.vue';
 import CommunityFamilyCount from './CommunityFamilyCount.vue';
 import PageHeader from './PageHeader.vue';
@@ -30,18 +32,36 @@ import { useRecipeAccordion } from '../composables/useRecipeAccordion.js';
 import { useCommunityNavigation } from '../composables/useCommunityNavigation.js';
 import { useCommunityFeedViewport } from '../composables/useCommunityFeedViewport.js';
 import { sheetOpen } from '../composables/sheetStack.js';
-const emit = defineEmits(['edit-entry']);
-const props = defineProps({ active: { type: Boolean, default: true } });
+const emit = defineEmits(['edit-entry', 'close']);
+const props = defineProps({ active: { type: Boolean, default: true }, detailOnly: Boolean, initialPost: Object });
 const category = ref('荤菜');
 const mode = ref('recommended');
 const recommendationSeed = ref(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`);
 const search = ref('');
 const searchFocused = ref(false);
 const searchFocus = ref(false);
+const searchExpanded = ref(false);
+async function openSearch() {
+  searchExpanded.value = true;
+  await nextTick();
+  if (searchExpanded.value && !navigationHidden.value) searchFocus.value = true;
+}
+function blurSearch() {
+  searchFocused.value = false;
+  searchFocus.value = false;
+  if (!search.value.trim()) searchExpanded.value = false;
+}
 const categoryOpen = ref(false);
 const feedLocked = computed(() => !props.active || sheetOpen.value);
-const navigation = useCommunityNavigation(feedLocked, computed(() => searchFocused.value || categoryOpen.value));
+const navigation = useCommunityNavigation(feedLocked, categoryOpen);
 const navigationHidden = navigation.hidden;
+watch(navigationHidden, hidden => {
+  if (!hidden) return;
+  searchExpanded.value = false;
+  searchFocused.value = false;
+  searchFocus.value = false;
+  dismissFocusedKeyboard();
+}, { flush: 'sync' });
 let resetAfterSheet = false;
 let disposed = false;
 function resetResults() {
@@ -63,7 +83,18 @@ async function clearSearch() { search.value = ''; searchFocus.value = false; awa
 const filters = computed(() => foodFeedQuery(mode.value, category.value, recommendationSeed.value));
 const skeletonLanes = buildFoodWaterfall(Array.from({ length: 4 }, (placeholder, index) => ({ id: index, title: '' })));
 const current = ref(null);
-const friendCard = computed(() => current.value ? dishShareCard({ ...current.value, imageUrl: resolveImage(current.value.image) }) : null);
+function presentFamilyPublisher(post) {
+  const family = state.value.family;
+  // Project the active family's name without rewriting published recipes or caches.
+  // Official attribution and other workspaces always keep their server identity.
+  if (!cloudMode || !cloudStatus.value.userId || !family?.id || family.deletedAt || family.status === 'deleted'
+    || family.id !== cloudStatus.value.familyId || post?.familyId !== family.id
+    || post.publisherType === 'official' || post.publisherId === 'official:shiyuan') return post;
+  const author = family.kind === 'personal' ? workspaceDisplayName(family, activeMember.value, '') : workspaceName.value;
+  return author && author !== post.author ? { ...post, author } : post;
+}
+const currentPublisher = computed(() => communityPublisherName(presentFamilyPublisher(current.value)));
+const friendCard = computed(() => !props.detailOnly && current.value?.id ? dishShareCard({ ...current.value, imageUrl: resolveImage(current.value.image) }) : null);
 const detailLoading = ref(false);
 const detailReady = ref(false);
 const commentCursor = ref('');
@@ -95,6 +126,8 @@ defineExpose({ onScroll: navigation.onScroll, loadMore });
 watch([filters, search, () => cloudStatus.value.familyId, () => cloudStatus.value.userId, communityFeedRevision, () => props.active], (values, previous) => {
   if (cloudMode && props.active) feedController.select({ ...filters.value, search: search.value.trim() }, `${cloudStatus.value.userId}:${cloudStatus.value.familyId}`, { delay: search.value.trim() && previous?.length && values[1] !== previous[1] ? 220 : 0, retain: true });
 }, { immediate: true });
+watch(() => props.initialPost, post => { if (post) void open(post); }, { immediate: true });
+watch(current, (value, previous) => { if (!value && previous && props.detailOnly) emit('close'); });
 watch(() => props.active, active => {
   if (active) return;
   mode.value = 'recommended';
@@ -116,6 +149,8 @@ async function open(post) {
   current.value = post; resetRecipes(); comment.value = ''; commentError.value = ''; replyTarget.value = null; commentFocus.value = false;
   detailReady.value = !cloudMode; detailLoading.value = cloudMode; commentCursor.value = ''; commentsLoading.value = false;
   const token = ++detailSequence;
+  // Legacy meal cards can display their cover immediately while resolving the public ID.
+  if (!post.id) return;
   const scope = `${cloudStatus.value.userId}:${cloudStatus.value.familyId}`;
   const cached = cloudMode ? peekCommunityPost(post.id, { includeComments: COMMUNITY_COMMENTS_ENABLED }) : undefined;
   if (cached) {
@@ -155,7 +190,7 @@ async function loadComments() {
 }
 function reply(entry) { replyTarget.value = entry; commentFocus.value = false; nextTick(() => { commentFocus.value = true; }); }
 function add(post) {
-  if (disposed || imported(post) || addingPosts.value.includes(post.id)) return;
+  if (disposed || !detailReady.value || imported(post) || addingPosts.value.includes(post.id)) return;
   const detailToken = detailSequence;
   const scope = `${cloudStatus.value.userId}:${cloudStatus.value.familyId}`;
   tapFeedback();
@@ -214,7 +249,8 @@ async function removePost() {
 </script>
 
 <template>
-  <view class="community-view">
+  <view :class="detailOnly ? 'community-detail-host' : 'community-view'">
+    <template v-if="!detailOnly">
     <PageHeader title="美食">
       <template #extension>
         <view class="community-sticky-controls">
@@ -225,10 +261,11 @@ async function removePost() {
                   <button role="button" class="community-order-button" :class="{ active: mode === 'recommended' }" :aria-pressed="mode === 'recommended'" :tabindex="navigationHidden ? -1 : 0" @click="$feedback(); mode = 'recommended'" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">推荐</button>
                   <button role="button" class="community-order-button" :class="{ active: mode === 'latest' }" :aria-pressed="mode === 'latest'" :tabindex="navigationHidden ? -1 : 0" @click="$feedback(); mode = 'latest'" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">最新</button>
                   <SelectField :model-value="category" :options="categories" label="美食分类" variant="feed" :active="mode === 'category'" :tabindex="navigationHidden ? -1 : 0" :disabled="navigationHidden" @update:model-value="selectCategory" @open-change="categoryOpen = $event" />
-                  <view class="search-wrap community-search">
-                    <view class="search-leading-icon" aria-hidden="true"><AppIcon name="search" :size="16" /></view>
-                    <view class="search-input-slot"><FormField v-model="search" placeholder="搜索" aria-label="搜索美食菜品或套餐" maxlength="60" :focus="searchFocus" :disabled="navigationHidden" @focus="searchFocused = true" @blur="searchFocused = false; searchFocus = false" /></view>
-                    <view class="search-clear-slot"><button v-if="search" role="button" class="search-clear" aria-label="清空美食搜索" :tabindex="navigationHidden ? -1 : 0" @click="clearSearch" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="close" :size="16" /></button></view>
+                  <view class="search-wrap community-search" :class="{ 'is-collapsed': !searchExpanded }">
+                    <button v-if="!searchExpanded" class="community-search-open" aria-label="展开美食搜索" :disabled="navigationHidden" @click="openSearch" hover-class="touch-feedback"><AppIcon name="search-rounded" :size="20" /></button>
+                    <view v-if="searchExpanded" class="search-leading-icon" aria-hidden="true"><AppIcon name="search" :size="16" /></view>
+                    <view v-show="searchExpanded" class="search-input-slot"><FormField v-model="search" placeholder="搜索" aria-label="搜索美食菜品或套餐" maxlength="60" :focus="searchFocus" :disabled="navigationHidden || !searchExpanded" @focus="searchFocused = true" @blur="blurSearch" /></view>
+                    <view v-show="searchExpanded" class="search-clear-slot"><button v-if="search" role="button" class="search-clear" aria-label="清空美食搜索" :tabindex="navigationHidden ? -1 : 0" @click="clearSearch" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="close" :size="16" /></button></view>
                   </view>
                 </view>
               </view>
@@ -253,7 +290,7 @@ async function removePost() {
           <view class="feed-summary">
             <button role="button" class="feed-body" :aria-label="`查看${entry.post.title}详情`" @click="open(entry.post)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">
               <view class="feed-heading"><text class="feed-title food-list-title">{{ entry.post.title }}</text></view>
-              <view class="feed-meta"><CommunityByline class="feed-byline" :post="entry.post" /><CommunityFamilyCount class="feed-family-count" :count="entry.post.importedFamilyCount" inline /></view>
+              <view class="feed-meta"><CommunityByline class="feed-byline" :post="presentFamilyPublisher(entry.post)" /><CommunityFamilyCount class="feed-family-count" :count="entry.post.importedFamilyCount" inline /></view>
             </button>
           </view>
         </view>
@@ -263,11 +300,12 @@ async function removePost() {
     <view v-if="(!cloudMode || (feed.ready && !feed.error)) && !filtered.length" class="empty-state community-search-empty" role="status"><text class="subheading">{{ search.trim() ? '没有找到相关菜品或套餐' : '这个分类还没有内容' }}</text><text class="search-empty-hint">换一换试试</text></view>
       </view>
     </scroll-view>
-    <FoodDetailSheet v-if="current" :title="current.title" :image="current.image" community :publisher="communityPublisherName(current)" :family-count="current.importedFamilyCount" :kind="current.kind" :category="current.kind === 'dish' ? current.recipes[0].category : '套餐'" :minutes="current.kind === 'dish' ? current.recipes[0].minutes : null" :dish-count="current.kind === 'dish' ? null : current.recipes.length" :scroll-anchor="scrollAnchor" :share-card="friendCard" :can-edit="Boolean(editableEntry)" :can-remove="canDelete" :busy="removingPost" @close="current = null" @edit="editPost" @remove="removePost">
-      <template #action><button role="button" class="recipe-detail-button menu-detail-order" :class="{ 'is-complete': imported(current) }" :disabled="imported(current) || removingPost || addingPosts.includes(current.id)" :aria-busy="addingPosts.includes(current.id)" @click="add(current)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="detail-choice-surface"><AppIcon :name="imported(current) ? 'check' : 'plus-inverse'" :size="14" /><text>{{ imported(current) ? '已加入' : addingPosts.includes(current.id) ? '加入中' : '加入菜单' }}</text></view></button></template>
-      <view v-if="detailLoading && !detailReady" class="detail-loading" role="status">正在加载食材与做法…</view><button v-if="!detailReady && !detailLoading" class="text-button" @click="open(current)" role="button" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">重新加载详情</button><view v-if="detailReady">
+    </template>
+    <FoodDetailSheet v-if="current" :title="current.title" :image="current.image" community :publisher="currentPublisher" :family-count="current.importedFamilyCount" :kind="current.kind" :category="current.kind === 'dish' ? current.recipes[0].category : '套餐'" :minutes="current.kind === 'dish' ? current.recipes[0].minutes : null" :dish-count="current.kind === 'dish' ? null : current.recipes.length" :scroll-anchor="scrollAnchor" :share-card="friendCard" :busy="removingPost" @close="current = null" @edit="editPost" @remove="removePost">
+      <template #action><button role="button" class="recipe-detail-button menu-detail-order" :class="{ 'is-complete': imported(current) }" :disabled="!detailReady || imported(current) || removingPost || addingPosts.includes(current.id)" :aria-busy="addingPosts.includes(current.id)" @click="add(current)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="detail-choice-surface"><AppIcon :name="imported(current) ? 'check' : 'plus-inverse'" :size="14" /><text>{{ imported(current) ? '已加入' : addingPosts.includes(current.id) ? '加入中' : '加入菜单' }}</text></view></button></template>
+      <RecipeDetailLoading v-if="detailLoading && !detailReady" /><button v-if="!detailReady && !detailLoading" class="text-button" @click="open(current)" role="button" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">重新加载详情</button><view v-if="detailReady">
       <RecipeContent v-if="current.kind === 'dish'" :recipe="current.recipes[0]" :cover="false" :show-meta="false" />
-      <view v-else class="community-set-content" @touchmove="cancelRecipeScroll"><view class="section-line"><text class="subheading">套餐搭配</text></view><view v-for="(recipe, index) in current.recipes" :id="recipeAnchor(index)" :key="recipe.id" class="community-recipe"><button role="button" class="recipe-expand" :aria-label="`${expanded === recipe.id ? '收起' : '查看'}${recipe.title}食材与做法`" :aria-expanded="expanded === recipe.id" @click="toggleRecipe(recipe.id, index)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><FoodThumbnail :src="recipe.image" /><view class="recipe-list-copy"><text class="stock-name" :class="{ 'food-list-title': expanded !== recipe.id }">{{ recipe.title }}</text><RecipeListMeta :category="recipe.category" :minutes="recipe.minutes" /></view><AppIcon :name="expanded === recipe.id ? 'minus' : 'plus'" class="expand-mark" /></button><RecipeContent v-if="expanded === recipe.id" :recipe="recipe" :cover="false" :show-meta="false" /></view></view>
+      <view v-else class="community-set-content" @touchmove="cancelRecipeScroll"><view class="section-line"><text class="subheading">套餐搭配</text></view><view v-for="(recipe, index) in current.recipes" :id="recipeAnchor(index)" :key="recipe.id" class="community-recipe"><button role="button" class="recipe-expand" :aria-label="`${expanded === recipe.id ? '收起' : '查看'}${recipe.title}食材与做法`" :aria-expanded="expanded === recipe.id" @click="toggleRecipe(recipe.id, index)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><FoodThumbnail :src="recipe.image" /><view class="recipe-list-copy"><text class="stock-name" :class="{ 'food-list-title': expanded !== recipe.id }">{{ recipe.title }}</text><RecipeListMeta :category="recipe.category" :minutes="recipe.minutes" origin="美食" /></view><AppIcon :name="expanded === recipe.id ? 'minus' : 'plus'" class="expand-mark" /></button><RecipeContent v-if="expanded === recipe.id" :recipe="recipe" :cover="false" :show-meta="false" /></view></view>
       <view v-if="COMMUNITY_COMMENTS_ENABLED" class="community-comments">
       <view class="section-line"><text class="subheading">评论</text><text class="muted">{{ commentCursor ? '已加载 ' : '' }}{{ comments.length }} 条</text></view>
       <view v-for="thread in threads" :key="thread.id" class="comment-thread"><CommentItem :entry="thread" :member-id="state.activeMemberId" @reply="reply" @like="runAction(() => toggleCommentLike($event))" /><view v-if="thread.replies.length" class="comment-replies"><CommentItem v-for="response in thread.replies" :key="response.id" :entry="response" :member-id="state.activeMemberId" @reply="reply" @like="runAction(() => toggleCommentLike($event))" /></view></view>

@@ -81,23 +81,26 @@ test('compact cards restore ownership from the authoritative post, overriding st
   assert.equal((await server.command('deleteCommunityPost', [post.id], other, 'bob')).code, 'FORBIDDEN');
 });
 
-test('importing and sharing a dish makes an independent copy owned by the destination family', async () => {
+test('public imports retain the source ID until an edit creates a private fork owned by the destination family', async () => {
   const server = fixture();
   const source = await publish(server);
   const originalPost = await server.repository.get('posts', source.value);
   let destination = await server.create('bob');
   destination = await ok(server.command('addCollection', [{ id: originalPost.id, familyId: source.familyId, publisherId: digest('alice') }], destination, 'bob'));
   const imported = destination.snapshot.recipes[0];
-  assert.notEqual(imported.id, originalPost.familyItemId);
+  assert.equal(imported.id, originalPost.recipes[0].id);
   const recipeRow = (await server.repository.list('recipes', { familyId: destination.familyId }))[0];
   assert.equal(recipeRow.value.id, imported.id);
+  assert.equal((await server.command('publishToCommunity', [imported.id], destination, 'bob')).code, 'ALREADY_SHARED');
   destination = await ok(server.command('saveRecipe', [{ ...imported, title: '我家的独立副本' }, imported.id], destination, 'bob'));
-  destination = await ok(server.command('publishToCommunity', [imported.id], destination, 'bob'));
+  const forkId = destination.value;
+  assert.notEqual(forkId, imported.id);
+  destination = await ok(server.command('publishToCommunity', [forkId], destination, 'bob'));
   const reshared = await server.repository.get('posts', destination.value);
   assert.equal(reshared.familyId, destination.familyId);
   assert.equal(reshared.card.familyId, destination.familyId);
   assert.equal(reshared.publisherId, digest('bob'));
-  assert.equal(reshared.familyItemId, imported.id);
+  assert.equal(reshared.familyItemId, forkId);
   assert.equal(reshared.author, destination.snapshot.family.name);
   assert.notEqual(reshared.id, originalPost.id);
   assert.equal(reshared.title, '我家的独立副本');
@@ -128,7 +131,7 @@ test('friend share snapshots retain the source family ID even with a matching fa
 test('saving a recipe requires a title for every step while the step body is optional', async () => {
   const server = fixture();
   const current = await server.create();
-  for (const steps of [[], [{ text: '切好后煮熟' }], [{ title: '   ', text: '切好后煮熟' }]]) {
+  for (const steps of [[{ text: '切好后煮熟' }], [{ title: '   ', text: '切好后煮熟' }]]) {
     assert.equal((await server.command('saveRecipe', [{ ...recipe, steps }], current)).code, 'INVALID');
   }
   const saved = await ok(server.command('saveRecipe', [{ ...recipe, steps: [{ title: '切好后煮熟' }] }], current));
@@ -151,7 +154,7 @@ test('cloud imports isolate reused recipe IDs from different source families and
   for (const index of [0, 1]) target = await ok(server.command('addCollection', [{ id: `legacy-menu-${index}` }], target, 'carol'));
   assert.equal(target.snapshot.recipes.length, 4);
   assert.equal(new Set(target.snapshot.recipes.map(entry => entry.id)).size, 4);
-  assert.equal(new Set(target.snapshot.recipes.map(entry => entry.shareId)).size, 4);
+  assert.equal(new Set(target.snapshot.recipes.map(entry => `${entry.sourceFamilyId}:${entry.communityRecipeId}`)).size, 4);
   assert.equal(target.snapshot.mealSets.length, 2);
   for (const set of target.snapshot.mealSets) {
     assert.ok(set.shareId);
@@ -163,9 +166,12 @@ test('cloud imports isolate reused recipe IDs from different source families and
   assert.equal(target.snapshot.recipes.length, 4);
   assert.equal(target.snapshot.mealSets.length, 2);
   const copied = target.snapshot.recipes[0];
-  target = await ok(server.command('publishToCommunity', [copied.id], target, 'carol'));
+  assert.equal((await server.command('publishToCommunity', [copied.id], target, 'carol')).code, 'ALREADY_SHARED');
+  target = await ok(server.command('saveRecipe', [{ ...copied, title: '我家的新版本' }, copied.id], target, 'carol'));
+  const forkId = target.value;
+  target = await ok(server.command('publishToCommunity', [forkId], target, 'carol'));
   const reshared = await server.repository.get('posts', target.value);
   assert.equal(reshared.familyId, target.familyId);
-  assert.equal(reshared.recipes[0].id, copied.shareId);
+  assert.equal(reshared.recipes[0].id, forkId);
   assert.notEqual(reshared.recipes[0].id, copied.sourceId);
 });

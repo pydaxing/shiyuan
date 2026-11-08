@@ -72,26 +72,20 @@ test('adding a changed set extends its snapshot without removing dishes already 
   assert.equal(order.items.length, 3);
 });
 
-test('new meals start preparing and remain editable until served or cancelled', () => {
+test('planned meals reject resubmission and remain editable through kitchen additions', () => {
   const context = fixture();
   context.actions.submitOrder({ tomato: 1 }, slot, '少盐');
   const orderId = context.state.orders[0].id;
   assert.equal(context.state.orders[0].status, 'accepted');
-  const beforeLegacyStart = structuredClone(context.state);
-  context.actions.updateOrder(orderId, 'accepted');
-  assert.deepEqual(context.state, beforeLegacyStart);
-  context.actions.switchMember('partner');
-  context.actions.submitOrder({ chicken: 1 }, slot, '保留家人备注');
-  context.actions.switchMember('me');
+  for (const member of ['partner', 'me']) {
+    context.actions.switchMember(member);
+    const before = structuredClone(context.state);
+    for (const cart of [{ chicken: 1 }, {}]) assert.throws(() => context.actions.submitOrder(cart, slot, '替换备注'), /已安排/);
+    assert.deepEqual(context.state, before);
+  }
   context.actions.addOrderDishes(orderId, { soup: 1 });
-  assert.deepEqual(context.state.orders[0].items.map(item => item.recipe.id), ['tomato', 'soup', 'chicken']);
-  context.actions.submitOrder({ soup: 1 }, slot, '改备注');
-  assert.equal(context.state.orders[0].note, '我：改备注\n家人：保留家人备注');
-  context.actions.submitOrder({}, slot);
-  assert.equal(context.state.orders[0].id, orderId);
-  assert.equal(context.state.orders[0].status, 'accepted');
-  assert.deepEqual(context.state.orders[0].items.map(item => item.recipe.id), ['chicken']);
-  assert.equal(context.state.orders[0].note, '家人：保留家人备注');
+  assert.deepEqual(context.state.orders[0].items.map(item => item.recipe.id), ['tomato', 'soup']);
+  assert.equal(context.state.orders[0].note, '我：少盐');
 });
 
 test('legacy pending meals permit adding without migrating or replacing the stored meal', () => {
@@ -190,18 +184,21 @@ test('order voter data stays intact while kitchen rows omit profile decoration',
   assert.equal(rows[0].chosenBy.length, 4);
   const source = readFileSync(new URL('../src/components/MealDishList.vue', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /LazyImage|dish-avatars/);
-  assert.match(source, /item\.voters\.length \|\| 1/);
+  assert.doesNotMatch(source, /人想吃/);
   assert.doesNotMatch(source, /:src="members.find|member\.name\.slice/);
 });
 
-test('checkout permits additions and own selection edits in both active storage statuses', () => {
-  for (const status of ['pending', 'accepted']) {
-    assert.equal(checkoutPresentation({ status, hasOrder: true, hasSelection: false, dishCount: 0 }).label, '去加菜');
-    const saved = { status, hasOrder: true, hasSelection: true, dirty: false, dishCount: 2 };
-    assert.equal(checkoutPresentation(saved).label, '去加菜');
-    assert.match(checkoutPresentation(saved).tip, /备菜中也可以继续加菜/);
-    assert.equal(checkoutPresentation({ ...saved, dirty: true }).action, 'update');
-    assert.equal(checkoutPresentation({ ...saved, dirty: true, dishCount: 0 }).action, 'withdraw');
-    assert.equal(checkoutPresentation({ ...saved, hasSelection: false, dirty: true }).action, 'submit');
-  }
+test('checkout blocks duplicate arrangements for both active storage statuses', () => {
+ for (const status of ['pending', 'accepted']) for (const dishCount of [0, 2]) {
+   assert.equal(checkoutPresentation({ status, hasOrder: true, dirty: true, dishCount }).action, 'occupied');
+ }
+});
+
+test('addition labels count distinct ordered dishes within each set across family members', () => {
+  const entries = [{ key: 'set:a', recipes: [{ id: 'a' }, { id: 'b' }, { id: 'b' }, { id: 'c' }] }];
+  const order = { items: [{ recipe: { id: 'a' } }, { recipe: { id: 'b' } }], selections: [{ memberId: 'me', items: [{ recipe: { id: 'a' } }] }] };
+  const [option] = mealAdditionOptions(entries, order, 'me');
+  assert.equal(option.orderedCount, 2);
+  assert.equal(option.alreadySelected, false);
+  assert.equal(mealAdditionOptions(entries, { items: [] }, 'me')[0].orderedCount, 0);
 });

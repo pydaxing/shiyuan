@@ -1,3 +1,4 @@
+export const DEFAULT_PERSONAL_COVER = '/static/personal-home-default.jpg';
 export const DEFAULT_FAMILY_COVER = '/static/family-home-default.jpg';
 export const FAMILY_APPEARANCE_DEFAULTS = Object.freeze({ name: '我们的小家', cover: '', coverTitle: '都是我喜欢的味道！', coverSubtitle: '一日三餐四季，都要好好吃饭' });
 

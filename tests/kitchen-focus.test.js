@@ -113,7 +113,7 @@ test('the first procurement group stays at page top while later groups still get
 test('default meal navigation keeps the card below the page header and the WeChat capsule', async context => {
   const originalUni = globalThis.uni;
   context.after(() => { globalThis.uni = originalUni; });
-  for (const native of [false, true]) {
+  for (const native of [false, true]) for (const headerExtension of [0, 44]) {
     const moves = [];
     const selectors = [];
     const scope = effectScope();
@@ -128,11 +128,11 @@ test('default meal navigation keeps the card below the page header and the WeCha
       pageScrollTo: options => moves.push(options),
     };
     try {
-      const focus = scope.run(() => useKitchenFocus(ref([{ id: 'meal-1' }, { id: 'meal-2' }]), ref(true), ref(false)));
+      const focus = scope.run(() => useKitchenFocus(ref([{ id: 'meal-1' }, { id: 'meal-2' }]), ref(true), ref(false), undefined, { headerExtension }));
       focus.focus('meal-2');
       await flush();
       assert.deepEqual(selectors, ['#kitchen-meal-1']);
-      assert.deepEqual(moves, [{ scrollTop: 740 - (native ? 100 : 64), duration: 0 }]);
+      assert.deepEqual(moves, [{ scrollTop: 740 - (native ? 100 : 64) - headerExtension, duration: 0 }]);
     } finally { scope.stop(); }
   }
 });

@@ -72,8 +72,8 @@ test('removing a dish inside a set splits only affected selections into snapshot
   const selection = ref(order.selections[0]);
   const menu = computed(() => [{ key: `set:${set.id}` }, ...app.state.recipes.map(recipe => ({ key: recipe.id }))]);
   const draft = useMealDraft(ref('me'), selection, menu);
-  assert.deepEqual(draft.cart.value, { soup: 1, chicken: 1 });
-  app.actions.submitOrder(draft.cart.value, slot, '修改备注');
+  assert.deepEqual(draft.cart.value, {});
+  assert.throws(() => app.actions.submitOrder(draft.cart.value, slot, '修改备注'), /已安排/);
   assert.ok(app.state.orders[0].items.every(item => item.recipe.id !== 'tomato'));
 });
 

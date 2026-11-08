@@ -27,14 +27,13 @@ test('choosing another date or meal preserves selected dishes, sets and notes', 
   }
 });
 
-test('changing the destination also preserves an unchanged previously submitted selection', () => {
+test('saved meal selections never seed a new menu draft', () => {
   const draft = setup({ entries: [{ id: 'tomato' }], note: '少盐' });
+  assert.deepEqual(draft.cart.value, {});
+  assert.equal(draft.note.value, '');
+  draft.retain(); draft.currentSelection.value = null;
+  assert.deepEqual(draft.cart.value, {});
   assert.equal(draft.dirty.value, false);
-  draft.retain();
-  draft.currentSelection.value = null;
-  assert.deepEqual(draft.cart.value, { tomato: 1 });
-  assert.equal(draft.note.value, '少盐');
-  assert.equal(draft.dirty.value, true);
 });
 
 test('empty selection stays empty when choosing a meal with previous picks', () => {
@@ -43,7 +42,7 @@ test('empty selection stays empty when choosing a meal with previous picks', () 
   draft.retain();
   draft.currentSelection.value = { entries: [{ id: 'soup' }], note: '' };
   assert.deepEqual(draft.cart.value, {});
-  assert.equal(draft.dirty.value, true);
+  assert.equal(draft.dirty.value, false);
 });
 
 test('clear-selection empties dishes, sets and notes without restoring or changing a saved order', () => {
@@ -54,7 +53,7 @@ test('clear-selection empties dishes, sets and notes without restoring or changi
   draft.empty();
   assert.deepEqual(draft.cart.value, {});
   assert.equal(draft.note.value, '');
-  assert.equal(draft.dirty.value, true);
+  assert.equal(draft.dirty.value, false);
   assert.deepEqual(selection, { entries: [{ id: 'tomato' }], note: '少盐' });
   draft.cart.value = { chicken: 1 };
   assert.deepEqual(draft.cart.value, { chicken: 1 });
@@ -81,12 +80,12 @@ test('selection dock reflects remaining dishes without a hidden edit mode and ke
   baseParse(parse(source).descriptor.template.content).children.forEach(walk);
   const dock = nodes.find((node) => node.props.some((prop) => prop.name === 'class' && prop.value?.content === 'selection-dock'));
   const condition = dock.props.find((prop) => prop.name === 'if').exp.content;
-  const visible = new Function('dishCount', 'tab', 'menuMode', 'currentSelection', `return ${condition}`);
+  const visible = new Function('dishCount', 'tab', 'currentSelection', `const menuActive = tab === 'menu'; return ${condition}`);
   for (const saved of [null, { entries: [{ id: 'tomato' }] }]) {
-    assert.equal(visible(0, 'menu', 'menu', saved), false);
-    assert.equal(visible(1, 'menu', 'menu', saved), true);
-    assert.equal(visible(1, 'kitchen', 'orders', saved), false);
-    assert.equal(visible(1, 'community', 'menu', saved), false);
+    assert.equal(visible(0, 'menu', saved), false);
+    assert.equal(visible(1, 'menu', saved), true);
+    assert.equal(visible(1, 'activity', saved), false);
+    assert.equal(visible(1, 'community', saved), false);
   }
   const hasClass = (node, name) => node.props?.some(prop => prop.name === 'class' && prop.value?.content.split(' ').includes(name));
   const overview = dock.children.find(node => hasClass(node, 'selection-overview'));
@@ -102,7 +101,7 @@ test('selection dock reflects remaining dishes without a hidden edit mode and ke
   assert.match(summary.loc.source, /<text>已选 {{ dishCount }} 道菜<\/text>/);
   assert.ok(clear.children.some(node => node.tag === 'text' && node.children[0].content === '清空'));
   assert.match(clear.loc.source, /<AppIcon name="trash-danger" :size="16" \/><text>清空<\/text>/);
-  assert.ok(submit.children.some(node => node.tag === 'text' && node.children[0].content === '点餐'));
+  assert.ok(submit.children.some(node => node.tag === 'text' && node.children[0].content === '安排'));
   assert.doesNotMatch(dock.loc.source, /selection-actions|selection-total/);
   assert.doesNotMatch(summary.loc.source, /AppIcon/);
   assert.equal(submit.children.filter(node => node.tag === 'AppIcon').length, 1);
@@ -152,45 +151,30 @@ test('meal selectors live only in checkout, never in kitchen or dish browsing he
   assert.doesNotMatch(source, /class="selection-meal"/);
 });
 
-test('checkout actions distinguish new meals, family additions, edits and unchanged selections', () => {
-  const fresh = { closed: false, hasSelection: false, hasOrder: false, dirty: true, dishCount: 2 };
-  assert.deepEqual(checkoutPresentation(fresh), { action: 'submit', label: '送到厨房', tip: '' });
-  assert.match(checkoutPresentation({ ...fresh, hasOrder: true }).tip, /合并到同一单/);
-  const saved = { ...fresh, hasOrder: true, hasSelection: true, dirty: false };
-  assert.equal(checkoutPresentation(saved).action, 'view');
-  assert.equal(checkoutPresentation(saved).label, '去加菜');
-  assert.match(checkoutPresentation(saved).tip, /已经安排好.*备菜中也可以/);
-  assert.equal(checkoutPresentation({ ...saved, dirty: true }).action, 'update');
-  assert.match(checkoutPresentation({ ...saved, dirty: true }).tip, /不影响家人/);
-});
-
-test('empty, withdrawn and completed meal states always explain the available action', () => {
-  assert.equal(checkoutPresentation({ dishCount: 0 }).action, 'choose');
-  const withdrawn = { hasSelection: true, dirty: true, dishCount: 0 };
-  assert.equal(checkoutPresentation(withdrawn).action, 'withdraw');
-  assert.equal(checkoutPresentation(withdrawn).label, '撤回我的选菜');
-  for (const props of [withdrawn, { hasSelection: true, dirty: false, dishCount: 3 }, { dishCount: 1 }]) {
-    const closed = checkoutPresentation({ ...props, closed: true });
-    assert.equal(closed.action, 'blocked');
-    assert.equal(closed.label, '请先更换餐次');
-    assert.match(closed.tip, /已做好.*日期或餐次/);
+test('existing meals keep confirmation with an inline warning regardless of member, notes or draft', () => {
+  assert.equal(checkoutPresentation({ dishCount: 2 }).action, 'submit');
+  for (const hasSelection of [false, true]) for (const dirty of [false, true]) for (const dishCount of [0, 2]) {
+    const result = checkoutPresentation({ hasOrder: true, hasSelection, dirty, dishCount });
+    assert.equal(result.action, 'occupied'); assert.equal(result.label, '确认安排');
+    assert.equal(result.tip, '这一餐已安排，请选择其他日期、餐次。');
+    assert.equal(result.warning, true);
   }
 });
 
-test('note-only changes enable an update and changing back restores the view-order action', () => {
-  const draft = setup({ entries: [{ id: 'tomato' }], note: '少盐' });
-  const presentation = () => checkoutPresentation({ hasSelection: Boolean(draft.currentSelection.value), dirty: draft.dirty.value, dishCount: Object.keys(draft.cart.value).length });
-  assert.equal(presentation().action, 'view');
-  draft.note.value = '不放辣椒';
-  assert.equal(presentation().action, 'update');
-  draft.note.value = ' 少盐 ';
-  assert.equal(presentation().action, 'view');
-  draft.cart.value = { tomato: 1, chicken: 1 };
-  assert.equal(presentation().action, 'update');
+test('empty and completed meal states explain the available action', () => {
+  assert.equal(checkoutPresentation({ dishCount: 0 }).action, 'choose');
+  for (const dishCount of [0, 3]) assert.equal(checkoutPresentation({ closed: true, dishCount }).action, 'blocked');
+});
+
+test('successful clear stays empty after server refresh; failed drafts remain intact', () => {
+  const draft = setup(); draft.cart.value = { tomato: 1 }; draft.note.value = '少盐';
   draft.retain();
-  draft.currentSelection.value = null;
-  assert.equal(presentation().action, 'submit');
-  assert.equal(Object.keys(draft.cart.value).length, 2);
+  assert.deepEqual(draft.cart.value, { tomato: 1 });
+  draft.currentSelection.value = { entries: [{ id: 'tomato' }], note: '少盐' };
+  draft.clear();
+  assert.deepEqual(draft.cart.value, {}); assert.equal(draft.note.value, '');
+  draft.currentSelection.value = { entries: [{ id: 'chicken' }], note: '新备注' };
+  assert.deepEqual(draft.cart.value, {}); assert.equal(draft.note.value, '');
 });
 
 test('checkout uses three spaced cards without detached hints or silent no-change disabling', () => {
@@ -201,5 +185,14 @@ test('checkout uses three spaced cards without detached hints or silent no-chang
   assert.match(checkout, /class="checkout-tip warning checkout-submit-error" role="alert"/);
   assert.doesNotMatch(checkout, /class="hint"|class="error-message"|重复菜品只做一道|:disabled="[^"]*cartDirty/);
   assert.match(checkout, /继续选菜/);
-  assert.match(source, /if \(action === 'view' \|\| action === 'choose'\)/);
+  assert.match(source, /if \(action === 'choose'\)/);
+});
+
+ test('new arrangements require an explicit meal selection before submission', () => {
+  for (const dishCount of [0, 1, 3]) {
+    const result = checkoutPresentation({ hasMeal: false, dishCount });
+    assert.equal(result.action, 'validate');
+    assert.equal(result.label, '确认安排');
+  }
+  assert.equal(checkoutPresentation({ hasMeal: true, dishCount: 1 }).action, 'submit');
 });

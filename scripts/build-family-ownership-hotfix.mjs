@@ -12,6 +12,10 @@ export async function buildFamilyOwnershipHotfix(baseline) {
   assert.ok(!baseline.includes('const ownershipFields ='), '生产代码已包含家庭归属补丁，请重新核对');
   const built = await build({ entryPoints: [path.join(root, 'server/application.mjs')], bundle: true, write: false, platform: 'node', target: 'node18', format: 'cjs' });
   const source = built.outputFiles[0].text;
+  // This historical partial patch copied isolated declarations. Identity v2
+  // adds shared helpers and transactional state, which cannot be transplanted
+  // safely by that mechanism. Use the backed-up full verified deploy instead.
+  assert.ok(!source.includes('function privateRecipeIdentity('), '历史家庭归属补丁已停用：菜品身份 v2 必须使用完整兼容后端及 deploy-cloud-verified.mjs 部署');
   const declaration = (code, name, indent = '') => {
     const matches = [...code.matchAll(new RegExp(`^${indent}function ${name}\\([^]*?^${indent}}`, 'gm'))];
     assert.equal(matches.length, 1, `${name} 定义不唯一`);

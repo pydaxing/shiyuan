@@ -9,7 +9,7 @@ import { createKeyboardDismissGesture, focusKeyboardField, blurKeyboardField, di
 const source = readFileSync(new URL('../src/components/Sheet.vue', import.meta.url), 'utf8');
 const template = parse(source).descriptor.template.content;
 
-function compileSheet(content = template, footerVisible = true, scrollAnchor = '') {
+function compileSheet(content = template, footerVisible = true, scrollAnchor = '', page = false) {
   let markup = '';
   const compiled = compile(content, {
     filename: 'Sheet.vue',
@@ -24,6 +24,9 @@ function compileSheet(content = template, footerVisible = true, scrollAnchor = '
     },
   });
   const events = [];
+  let isTop = true;
+  const reachBottomSource = source.match(/function reachBottom\(\) \{[^\n]+/)[0];
+  const reachBottom = new Function('layer', 'emit', `${reachBottomSource}; return reachBottom;`)({ isTop: () => isTop }, event => events.push(event));
   const keyboardDismissals = [];
   const gesture = createKeyboardDismissGesture();
   const surfaceGesture = Object.fromEntries(Object.entries(gesture).map(([name, handler]) => [name, event => {
@@ -32,7 +35,7 @@ function compileSheet(content = template, footerVisible = true, scrollAnchor = '
     try { handler(event); } finally { globalThis.uni = previous; }
   }]));
   const render = new Function('Vue', compiled.code)({ o: (handler) => handler, t: String, e: Object.assign, s: (style) => style, n: (value) => typeof value === 'object' ? Object.keys(value).filter((key) => value[key]).join(' ') : value });
-const bindings = render({ title: '创建菜品', eyebrow: '', immersive: false, variant: '', focused: false, keyboard: 0, footerVisible, backdropStyle: {}, sheetStyle: {}, scrollTop: 0, scrollAnchor, multiline: false, fieldClass: 'input', modelValue: '', placeholder: '', ariaLabel: '菜名', maxlength: 30, disabled: false, focus: false, type: 'text', error: '', sheet: {}, onInput() {}, onCompositionStart() {}, onCompositionEnd() {}, onFocus() {}, onBlur() {}, keyboardChange() {}, handleScroll() {}, cancelReveal() {}, touchField() {}, dismissKeyboard() {}, surfaceGesture, startSurfaceGesture: surfaceGesture.begin, $slots: { footer: true }, $emit: (event) => events.push(event) }, []);
+const bindings = render({ page, pageHeaderStyle: {}, title: '创建菜品', eyebrow: '', immersive: false, variant: '', focused: false, keyboard: 0, footerVisible, backdropStyle: {}, sheetStyle: {}, scrollTop: 0, scrollAnchor, multiline: false, fieldClass: 'input', modelValue: '', placeholder: '', placeholderStyle: '', ariaLabel: '菜名', maxlength: 30, disabled: false, focus: false, type: 'text', error: '', sheet: {}, onInput() {}, onCompositionStart() {}, onCompositionEnd() {}, onFocus() {}, onBlur() {}, keyboardChange() {}, handleScroll() {}, reachBottom, cancelReveal() {}, touchField() {}, dismissKeyboard() {}, surfaceGesture, startSurfaceGesture: surfaceGesture.begin, endSurfaceGesture: surfaceGesture.end, cancelSurfaceGesture: surfaceGesture.cancel, $slots: { footer: true }, $emit: (event) => events.push(event) }, []);
   const nodes = [];
   function collect(node, parent = null) {
     if (node.type !== 1) return;
@@ -43,7 +46,7 @@ const bindings = render({ title: '创建菜品', eyebrow: '', immersive: false, 
   }
   baseParse(markup).children.forEach((node) => collect(node));
   const byClass = (name) => nodes.find((node) => node.props.some((prop) => prop.name === 'class' && (prop.value?.content.split(' ').includes(name) || prop.value?.content.includes(`'${name}'`))));
-  return { markup, events, keyboardDismissals, nodes, byClass, root: byClass('sheet-backdrop') };
+  return { setTop: value => { isTop = value; }, markup, events, keyboardDismissals, nodes, byClass, root: byClass('sheet-backdrop') };
 }
 
 function dispatch(target, type, coordinates = { clientX: 120, clientY: 200 }) {
@@ -222,4 +225,25 @@ test('reply focus stops taps and field containers cannot retarget native label f
     const editor = readFileSync(new URL(`../src/components/${name}.vue`, import.meta.url), 'utf8');
     assert.doesNotMatch(editor, /<label\b/);
   }
+});
+
+
+test('WeChat timeline pagination receives scrolltolower only from the frontmost sheet', () => {
+  const sheet = compileSheet();
+  dispatch(sheet.byClass('sheet-scroll'), 'scrolltolower');
+  sheet.setTop(false);
+  dispatch(sheet.byClass('sheet-scroll'), 'scrolltolower');
+  sheet.setTop(true);
+  dispatch(sheet.byClass('sheet-scroll'), 'scrolltolower');
+  assert.deepEqual(sheet.events, ['reach-bottom', 'reach-bottom']);
+});
+
+
+test('full-screen secondary pages return once from the top-left button and retain sheet pagination', () => {
+  const sheet = compileSheet(template, false, '', true);
+  touch(sheet.byClass('sheet-back-button'));
+  assert.deepEqual(sheet.events, ['close']);
+  const scroller = sheet.byClass('sheet-scroll');
+  dispatch(scroller, 'scrolltolower');
+  assert.deepEqual(sheet.events, ['close', 'reach-bottom']);
 });

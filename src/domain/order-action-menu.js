@@ -1,4 +1,4 @@
-const actionIcons = new Map([['cancel', 'cancel'], ['restore', 'restore'], ['edit', 'edit'], ['remove', 'trash-danger']]);
+const actionIcons = new Map([['cancel', 'cancel'], ['restore', 'restore'], ['edit', 'edit'], ['remove', 'trash-danger'], ['visibility', 'lock']]);
 
 export function orderMenuIcon(action) {
   return actionIcons.get(action) || '';
@@ -12,11 +12,11 @@ export function orderMenuActions(status, hasDishes = true) {
   return actions;
 }
 
-export function orderMenuGeometry(anchor, viewport, count) {
+export function orderMenuGeometry(anchor, viewport, count, preferredWidth = 128) {
   if (![anchor?.left, anchor?.right, anchor?.top, anchor?.bottom, viewport?.windowWidth, viewport?.windowHeight].every(Number.isFinite) || !Number.isInteger(count) || count < 1) return null;
   const gutter = 12;
   const gap = 6;
-  const width = Math.min(128, viewport.windowWidth - gutter * 2);
+  const width = Math.min(preferredWidth, viewport.windowWidth - gutter * 2);
   if (width < 44 || anchor.right <= 0 || anchor.left >= viewport.windowWidth || anchor.bottom <= 0 || anchor.top >= viewport.windowHeight || anchor.right <= anchor.left || anchor.bottom <= anchor.top) return null;
   const desiredHeight = count * 44 + 10;
   const below = viewport.windowHeight - gutter - anchor.bottom - gap;

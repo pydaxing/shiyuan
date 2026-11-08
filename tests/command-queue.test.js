@@ -328,7 +328,7 @@ test('existing edits preserve IDs and share IDs while meal selection preserves t
   assert.equal(app.view.recipes[0].shareId, recipe.shareId);
   app.confirm(0);
   await saved;
-  const selection = app.queue.enqueue('submitOrder', [{ [recipe.id]: 1 }, { date: today, meal: '晚餐' }, '新备注']);
+  const selection = app.queue.enqueue('addOrderDishes', ['order-1', { [recipe.id]: 1 }]);
   assert.equal(selection.projected, true);
   assert.equal(app.view.orders.length, 1);
   assert.equal(app.view.orders[0].id, 'order-1');
@@ -434,4 +434,54 @@ test('reactive field updates cannot mutate the confirmed baseline when toggling 
     assert.equal(app.queue.getBase().family.features.fridge, enabled);
     assert.equal(app.status.failures.length, 0);
   }
+});
+
+test('duplicate menu submission is rejected before projection and preserves the arranged meal', async () => {
+  const app = harness({ initial: withOrder() });
+  const before = structuredClone(app.view.orders);
+  const result = app.queue.enqueue('submitOrder', [{ [app.view.recipes[0].id]: 1 }, { date: today, meal: '晚餐' }, '覆盖备注']);
+  await assert.rejects(result, /已安排/);
+  assert.deepEqual(app.view.orders, before);
+});
+
+test('public-recipe edit projects a fork and blocks dependent pending IDs until confirmed', async () => {
+  const initial = withOrder();
+  const dish = initial.recipes[0];
+  Object.assign(dish, { identityVersion: 2, recipeOrigin: 'community', communityRecipeId: dish.id });
+  initial.mealSets = [{ id: 'stable-menu', title: '双人餐', image: '', recipeIds: initial.recipes.slice(0, 2).map(item => item.id) }];
+  const archived = clone(initial.orders);
+  const app = harness({ initial });
+  const saving = app.queue.enqueue('saveRecipe', [{ ...dish, title: '改良做法' }, dish.id]);
+  const pending = app.view.recipes.find(item => item.title === '改良做法');
+  assert.match(pending.id, /^pending-/);
+  assert.equal(pending.recipeOrigin, 'custom');
+  assert.equal(app.view.mealSets[0].recipeIds[0], pending.id);
+  assert.deepEqual(app.view.orders, archived);
+  await assert.rejects(app.queue.enqueue('saveRecipe', [{ ...pending, title: '再次修改' }, pending.id]), /尚未同步/);
+  await assert.rejects(app.queue.enqueue('submitOrder', [{ [pending.id]: 1 }, { date: today, meal: '早餐' }]), /尚未同步/);
+  assert.equal(app.requests.length, 1);
+  app.confirm(0);
+  const savedId = await saving;
+  assert.ok(savedId && savedId !== dish.id && !savedId.startsWith('pending-'));
+  assert.equal(app.view.mealSets[0].recipeIds[0], savedId);
+  const second = app.queue.enqueue('saveRecipe', [{ ...app.view.recipes.find(item => item.id === savedId), title: '再次修改' }, savedId]);
+  await tick();
+  app.confirm(1);
+  assert.equal(await second, savedId);
+  assert.deepEqual(app.view.orders, archived);
+});
+
+test('failed fork restores the original public recipe and menu references', async () => {
+  const initial = initialSnapshot();
+  const dish = initial.recipes[0];
+  Object.assign(dish, { identityVersion: 2, recipeOrigin: 'community', communityRecipeId: dish.id });
+  initial.mealSets = [{ id: 'stable-menu', title: '双人餐', image: '', recipeIds: initial.recipes.slice(0, 2).map(item => item.id) }];
+  const app = harness({ initial });
+  const saving = app.queue.enqueue('saveRecipe', [{ ...dish, title: '尚未保存' }, dish.id]);
+  app.requests[0].reject(failure('INVALID', '封面不可用'));
+  await assert.rejects(saving, /封面不可用/);
+  assert.equal(app.view.recipes[0].id, dish.id);
+  assert.equal(app.view.recipes[0].title, dish.title);
+  assert.equal(app.view.mealSets[0].recipeIds[0], dish.id);
+  assert.equal(app.view.recipes.some(item => item.id.startsWith('pending-')), false);
 });

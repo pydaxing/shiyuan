@@ -1,23 +1,24 @@
 <script setup>
 import { useSheetContentResize } from '../composables/useSheetSizing.js';
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import { chooseLocalImages, persistSelectedImages, previewImages, imageUploadLabel } from '../services/images.js';
 import AppIcon from './AppIcon.vue';
 import LazyImage from './LazyImage.vue';
 import ImageUploadProgress from './ImageUploadProgress.vue';
-const props = defineProps({ modelValue: { type: Array, default: () => [] }, label: String });
+const props = defineProps({ modelValue: { type: Array, default: () => [] }, fallbackImages: { type: Array, default: () => [] }, label: String, purpose: { type: String, default: '' }, variant: String, iconOnly: Boolean, disabled: Boolean });
 const emit = defineEmits(['update:modelValue', 'busy']);
 useSheetContentResize();
 const busy = ref(false);
 const error = ref('');
 const pendingPhotos = ref([]);
 const failedPaths = ref([]);
+const visibleFallbacks = computed(() => !props.modelValue.length && !pendingPhotos.value.length ? props.fallbackImages || [] : []);
 async function choose(retry = false) {
-  if (busy.value || props.modelValue.length >= 9) return;
+  if (props.disabled || busy.value || props.modelValue.length >= 9) return;
   busy.value = true; emit('busy', true); error.value = '';
   try {
     const report = ({ items }) => { pendingPhotos.value = items; };
-    const images = retry ? await persistSelectedImages(failedPaths.value, report) : await chooseLocalImages(9 - props.modelValue.length, ['album', 'camera'], report);
+    const images = retry ? await persistSelectedImages(failedPaths.value, report, [], '', props.purpose) : await chooseLocalImages(9 - props.modelValue.length, ['album', 'camera'], report, props.purpose);
     if (images.length) emit('update:modelValue', [...props.modelValue, ...images]);
     failedPaths.value = [];
   } catch (failure) {
@@ -28,18 +29,38 @@ async function choose(retry = false) {
   finally { pendingPhotos.value = []; busy.value = false; emit('busy', false); }
 }
 function preview(image) { void previewImages(props.modelValue, image); }
+function previewFallback(image) { void previewImages(props.fallbackImages || [], image); }
+function remove(index) {
+  if (props.disabled || busy.value) return;
+  emit('update:modelValue', props.modelValue.filter((_, position) => position !== index));
+}
 </script>
 
 <template>
-  <view class="step-photo-picker">
+  <view class="step-photo-picker" :class="{ 'is-meal': variant === 'meal' }">
     <view class="step-photo-grid">
+      <view v-for="(image, index) in visibleFallbacks" :key="`fallback-${index}-${image}`" class="step-photo-tile step-photo-fallback">
+        <button role="button" class="step-photo-preview" :aria-label="`查看餐单照片第${index + 1}张`" @click="previewFallback(image)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><LazyImage :src="image" variant="card" mode="aspectFill" /></button>
+      </view>
       <view v-for="(image, index) in modelValue" :key="`${index}-${image}`" class="step-photo-tile">
         <button role="button" class="step-photo-preview" :aria-label="`查看${label}第${index + 1}张`" @click="preview(image)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><LazyImage :src="image" variant="card" mode="aspectFill" /></button>
-        <button role="button" class="card-remove" :disabled="busy" :aria-label="`移除${label}第${index + 1}张`" @click="$feedback(); $emit('update:modelValue', modelValue.filter((_, position) => position !== index))" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="close-inverse" :size="18" /></button>
+        <button role="button" class="card-remove" :disabled="busy || disabled" :aria-label="`移除${label}第${index + 1}张`" @click="$feedback(); remove(index)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="close-inverse" :size="18" /></button>
       </view>
       <view v-for="photo in pendingPhotos" :key="photo.path" class="step-photo-tile photo-processing-tile"><image :src="photo.preview || photo.path" mode="aspectFill" /><ImageUploadProgress v-if="photo.status !== 'failed'" :value="imageUploadLabel(photo)" compact /></view>
-      <button v-if="modelValue.length + pendingPhotos.length < 9" role="button" class="step-photo-add" :aria-label="`添加${label}`" :disabled="busy" @click="choose(false)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="camera" :size="24" active /><text v-if="!busy">添加图片</text></button>
+      <button v-if="modelValue.length + pendingPhotos.length < 9" role="button" class="step-photo-add" :aria-label="`添加${label}`" :disabled="busy || disabled" @click="choose(false)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view v-if="variant === 'meal' || iconOnly" class="meal-photo-plus" aria-hidden="true" /><text v-if="variant === 'meal'" class="meal-photo-label">实拍</text><template v-if="variant !== 'meal' && !iconOnly"><AppIcon name="camera" :size="24" active /><text v-if="!busy">添加图片</text></template></button>
     </view>
-    <text v-if="error" class="error-message" role="alert">{{ error }}</text><button v-if="failedPaths.length && !busy" class="text-button" @click="choose(true)" role="button" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">重试未成功的图片</button>
+    <text v-if="error" class="error-message" role="alert">{{ error }}</text><button v-if="failedPaths.length && !busy" class="text-button" :disabled="disabled" @click="choose(true)" role="button" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">重试未成功的图片</button>
   </view>
 </template>
+
+<style scoped>
+.step-photo-picker.is-meal { --step-photo-size: var(--meal-photo-size, 96px); }
+.is-meal .step-photo-grid { gap: 6px; }
+.is-meal .step-photo-tile, .is-meal .step-photo-add { border-radius: 3px; }
+.is-meal .step-photo-add { border: 0; background: var(--control-surface); color: var(--muted); }
+.meal-photo-label { font-size: var(--type-caption); line-height: 18px; }
+.meal-photo-plus { position: relative; width: 30px; height: 30px; }
+.meal-photo-plus::before, .meal-photo-plus::after { content: ''; position: absolute; background: currentColor; border-radius: 1px; }
+.meal-photo-plus::before { top: 14px; left: 0; width: 30px; height: 2px; }
+.meal-photo-plus::after { top: 0; left: 14px; width: 2px; height: 30px; }
+</style>

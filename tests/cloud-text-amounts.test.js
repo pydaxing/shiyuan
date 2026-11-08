@@ -236,7 +236,7 @@ test('new or changed meal selections require a fresh server confirmation rather 
   const oldSignature = current.snapshot.purchases[0].signature;
   current = await success(server.command('saveRecipe', [{ ...recipe([salt]), title: '另一道菜' }], current.revision));
   const secondId = current.snapshot.recipes.find(item => item.id !== firstId).id;
-  current = await success(server.command('submitOrder', [{ [firstId]: 1, [secondId]: 1 }, { date: today, meal: '晚餐' }], current.revision));
+  current = await success(server.command('addOrderDishes', [current.snapshot.orders[0].id, { [secondId]: 1 }], current.revision));
   assert.equal(current.snapshot.purchases[0].signature, oldSignature);
   assertTextRequirement((await bootstrap(server)).snapshot, true);
   current = await success(server.command('recordPurchase', [confirmation({ signature: oldSignature })], current.revision));

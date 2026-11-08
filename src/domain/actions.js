@@ -1,6 +1,8 @@
-import { clone, completeOrder, importCollection, matchesImportedSource, makeOrder, mergeMealSelection, rebuildMealOrder, assertMealEditable, validateIngredient, validatePurchase, validateRecipe, validateMealSet, validDate, purchaseQuantity, STOCK_LOCATIONS, validateReservation, shoppingOrders, localDate, hasTextAmount, normalizedIngredient, aggregateItems, requirementSignature } from './kitchen.js';
+import { workspaceDisplayName } from './workspace-identity.js';
+import { clone, completeOrder, importCollection, matchesImportedSource, makeOrder, validateIngredient, validatePurchase, validateRecipe, validateMealSet, validDate, purchaseQuantity, STOCK_LOCATIONS, validateReservation, shoppingOrders, localDate, hasTextAmount, normalizedIngredient, aggregateItems, requirementSignature } from './kitchen.js';
 import { familyPublications, publishedFamilyKeys, publicationKey } from './community-publications.js';
-import { validateImage, cleanSteps } from './presentation.js';
+import { validateImage, cleanSteps, hasRecipeCover } from './presentation.js';
+import { canonicalRecipeId, isCommunityRecipe, isUnchangedCommunityRecipe, wasRecipePublished, sameRecipeContent, privateRecipeIdentity } from './recipe-identity.js';
 import { makeShare, parseShare } from './sharing.js';
 import { canDeleteCommunityPost } from './community-policy.js';
 import { appendOrderDishes } from './meal-additions.js';
@@ -17,23 +19,10 @@ function submitOrder(cart, selection, note = '') {
   validateReservation(selection, today());
   const next = clone(state.value);
   const index = next.orders.findIndex((order) => order.date === selection.date && order.meal === selection.meal && ['pending', 'accepted'].includes(order.status));
-  if (index >= 0) assertMealEditable(next.orders[index]);
-  if (index < 0 && next.orders.some((order) => order.date === selection.date && order.meal === selection.meal && order.status === 'completed')) throw new Error('这一餐已经做好了，请选择其他日期或餐次');
-  if (!Object.keys(cart).length && index >= 0) {
-    const order = next.orders[index];
-    if (!order.selections.some((entry) => entry.memberId === activeMember.value.id)) throw new Error('先选几道想吃的菜吧');
-    const remaining = order.selections.filter((entry) => entry.memberId !== activeMember.value.id);
-    if (remaining.length) next.orders[index] = rebuildMealOrder({ ...order, selections: remaining });
-    else {
-      order.status = 'cancelled';
-      order.cancelledAt = new Date(now()).toISOString();
-      if (order.shoppingDrafts) order.shoppingDrafts = [];
-    }
-  } else {
-    const order = makeOrder({ id: newId('order'), recipes: next.recipes, mealSets: next.mealSets, cart, member: activeMember.value, ...selection, note });
-    if (index >= 0) next.orders[index] = mergeMealSelection(next.orders[index], order);
-    else next.orders.unshift(order);
-  }
+  if (index >= 0) throw Object.assign(new Error('这一餐已安排，请到三餐增减菜品'), { code: 'CONFLICT' });
+  if (next.orders.some((order) => order.date === selection.date && order.meal === selection.meal && order.status === 'completed')) throw new Error('这一餐已经做好了，请选择其他日期或餐次');
+  const order = makeOrder({ id: newId('order'), recipes: next.recipes, mealSets: next.mealSets, cart, member: activeMember.value, ...selection, note });
+  next.orders.unshift(order);
   commit(next);
 }
 
@@ -63,7 +52,7 @@ function updateOrder(orderId, action) {
   if (action === 'accepted' && order?.status === 'cancelled') {
     validateReservation(order, today());
     if (!order.items.length) throw Object.assign(new Error('这餐已没有菜品，请从菜单重新预订'), { code: 'CONFLICT' });
-    if (next.orders.some(entry => entry.id !== orderId && entry.date === order.date && entry.meal === order.meal && ['pending', 'accepted', 'completed'].includes(entry.status))) throw Object.assign(new Error('这个餐次已有餐单，请先查看厨房，不能重复恢复'), { code: 'CONFLICT' });
+    if (next.orders.some(entry => entry.id !== orderId && entry.date === order.date && entry.meal === order.meal && ['pending', 'accepted', 'completed'].includes(entry.status))) throw Object.assign(new Error('这个餐次已有餐单，请先查看三餐，不能重复恢复'), { code: 'CONFLICT' });
     order.status = 'accepted';
     return commit(next);
   }
@@ -171,14 +160,26 @@ function removeStock(id) {
 
 function saveRecipe(recipe, editingId) {
   recipe = { ...recipe, nutrition: typeof recipe.nutrition === 'string' ? recipe.nutrition.trim() : recipe.nutrition, steps: cleanSteps(recipe.steps) };
-  validateRecipe(recipe, { requireStepTitles: true });
+  validateRecipe(recipe, { requireStepTitles: true, requireCover: true });
   const next = clone(state.value);
   const index = next.recipes.findIndex((entry) => entry.id === editingId);
   if (editingId && index < 0) throw new Error('菜品已不存在，请重新打开');
-  const saved = { ...(index >= 0 ? next.recipes[index] : {}), ...clone(recipe), title: recipe.title.trim(), id: editingId || newId('recipe'), shareId: newId('shared-dish'), author: activeMember.value.name, tag: '家庭私房菜', servings: Number(recipe.servings), minutes: recipe.minutes === null ? null : Number(recipe.minutes), ingredients: recipe.ingredients.map((item) => ({ ...item, name: item.name.trim(), quantity: hasTextAmount(item) ? null : Number(item.quantity), ...(hasTextAmount(item) ? { amountText: item.amountText.trim() } : {}) })) };
+  const previous = index >= 0 ? next.recipes[index] : undefined;
+  const editable = Object.fromEntries(['title', 'category', 'minutes', 'servings', 'image', 'guideImage', 'nutrition', 'ingredients', 'steps', 'provenance'].filter(key => recipe[key] !== undefined).map(key => [key, clone(recipe[key])]));
+  const normalized = { ...previous, ...editable, title: recipe.title.trim(), servings: Number(recipe.servings), minutes: recipe.minutes === null ? null : Number(recipe.minutes), ingredients: recipe.ingredients.map((item) => ({ ...item, name: item.name.trim(), quantity: hasTextAmount(item) ? null : Number(item.quantity), ...(hasTextAmount(item) ? { amountText: item.amountText.trim() } : {}) })) };
+  if (previous && sameRecipeContent(previous, normalized)) return previous.id;
+  const publicPosts = [...(next.posts || []), ...getPublicPosts()];
+  const fork = Boolean(previous && (isCommunityRecipe(previous) || isUnchangedCommunityRecipe(previous, publicPosts)
+    || publishedFamilyKeys(next).has(publicationKey('dish', previous.id))
+    || wasRecipePublished(previous, publicPosts, next.family.id)
+    || previous.publishedPostId
+    || (previous.recipeOrigin !== 'custom' && previous.sourcePostId && !previous.sourcePostId.startsWith('friend-'))));
+  const saved = privateRecipeIdentity({ ...normalized, ...(index < 0 || fork ? { createdBy: activeMember.value.id, createdAt: now() } : {}), updatedBy: activeMember.value.id, updatedAt: now(), author: activeMember.value.name, tag: '家庭私房菜' }, fork || !previous ? newId('recipe') : previous.id, previous, { fork });
   if (index >= 0) next.recipes.splice(index, 1, saved);
   else next.recipes.unshift(saved);
+  if (fork) next.mealSets = (next.mealSets || []).map(set => ({ ...set, recipeIds: set.recipeIds.map(id => id === previous.id ? saved.id : id) }));
   commit(next);
+  return saved.id;
 }
 
 function addCollection(collection) {
@@ -201,7 +202,7 @@ function saveMealSet(mealSet, editingId) {
   validateMealSet(mealSet, next.recipes);
   const index = next.mealSets.findIndex((entry) => entry.id === editingId);
   if (editingId && index < 0) throw new Error('套餐已不存在，请重新打开');
-  const saved = { ...(index >= 0 ? next.mealSets[index] : {}), ...clone(mealSet), id: editingId || newId('set'), shareId: newId('shared-set'), title: mealSet.title.trim(), author: activeMember.value.name };
+  const saved = { ...(index >= 0 ? next.mealSets[index] : {}), ...clone(mealSet), id: editingId || newId('set'), ...(index < 0 ? { createdBy: activeMember.value.id, createdAt: now() } : {}), updatedBy: activeMember.value.id, updatedAt: now(), shareId: newId('shared-set'), title: mealSet.title.trim(), author: activeMember.value.name };
   if (index >= 0) next.mealSets.splice(index, 1, saved);
   else next.mealSets.unshift(saved);
   commit(next);
@@ -239,8 +240,21 @@ function publishToCommunity(id, kind = 'dish') {
   const item = (kind === 'set' ? next.mealSets : next.recipes).find((entry) => entry.id === id);
   if (!item) throw new Error('请从家庭菜单中选择要分享的菜品或套餐');
   if (publishedFamilyKeys(next).has(publicationKey(kind, id))) throw Object.assign(new Error('这道菜品或套餐已分享，请勿重复发布'), { code: 'ALREADY_SHARED' });
-  const content = parseShare(makeShare(item, next.recipes, next.family.name, kind));
-  const post = { ...content, id: newId('post'), familyId: next.family.id, familyItemId: id, familyKind: kind, publisherId: activeMember.value.id, publisherType: 'user', image: content.image || '', categories: kind === 'set' ? [] : [content.recipes[0].category], publishedAt: new Date().toISOString() };
+  if (kind === 'dish' && isUnchangedCommunityRecipe(item, [...(next.posts || []), ...getPublicPosts()])) throw Object.assign(new Error('美食已有，此菜品来自美食'), { code: 'ALREADY_SHARED' });
+  const dishes = kind === 'set' ? item.recipeIds.map(recipeId => next.recipes.find(recipe => recipe.id === recipeId)) : [item];
+  if (dishes.some(recipe => !hasRecipeCover(recipe?.image))) throw new Error('请先为菜品添加封面图，再分享到美食');
+  dishes.forEach(recipe => validateRecipe(recipe, { requireCover: true, requireDetails: true }));
+  const content = parseShare(makeShare(item, next.recipes, workspaceDisplayName(next.family, activeMember.value), kind));
+  content.recipes = content.recipes.map(recipe => ({ ...recipe, identityVersion: 2, recipeOrigin: 'community', canonicalRecipeId: recipe.id }));
+  const post = { ...content, sourceKind: 'community', id: newId('post'), familyId: next.family.id, familyItemId: id, familyKind: kind, publisherId: activeMember.value.id, publisherType: 'user', image: content.image || '', categories: kind === 'set' ? [] : [content.recipes[0].category], publishedAt: new Date(now()).toISOString() };
+  for (const dish of dishes) {
+    // The author may withdraw and re-publish their own dish. Keep creation
+    // origin distinct from an untouched import; publication does not transfer
+    // authorship. publishedPostId also protects dishes first shared in a set.
+    if (isCommunityRecipe(dish)) continue;
+    dish.canonicalRecipeId = canonicalRecipeId(dish);
+    dish.publishedPostId = post.id;
+  }
   next.sharedItems = [...familyPublications(next), { kind, itemId: id, postId: post.id }];
   next.posts = [post, ...next.posts];
   commit(next);

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import postcss from 'postcss';
-import { pageHeaderHeight, pageHeaderStyle } from '../src/domain/mobile.js';
+import { pageHeaderHeight, pageHeaderStyle, sheetPageHeaderStyle } from '../src/domain/mobile.js';
 import { homeMenuGeometry } from '../src/domain/home-menu.js';
 
 const source = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -54,6 +54,28 @@ test('fixed page titles reserve the same height as menu viewports and kitchen an
   assert.equal(pageHeaderHeight({ screenWidth: 1024 }), 64);
 });
 
+test('full-screen editor headers match discovery title center and lower boundary across devices', () => {
+  for (const width of [320, 375, 390, 430]) for (const statusBarHeight of [20, 44, 54, 59]) {
+    const info = { windowWidth: width, uniPlatform: 'mp-weixin', statusBarHeight };
+    for (const capsule of [{}, { top: statusBarHeight + 4, bottom: statusBarHeight + 36, left: width - 97 }]) {
+      const page = pageHeaderStyle(info, capsule);
+      const sheet = sheetPageHeaderStyle(info, capsule);
+      const height = Number.parseFloat(sheet.height);
+      const top = Number.parseFloat(sheet.paddingTop);
+      const padding = Number.parseFloat(sheet.paddingBottom);
+      assert.equal(height, Number.parseFloat(page.minHeight));
+      assert.equal(top + 22, (Number.parseFloat(page.paddingTop) + height - 12) / 2);
+      assert.equal(top + 44 + padding, height);
+      assert.ok(padding >= 0);
+    }
+  }
+  for (const width of [320, 430, 1024]) {
+    const info = { windowWidth: width, uniPlatform: 'h5' };
+    assert.equal(Number.parseFloat(sheetPageHeaderStyle(info).height), pageHeaderHeight(info));
+  }
+  assert.match(source('src/components/Sheet.vue'), /sheetPageHeaderStyle\(info, capsule\)/);
+});
+
 test('all custom page headers share a full-width fixed surface below dialog overlays', () => {
   const fixed = declarations('.page-header-fixed');
   assert.equal(fixed.get('position'), 'fixed');
@@ -82,12 +104,13 @@ test('all custom page headers share a full-width fixed surface below dialog over
 
 test('fixed titles keep page scrolling, feed pagination and the hidden menu lifecycle intact', () => {
   const page = source('src/pages/index/index.vue');
-  assert.match(page, /<view v-show="tab === 'menu'" class="menu-view">\s*<PageHeader title="我家菜单"/);
-  assert.match(page, /<PageHeader title="我家厨房"/);
-  assert.match(page, /onReachBottom\(\(\) => \{ if \(tab\.value === 'community'\) communityView\.value\?\.loadMore\(\)/);
+  assert.match(page, /<view v-show="activeNavigation === 'menu'" class="meals-home">\s*<view class="meals-cover"/);
+  assert.match(page, /<PageHeader title="" cover/);
+  assert.match(page, /<view v-show="tab === 'menu'" class="menu-home">/);
+  assert.match(page, /onReachBottom\(\(\) => \{ if \(sheetOpen\.value\) return; if \(tab\.value === 'community'\) communityView\.value\?\.loadMore\(\)/);
   assert.ok(source('src/components/CommunityView.vue').includes('<PageHeader title="美食"'));
   assert.match(source('src/components/IngredientsView.vue'), /<PageHeader :title="fridgeEnabled \? '食材' : '采购'"/);
-  assert.match(source('src/components/FamilyView.vue'), /<PageHeader :title="familyDisplay\.name"/);
+  assert.match(source('src/components/FamilyView.vue'), /<PageHeader :title="pageTitle"/);
   assert.equal(declarations('.page-heading').get('text-overflow'), 'ellipsis');
 });
 

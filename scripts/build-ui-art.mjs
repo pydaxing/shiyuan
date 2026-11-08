@@ -4,6 +4,13 @@ import { NATIVE_UI_COLORS } from '../src/domain/ui-theme.js';
 
 const destination = new URL('../src/static/', import.meta.url);
 const icons = {
+  'identity-home-inverse': '<path d="m4 14 12-10 12 10M7 12v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V12M13 28v-9h6v9"/>',
+  'identity-person-inverse': '<circle cx="16" cy="10" r="5"/><path d="M6 28v-3a10 9 0 0 1 20 0v3"/>',
+  'heart-inverse': '<path d="M16 27 4.9 16.2C1.8 13.1 2 8.2 5.2 5.5 8.5 2.8 13.3 3.8 16 7.3 18.7 3.8 23.5 2.8 26.8 5.5 30 8.2 30.2 13.1 27.1 16.2L16 27Z"/>',
+  'heart-liked': '<path d="M16 27 4.9 16.2C1.8 13.1 2 8.2 5.2 5.5 8.5 2.8 13.3 3.8 16 7.3 18.7 3.8 23.5 2.8 26.8 5.5 30 8.2 30.2 13.1 27.1 16.2L16 27Z" stroke="#ee625f" fill="#ee625f"/>',
+  'heart-social': '<path d="M16 27 4.9 16.2C1.8 13.1 2 8.2 5.2 5.5 8.5 2.8 13.3 3.8 16 7.3 18.7 3.8 23.5 2.8 26.8 5.5 30 8.2 30.2 13.1 27.1 16.2L16 27Z" stroke="#576b95"/>',
+  'arrow-up-circle': '<circle cx="16" cy="16" r="12"/><path d="M16 23V9m-5 5 5-5 5 5"/>',
+  'arrow-down-circle': '<circle cx="16" cy="16" r="12"/><path d="M16 9v14m-5-5 5 5 5-5"/>',
   menu: '<path d="M4 13h24c-1 9-5 12-12 12S5 22 4 13Z"/><path d="M10 28h12M10 8V4m6 4V2m6 6V4"/>',
   'meal-set': '<rect x="3" y="5" width="26" height="22" rx="4"/><path d="M18 5v22M18 16h11"/><circle cx="10.5" cy="16" r="4"/>',
   community: '<rect x="4" y="4" width="9" height="9" rx="3"/><rect x="19" y="4" width="9" height="9" rx="3"/><rect x="4" y="19" width="9" height="9" rx="3"/><path d="m23.5 17 1.8 4.7 4.7 1.8-4.7 1.8-1.8 4.7-1.8-4.7-4.7-1.8 4.7-1.8Z"/>',
@@ -12,6 +19,7 @@ const icons = {
   family: '<path d="m3 14 13-11 13 11M7 12v16h18V12"/><path d="M16 16c-5-6-10 2 0 7 10-5 5-13 0-7Z"/>',
   chef: '<path d="M9 19a6 6 0 0 1-2-11 6 6 0 0 1 11-3 6 6 0 0 1 9 8 6 6 0 0 1-4 6v9H9v-9Z"/><path d="M9 23h14m-10-7v3m6-3v3"/>',
   camera: '<path d="M4 9h6l2-4h8l2 4h6v18H4V9Z"/><circle cx="16" cy="17" r="5"/>',
+  moments: '<circle cx="16" cy="16" r="12.2"/><path d="M16 10.8 28.2 15.85M19.68 12.32 24.73 24.52M21.2 16 16.15 28.2M19.68 19.68 7.48 24.73M16 21.2 3.8 16.15M12.32 19.68 7.27 7.48M10.8 16 15.85 3.8M12.32 12.32 24.52 7.27"/>',
   calendar: '<rect x="5" y="6" width="22" height="23" rx="3"/><path d="M10 3v6m12-6v6M5 13h22m-16 6h3m5 0h3m-11 5h3"/>',
   plus: '<path d="M16 7v18M7 16h18"/>',
   'plus-inverse': '<path d="M16 7v18M7 16h18"/>',
@@ -38,11 +46,17 @@ const icons = {
   chevron: '<path d="m12 8 8 8-8 8"/>',
   'detail-collapse': '<path d="m7.5 12 8.5 8.5 8.5-8.5"/>',
   'detail-share': '<path d="M17.5 5.4c0-1.6 1-2 2.2-.9l8 7.5c1.1 1 1.1 2.5 0 3.5l-8.1 8.1c-1.2 1.2-2.4.7-2.3-.9l.2-3.7c-5.6-.4-9.4 1.9-12.5 4.8-1.3 1.2-2.1.7-1.7-1.1 1.4-7.6 6.1-11.8 14.2-12.3V5.4Z"/>',
+  'search-rounded': '<circle cx="14.5" cy="14.5" r="10.5"/><path d="m22 22 4.5 4.5"/>',
   search: '<circle cx="14" cy="14" r="9"/><path d="m21 21 7 7"/>',
   grid: '<rect x="5" y="5" width="8" height="22" rx="2"/><rect x="19" y="5" width="8" height="22" rx="2"/>',
   list: '<rect x="5" y="5" width="22" height="8" rx="2"/><rect x="5" y="19" width="22" height="8" rx="2"/>',
 };
-const navigationIcons = new Set(['menu', 'community', 'inventory', 'shopping', 'family']);
+icons.lock = '<rect x="7" y="14" width="18" height="14" rx="3"/><path d="M11 14V9a5 5 0 0 1 10 0v5M16 20v3"/>';
+icons['meal-breakfast'] = '<path d="M3 23h26M6 28h20M9 23a7 7 0 0 1 14 0M16 5v5M5 12l4 4m18-4-4 4"/>';
+icons['meal-lunch'] = '<circle cx="16" cy="16" r="7"/><path d="M16 2v4m0 20v4M2 16h4m20 0h4M6 6l3 3m14 14 3 3M26 6l-3 3M9 23l-3 3"/>';
+icons['meal-dinner'] = '<path d="M25 21A12 12 0 0 1 11 4a12 12 0 1 0 14 17Z"/><path d="M24 4v6m-3-3h6"/>';
+icons['meal-snack'] = '<path d="M5 12h18v10a6 6 0 0 1-6 6h-6a6 6 0 0 1-6-6V12Zm18 2h2a4 4 0 0 1 0 8h-2M9 4v3m6-4v4m6-3v3"/>';
+const navigationIcons = new Set(['menu', 'community', 'moments', 'inventory', 'shopping', 'family']);
 for (const name of ['edit', 'trash', 'menu', 'chef', 'camera', 'close', 'clock', 'shopping']) icons[`${name}-inverse`] = icons[name];
 icons['menu-photo'] = icons.menu;
 icons['trash-danger'] = icons.trash;
@@ -55,7 +69,7 @@ for (const [name, paths] of Object.entries(icons)) {
   if (photoIconsOnly && !['menu-photo', 'clock-inverse'].includes(name)) continue;
   for (const active of [false, true]) {
     const color = name.endsWith('-inverse') || name === 'menu-photo' ? '#ffffff' : name.endsWith('-danger') ? NATIVE_UI_COLORS.danger : (active ? NATIVE_UI_COLORS.primary : NATIVE_UI_COLORS.muted);
-    const strokeWidth = name.startsWith('detail-') ? 2.6 : name === 'share-feed' ? 2 : navigationIcons.has(name) && active ? 2.2 : 1.8;
+    const strokeWidth = name.startsWith('identity-') ? 2.2 : name.startsWith('detail-') ? 2.6 : name === 'share-feed' ? 2 : navigationIcons.has(name) && active ? 2.2 : 1.8;
     const shadow = name === 'menu-photo' ? `<g stroke="#000000" opacity=".55" fill="none" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" transform="translate(0 .7)">${paths}</g>` : '';
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 32 32">${shadow}<g stroke="${color}" fill="none" stroke-width="${strokeWidth}" stroke-linecap="round" stroke-linejoin="round">${paths}</g></svg>`;
     await sharp(Buffer.from(svg)).png().toFile(fileURLToPath(new URL(`icon-${name}${active ? '-active' : ''}.png`, destination)));

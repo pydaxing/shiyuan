@@ -189,7 +189,7 @@ test('food category selection holds the toolbar open and activates even the unch
 test('feed uses an anchored portal while units keep the existing sheet and touch targets', () => {
   const nodes = templateNodes(selectSource);
   const sheet = nodes.find(node => node.tag === 'Sheet');
-  assert.equal(sheet.props.find(prop => prop.name === 'if').exp.content, "open && variant !== 'feed'");
+  assert.equal(sheet.props.find(prop => prop.name === 'if').exp.content, "open && !inline && variant !== 'feed'");
   const listbox = nodes.find(node => attribute(node, 'role') === 'listbox');
   assert.equal(listbox.tag, 'scroll-view');
   assert.equal(binding(listbox, 'bounces'), 'false');
@@ -269,4 +269,17 @@ test('active feed underline is centered under the label instead of the label and
   assert.equal(underline.get('bottom'), '4px');
   assert.equal(declarationsFor('.community-filter-trigger.active::before').size, 0);
   assert.equal(declarationsFor('.community-category-select .community-filter-trigger[disabled]').get('opacity'), '1');
+});
+
+test('inline editor choices can collapse without changing the draft value', async context => {
+  const current = selectFixture(context, { variant: 'units', inline: true, modelValue: '适量', options: ['适量', '少许', 'g'] });
+  await current.field.show();
+  assert.equal(current.field.open.value, true);
+  await current.field.show();
+  assert.equal(current.field.open.value, false);
+  assert.deepEqual(current.events, []);
+  await current.field.show();
+  current.field.choose('g');
+  assert.equal(current.field.open.value, false);
+  assert.deepEqual(current.events, [['update:modelValue', 'g']]);
 });

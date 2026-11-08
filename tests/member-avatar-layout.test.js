@@ -25,13 +25,13 @@ function nodes(name) {
 const hasClass = (node, name) => node.props.some(prop => prop.name === 'class' && prop.value?.content.split(' ').includes(name));
 
 test('family avatars retain current member photos and shared anonymous rendering', () => {
-  const photo = nodes('FamilyView').find(node => node.tag === 'LazyImage' && node.props.some(prop => prop.arg?.content === 'src' && prop.exp?.content === 'member.avatar'));
+  const photo = nodes('FamilyManagement').find(node => node.tag === 'LazyImage' && node.props.some(prop => prop.arg?.content === 'src' && prop.exp?.content === 'member.avatar'));
   assert.ok(photo);
   assert.ok(hasClass(photo, 'member-avatar-image'));
   for (const name of ['avatar', 'round']) assert.ok(photo.props.some(prop => prop.name === name), name);
   assert.equal(photo.props.find(prop => prop.name === 'variant')?.value?.content, 'avatar');
   assert.ok(!photo.props.some(prop => prop.arg?.content === 'fallback'), 'missing pictures use the anonymous icon, not nickname initials');
-  const portrait = nodes('FamilyView').find(node => hasClass(node, 'member-photo'));
+  const portrait = nodes('FamilyManagement').find(node => hasClass(node, 'member-photo'));
   assert.ok(!portrait.props.some(prop => prop.name === 'if'), 'members without photos still get a visible avatar container');
 });
 
@@ -40,7 +40,7 @@ test('kitchen dishes release the avatar column without losing counts, food photo
   const row = mealNodes.find(node => hasClass(node, 'meal-dish-row'));
   assert.equal(row.children.filter(node => node.type === 1).length, 3, 'the dish opener and mutually exclusive checkout / kitchen removal controls remain');
   assert.ok(mealNodes.some(node => node.tag === 'FoodThumbnail' && hasClass(node, 'meal-dish-photo')));
-  assert.ok(mealNodes.some(node => hasClass(node, 'dish-voters')));
+  assert.ok(mealNodes.some(node => hasClass(node, 'meal-dish-origin')));
   const remove = mealNodes.find(node => hasClass(node, 'cart-remove'));
   assert.equal(remove.props.find(prop => prop.name === 'if')?.exp?.content, 'removable');
   assert.equal(remove.props.find(prop => prop.name === 'on' && prop.arg?.content === 'click')?.exp?.content, "$emit('remove', item.recipe.id)");

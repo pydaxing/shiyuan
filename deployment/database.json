@@ -10,7 +10,25 @@
     { "name": "orders", "indexes": [["familyId", "_id"]] },
     { "name": "inventory", "indexes": [["familyId", "_id"]] },
     { "name": "purchases", "indexes": [["familyId", "_id"]] },
-    { "name": "posts", "indexes": [["status", "_id"], ["status", "kind", "_id"], ["status", "categories", "_id"], ["status", "kind", "categories", "_id"], ["status", "assetIds", "_id"], ["familyId", "status", "_id"], ["familyId", "familyItemId", "status", "_id"], ["familyId", "familyItemId", "familyKind", "publisherId", "_id"]] },
+    { "name": "posts", "indexes": [["status", "_id"], ["status", "kind", "_id"], ["status", "categories", "_id"], ["status", "kind", "categories", "_id"], ["status", "assetIds", "_id"], ["familyId", "status", "_id"], ["familyId", "familyItemId", "status", "_id"], ["familyId", "status", "recipes.id", "_id"], ["familyId", "familyItemId", "familyKind", "publisherId", "_id"]] },
+    {
+      "name": "meal_posts",
+      "indexes": [
+        ["status", "visibility", "createdAt", "_id"],
+        ["status", "authorId", "spaceId", "createdAt", "_id"],
+        ["spaceId", "authorId", "orderId", "status", "_id"],
+        ["status", "visibility", "assetIds", "_id"],
+        ["status", "authorId", "assetIds", "_id"],
+        ["spaceId", "_id"],
+        ["status", "authorId", "createdAt", "_id"],
+        ["status", "mealSharingVersion", "visibility", "participantUserIds", "createdAt", "_id"],
+        ["status", "spaceId", "visibility", "createdAt", "_id"],
+        ["status", "spaceId", "mealSharingVersion", "visibility", "createdAt", "_id"],
+        ["status", "authorId", "spaceId", "visibility", "createdAt", "_id"],
+        ["status", "mealSharingVersion", "visibility", "assetIds", "_id"]
+      ]
+    },
+    { "name": "meal_reactions", "indexes": [["postId", "_id"]] },
     { "name": "comments", "indexes": [["postId", "_id"]] },
     { "name": "invites", "indexes": [] },
     { "name": "shares", "indexes": [] },

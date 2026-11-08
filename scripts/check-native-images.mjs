@@ -1,3 +1,4 @@
+import { computed, ref, watch } from 'vue';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -72,7 +73,7 @@ const wechat = {
     },
   },
 };
-const vendor = { index: native, wx$1: wechat, ref: value => ({ value }) };
+const vendor = { index: native, wx$1: wechat, ref, computed, watch };
 function load(file) {
   if (file === resolve(directory, 'common/vendor.js')) return vendor;
   if (modules.has(file)) return modules.get(file).exports;

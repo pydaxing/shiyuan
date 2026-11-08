@@ -1,15 +1,18 @@
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue';
 
-export function useCommunityFeedViewport({ navigation, locked, enabled, loading, refresh, onError = () => {} }) {
+export function useCommunityFeedViewport({ navigation, locked, enabled, loading, refresh, indicatorMaxMs = 0, onError = () => {} }) {
   const scrollTop = ref(0);
   const refreshing = ref(false);
   const pullReady = ref(false);
   const refreshThreshold = 80;
-  const refresherEnabled = computed(() => enabled.value && !locked.value && (!loading.value || refreshing.value));
+  // Keep the native refresher mounted while it restores its pull offset.
+  // Disabling it together with triggered=false can strand the content below the header.
+  const refresherEnabled = computed(() => enabled.value && !locked.value);
   let lastTop = 0;
   let scrollSequence = 0;
   let refreshSequence = 0;
   let disposed = false;
+  let indicatorTimer;
   watch(locked, value => { if (value) scrollTop.value = lastTop; }, { flush: 'sync' });
 
   function onScroll(event) {
@@ -30,6 +33,7 @@ export function useCommunityFeedViewport({ navigation, locked, enabled, loading,
     if (disposed) return;
     const token = ++scrollSequence;
     refreshSequence += 1;
+    clearTimeout(indicatorTimer);
     refreshing.value = false;
     pullReady.value = false;
     navigation.reset();
@@ -49,11 +53,14 @@ export function useCommunityFeedViewport({ navigation, locked, enabled, loading,
     try {
       await nextTick();
       if (disposed || token !== refreshSequence || !enabled.value || locked.value || loading.value) return;
+      if (indicatorMaxMs > 0) indicatorTimer = setTimeout(() => {
+        if (!disposed && token === refreshSequence) refreshing.value = false;
+      }, indicatorMaxMs);
       await refresh();
     } catch (error) {
       if (!disposed && token === refreshSequence && enabled.value && !locked.value) onError(error);
     } finally {
-      if (!disposed && token === refreshSequence) refreshing.value = false;
+      if (!disposed && token === refreshSequence) { clearTimeout(indicatorTimer); refreshing.value = false; }
     }
   }
 
@@ -61,6 +68,7 @@ export function useCommunityFeedViewport({ navigation, locked, enabled, loading,
     disposed = true;
     scrollSequence += 1;
     refreshSequence += 1;
+    clearTimeout(indicatorTimer);
     refreshing.value = false;
     pullReady.value = false;
   });

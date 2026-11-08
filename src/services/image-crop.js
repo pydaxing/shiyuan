@@ -1,4 +1,4 @@
-import { compressNativePhoto } from './images.js';
+import { compressNativePhoto, prepareNativeEditorPhoto } from './images.js';
 import { cropPixels } from '../domain/image-crop.js';
 import { displayImageSettings } from '../domain/image-variants.js';
 
@@ -17,17 +17,25 @@ export function releaseCropFile(path, original = '') {
   try { wx.getFileSystemManager().unlink({ filePath: path, fail() {} }); } catch {}
 }
 
-export async function prepareCropSource(original) {
+export async function prepareCropSource(original, variant, { highResolution = false } = {}) {
   if (typeof document !== 'undefined') {
     const photo = await readPhoto(() => new Image(), original);
-    return { original, preview: original, width: photo.naturalWidth, height: photo.naturalHeight };
+    return { original, preview: original, width: photo.naturalWidth, height: photo.naturalHeight, ...(variant ? { variant } : {}) };
+  }
+  // Packaged assets may be returned by getImageInfo without a leading slash.
+  // Keep them rooted at the mini-program package, not the current page; they
+  // are already bounded build assets and need no upload-file compression.
+  if (/^\/?static\//.test(original)) {
+    const path = original.startsWith('/') ? original : `/${original}`;
+    const info = await uni.getImageInfo({ src: path });
+    return { original: path, preview: path, width: info.width, height: info.height, ...(variant ? { variant } : {}) };
   }
   const file = await uni.getFileInfo({ filePath: original });
   if (file.size > 30 * 1024 * 1024) throw new Error('单张原图最大支持 30MB，请选择较小的照片');
-  const preview = await compressNativePhoto(original);
+  const preview = highResolution ? await prepareNativeEditorPhoto(original) : await compressNativePhoto(original, variant);
   try {
     const info = await uni.getImageInfo({ src: preview });
-    return { original, preview, width: info.width, height: info.height };
+    return { original, preview, width: info.width, height: info.height, ...(variant ? { variant } : {}) };
   } catch (error) { releaseCropFile(preview, original); throw error; }
 }
 
@@ -36,7 +44,7 @@ export async function renderImageCrop(source, crop) {
   const browser = typeof document !== 'undefined';
   if (!browser && (typeof wx === 'undefined' || !wx.createOffscreenCanvas || !wx.canvasToTempFilePath)) throw new Error('当前微信版本不支持调整图片，请升级微信后重试');
   const canvas = browser ? document.createElement('canvas') : wx.createOffscreenCanvas({ type: '2d', width: 1, height: 1 });
-  const setting = displayImageSettings.detail;
+  const setting = displayImageSettings[source.variant || 'detail'];
   try {
     const photo = await readPhoto(() => browser ? new Image() : canvas.createImage(), source.preview);
     const context = canvas.getContext('2d');

@@ -107,7 +107,7 @@ test('removing then re-adding a dish never resurrects its old prepared flag', ()
   const context = fixture();
   const signature = dishPreparationSignature(context.order.items[0]);
   context.actions.setDishPrepared(context.order.id, 'tomato', true, signature);
-  context.actions.submitOrder({ broccoli: 1 }, slot);
+  context.actions.removeOrderDish(context.order.id, 'tomato');
   assert.deepEqual(context.order.preparedDishes, []);
   context.actions.addOrderDishes(context.order.id, { tomato: 1 });
   assert.equal(shoppingMeals(context.snapshot, today)[0].preparedCount, 0);

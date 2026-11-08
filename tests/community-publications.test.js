@@ -1,10 +1,12 @@
+import { isUnchangedCommunityRecipe } from '../src/domain/recipe-identity.js';
+import { hasRecipeCover } from '../src/domain/presentation.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { runInNewContext } from 'node:vm';
 import { computed, ref, reactive, watch, effectScope, nextTick } from 'vue';
 import { createSeed } from '../src/data/seed.js';
-import { normalizeSnapshot } from '../src/domain/kitchen.js';
+import { normalizeSnapshot, recipeFieldErrors } from '../src/domain/kitchen.js';
 import { createKitchenActions } from '../src/domain/actions.js';
 import { familyPublications, publishedFamilyKeys, publicationKey } from '../src/domain/community-publications.js';
 import { publicationStatusMatches, readLegacyPublicationStatus } from '../src/services/legacy-publication-status.js';
@@ -71,7 +73,7 @@ function sheetFixture({ cloud = false, itemId, kind = 'dish', publish, refresh, 
   const calls = [];
   let unmount;
   const sheet = scope.run(() => runInNewContext(`${componentScript}\n;({ entries, filtered, selectedKey, selected, confirming, canPublish, busy, error, ready, syncing, syncShares, select, next, publish });`, {
-    computed, ref, watch, state, cloudMode: cloud, publishedFamilyKeys, publicationStatusMatches, readLegacyPublicationStatus,
+    computed, ref, watch, state, hasRecipeCover, recipeFieldErrors, isUnchangedCommunityRecipe, cloudMode: cloud, publishedFamilyKeys, publicationStatusMatches, readLegacyPublicationStatus,
     defineProps: () => ({ itemId, kind }), defineEmits: () => (...args) => events.push(args),
     onMounted: () => {}, onUnmounted: callback => { unmount = callback; },
     notify: () => {}, refreshCloud: async () => { if (refresh) await refresh(state); },
@@ -302,4 +304,53 @@ test('a failed publish retains the selection and blocks duplicate taps while sav
   reject(new Error('网络不稳定')); await saving;
   assert.equal(sheet.error.value, '网络不稳定'); assert.equal(sheet.selectedKey.value, key);
   sheet.stop();
+});
+
+
+test('unchanged imported dishes show the source explanation without issuing a publish request', async () => {
+  const sheet = sheetFixture();
+  const dish = sheet.state.value.recipes[0];
+  Object.assign(dish, { identityVersion: 2, recipeOrigin: 'community', communityRecipeId: dish.id });
+  sheet.select(sheet.entries.value.find(entry => entry.id === dish.id));
+  sheet.next();
+  assert.equal(sheet.confirming.value, false);
+  assert.equal(sheet.error.value, '美食已有，此菜品来自美食');
+  await sheet.publish();
+  assert.equal(sheet.calls.length, 0);
+  sheet.stop();
+});
+
+test('a legacy missing recipe cover is explained before confirming or sending a publication', async () => {
+  const sheet = sheetFixture();
+  const dish = sheet.state.value.recipes[0];
+  dish.image = '';
+  sheet.select(sheet.entries.value.find(entry => entry.id === dish.id));
+  sheet.next();
+  assert.equal(sheet.confirming.value, false);
+  assert.match(sheet.error.value, /添加封面图/);
+  await sheet.publish();
+  assert.equal(sheet.calls.length, 0);
+  sheet.stop();
+});
+
+
+test('public sharing preflights missing details for individual dishes and every set member', async () => {
+  for (const kind of ['dish', 'set']) {
+    const sheet = sheetFixture({ kind, itemId: kind === 'dish' ? 'tomato' : 'menu' });
+    const target = sheet.state.value.recipes.find(recipe => recipe.id === 'tomato');
+    const original = JSON.parse(JSON.stringify(target));
+    target.ingredients = [];
+    await sheet.publish();
+    assert.equal(sheet.calls.length, 0);
+    assert.match(sheet.error.value, /食材/);
+    target.ingredients = original.ingredients;
+    target.steps = [];
+    await sheet.publish();
+    assert.equal(sheet.calls.length, 0);
+    assert.match(sheet.error.value, /步骤/);
+    target.steps = original.steps;
+    await sheet.publish();
+    assert.equal(sheet.calls.length, 1);
+    sheet.stop();
+  }
 });

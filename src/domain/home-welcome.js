@@ -14,9 +14,9 @@ export function homeDateLabel(date) {
 
 export function kitchenWelcome(orders, today = localDate()) {
   const visibleOrders = kitchenOrders(orders, today);
-  if (!visibleOrders.length) return { mode: 'empty', title: '今天还没安排餐食', recordTitle: '' };
+  if (!visibleOrders.length) return { mode: 'empty', title: '还没有安排', recordTitle: '' };
   const activeOrders = visibleOrders.filter(order => ['pending', 'accepted'].includes(order.status));
-  if (activeOrders.length) return { mode: 'active', title: '有餐食预定，快来准备吧！', recordTitle: '' };
+  if (activeOrders.length) return { mode: 'active', title: '有餐食预定', recordTitle: '' };
   const recordTitle = visibleOrders.every(order => order.status === 'cancelled') ? '' : visibleOrders.every(order => order.status === 'completed') ? '已开饭' : '餐食记录';
-  return { mode: 'idle', title: '还没有餐食，快来预订吧！', recordTitle };
+  return { mode: 'idle', title: '可以继续安排下一餐', recordTitle };
 }

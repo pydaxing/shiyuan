@@ -2,15 +2,14 @@
 import { computed, getCurrentInstance, onMounted, onUnmounted, ref, watch } from 'vue';
 import AppIcon from './AppIcon.vue';
 import FormField from './FormField.vue';
-import MenuSwipeRow from './MenuSwipeRow.vue';
 import HomeWelcome from './HomeWelcome.vue';
-import { familyAppearance } from '../domain/family.js';
+import MenuSwipeRow from './MenuSwipeRow.vue';
 import { sheetOpen } from '../composables/sheetStack.js';
 import { dismissFocusedKeyboard } from '../services/keyboard.js';
 import { afterNativeRender } from '../composables/nativeRender.js';
 import { HOME_MENU_CATEGORIES, firstHomeMenuCategory, groupHomeMenu, homeMenuCategoryAtScroll } from '../domain/home-menu.js';
 
-const props = defineProps({ entries: Array, selected: Object, category: String, search: String, cover: String, coverTitle: String, dateLabel: String, busy: Boolean, sharing: Boolean, scrollInset: { type: Number, default: 16 }, docked: Boolean, active: { type: Boolean, default: true } });
+const props = defineProps({ entries: Array, selected: Object, category: String, search: String, busy: Boolean, sharing: Boolean, scrollInset: { type: Number, default: 16 }, docked: Boolean, active: { type: Boolean, default: true } });
 const emit = defineEmits(['update:category', 'update:search', 'open', 'toggle', 'create', 'edit-entry', 'share-entry', 'remove-entry', 'discover', 'layout', 'dock', 'page-drag']);
 const instance = getCurrentInstance();
 const openedKey = ref('');
@@ -18,14 +17,13 @@ const query = computed(() => (props.search || '').trim());
 const groups = computed(() => groupHomeMenu(props.entries, query.value));
 const visibleGroups = computed(() => groups.value.filter(group => group.entries.length));
 const emptyMenu = computed(() => !props.entries.length);
-const menuAppearance = computed(() => familyAppearance(props));
 const listInset = computed(() => Math.max(0, props.scrollInset ?? 16));
 const railContentHeight = ref(HOME_MENU_CATEGORIES.length * 48);
 const listOriginTop = ref(null);
 const menuStyle = computed(() => ({ '--home-menu-list-top': `${listInset.value}px`, '--home-menu-rail-content-height': `${railContentHeight.value}px`, ...(listOriginTop.value === null ? {} : { '--home-menu-origin-top': `${listOriginTop.value}px` }) }));
 const listScrollTarget = ref(0);
 const navigating = ref(false);
-const scrollEnabled = computed(() => props.active && !sheetOpen.value && (props.docked || navigating.value));
+const scrollEnabled = computed(() => props.active && !sheetOpen.value);
 const resultCount = computed(() => groups.value.reduce((count, group) => count + group.entries.length, 0));
 const railTarget = computed(() => `home-menu-tab-${Math.max(0, HOME_MENU_CATEGORIES.indexOf(props.category))}`);
 let positions = [];
@@ -37,13 +35,18 @@ let inactivePosition = null;
 let pinnedPosition = null;
 let navigationRevision = 0;
 let pendingLayout = null;
+let scrollLayoutTimer = null;
+let scrollRevision = 0;
 let disposed = false;
 
-function refreshLayout() {
+function refreshLayout(notifyLayout = true) {
+  clearTimeout(scrollLayoutTimer);
+  scrollLayoutTimer = null;
   if (pendingLayout) return pendingLayout;
   pendingLayout = afterNativeRender().then(() => {
     if (disposed || sheetOpen.value || !props.active) return [];
     return new Promise(resolve => {
+      const measuredRevision = scrollRevision;
       const selector = uni.createSelectorQuery().in(instance.proxy);
       selector.selectAll('.home-menu-group').boundingClientRect();
       selector.select('.home-menu-sections').scrollOffset();
@@ -52,14 +55,16 @@ function refreshLayout() {
       selector.selectViewport().scrollOffset();
       selector.exec(result => {
         if (disposed || sheetOpen.value || !props.active) return resolve([]);
-        lastScrollTop = result?.[1]?.scrollTop ?? lastScrollTop;
+        const measuredScrollTop = result?.[1]?.scrollTop ?? lastScrollTop;
+        if (measuredRevision === scrollRevision) lastScrollTop = measuredScrollTop;
         if (result?.[3]?.height > 0) railContentHeight.value = result[3].height;
         if (Number.isFinite(result?.[2]?.top) && Number.isFinite(result?.[4]?.scrollTop)) listOriginTop.value = Math.max(0, result[2].top + result[4].scrollTop);
         positions = (result?.[0] || []).flatMap(rect => {
           const group = visibleGroups.value.find(item => item.id === rect.id);
-          return group && result?.[2] ? [{ category: group.category, top: rect.top - result[2].top + lastScrollTop }] : [];
+          return group && result?.[2] ? [{ category: group.category, top: rect.top - result[2].top + measuredScrollTop }] : [];
         });
-        emit('layout');
+        if (notifyLayout) emit('layout');
+        syncCategory();
         resolve(positions);
       });
     });
@@ -111,12 +116,32 @@ function onScroll(event) {
 function onListScroll(detail) {
   if (sheetOpen.value || !props.active) return;
   if (Math.abs((detail.scrollTop || 0) - lastScrollTop) > 3) openedKey.value = '';
+  scrollRevision += 1;
   lastScrollTop = Math.max(0, detail.scrollTop || 0);
-  if (navigating.value || query.value || searchFocused) return;
+  syncCategory();
+  // Track cached boundaries while scrolling; measure after momentum settles.
+  // Querying every frame crosses the native bridge and can return stale offsets.
+  clearTimeout(scrollLayoutTimer);
+  scrollLayoutTimer = setTimeout(() => { scrollLayoutTimer = null; refreshLayout(false); }, 120);
+}
+
+function syncCategory() {
+  if (disposed || sheetOpen.value || !props.active || navigating.value || query.value || searchFocused) return;
   if (pinnedPosition && Math.abs(lastScrollTop - pinnedPosition.top) < 3) return;
   pinnedPosition = null;
   const category = homeMenuCategoryAtScroll(positions, lastScrollTop, 8);
   if (category && category !== props.category) emit('update:category', category);
+}
+
+async function onListBottom() {
+  const bottomScrollTop = lastScrollTop;
+  await refreshLayout(false);
+  if (disposed || sheetOpen.value || !props.active || navigating.value || query.value || searchFocused) return;
+  const category = positions.at(-1)?.category;
+  if (category && lastScrollTop > 0 && lastScrollTop >= bottomScrollTop - 2) {
+    pinnedPosition = null;
+    emit('update:category', category);
+  }
 }
 
 function scrollPage(payload) {
@@ -138,7 +163,7 @@ function clearSearch() {
 function closeMenuActions() { openedKey.value = ''; }
 
 function performEntryAction(action, entry) {
-  if (action !== 'share-entry') closeMenuActions();
+  closeMenuActions();
   dismissFocusedKeyboard();
   emit(action, entry);
 }
@@ -172,7 +197,6 @@ watch(query, (value, previous) => {
   }
 });
 watch(visibleGroups, () => { if (!props.sharing || !visibleGroups.value.some(group => group.entries.some(entry => entry.key === openedKey.value))) openedKey.value = ''; refreshLayout(); }, { flush: 'post' });
-watch(() => [props.coverTitle, props.dateLabel], () => refreshLayout(), { flush: 'post' });
 watch(listInset, () => refreshLayout(), { flush: 'post' });
 watch(() => Object.keys(props.selected || {}).length > 0, () => refreshLayout(), { flush: 'post' });
 watch(() => props.active, active => {
@@ -187,8 +211,8 @@ watch(() => props.active, active => {
 }, { flush: 'sync' });
 watch(sheetOpen, locked => { navigationRevision += 1; navigating.value = false; if (locked && !props.sharing) openedKey.value = ''; if (!locked) refreshLayout(); }, { flush: 'sync' });
 onMounted(() => { if (!query.value) reset(); else refreshLayout(); });
-onUnmounted(() => { disposed = true; navigationRevision += 1; });
-defineExpose({ onScroll, onListScroll, scrollPage, refreshLayout, reset, selectCategory });
+onUnmounted(() => { clearTimeout(scrollLayoutTimer); disposed = true; navigationRevision += 1; });
+defineExpose({ onScroll, onListScroll, onListBottom, scrollPage, refreshLayout, reset, selectCategory });
 </script>
 
 <script module="railGesture" lang="wxs">
@@ -226,8 +250,11 @@ function route(event, owner, kind) {
   var horizontal = Math.abs(event.touches[0].pageX - state.railStartX);
   if (vertical >= 8 || horizontal >= 8) state.railMoved = true;
   if (!state.railMoved || horizontal > vertical) return;
-  if (!data.docked && !state.pageGesture) return;
-  if (state.pageGesture || (movement < 0 && state[kind + 'ScrollTop'] <= 1)) {
+  // Never disable a retained native list when the cover is pulled open.
+  // Away from its top, both directions belong to that list. Only a list at
+  // its top hands off to the page; keep that owner until the next touch.
+  var atTop = state[kind + 'ScrollTop'] <= 1;
+  if (state.pageGesture || (atTop && (!data.docked || movement < 0))) {
     owner.callMethod('scrollPage', { distance: movement, start: !state.pageGesture });
     state.pageGesture = true;
     return false;
@@ -249,7 +276,6 @@ module.exports = { start: start, scroll: scroll, contain: contain, tap: tap, lis
   <view class="home-menu" :class="{ 'is-empty': emptyMenu, 'is-searching': Boolean(query) }" :style="menuStyle" @click="closeMenuActions">
     <HomeWelcome v-if="emptyMenu && !query" title="把爱吃的，放进我家菜单" primary-label="创建菜品" primary-icon="plus-inverse" secondary-label="看看美食" secondary-icon="community" :busy="busy" @primary="$emit('create', category, 'dish')" @secondary="$emit('discover')" />
     <template v-else>
-    <HomeWelcome compact calendar :cover="cover" :title="menuAppearance.coverTitle" :description="dateLabel" />
     <view class="home-menu-tools">
       <view class="home-menu-search search-wrap">
         <view class="search-leading-icon" aria-hidden="true"><AppIcon name="search" :size="16" /></view>
@@ -267,7 +293,7 @@ module.exports = { start: start, scroll: scroll, contain: contain, tap: tap, lis
         </scroll-view>
       </view>
       <view class="home-menu-list" :data-docked="docked" :data-locked="sheetOpen" @touchstart="railGesture.listStart" @touchmove="railGesture.listMove">
-      <scroll-view class="home-menu-sections" :scroll-y="scrollEnabled" enhanced :bounces="false" :show-scrollbar="false" :scroll-top="listScrollTarget" :scroll-with-animation="false" aria-label="菜品和套餐列表" @scroll="railGesture.listScroll">
+      <scroll-view class="home-menu-sections" :scroll-y="scrollEnabled" enhanced :bounces="false" :show-scrollbar="false" :scroll-top="listScrollTarget" :scroll-with-animation="false" aria-label="菜品和套餐列表" @scroll="railGesture.listScroll" :lower-threshold="2" @scrolltolower="onListBottom">
       <view class="home-menu-content">
         <view v-for="group in visibleGroups" :id="group.id" :key="group.category" class="home-menu-group" :aria-label="`${group.category}，${group.entries.length}项`">
           <view class="home-menu-group-heading" role="heading" aria-level="2">{{ group.category }}</view>

@@ -1,11 +1,12 @@
 import { clone, validateRecipe, validateMealSet } from './kitchen.js';
 import { validateImage } from './presentation.js';
+import { canonicalRecipeId } from './recipe-identity.js';
 
 export function makeShare(recipeOrSet, recipes, author, kind = 'dish') {
   const dishes = kind === 'set' ? recipeOrSet.recipeIds.map((id) => recipes.find((recipe) => recipe.id === id)) : [recipeOrSet];
   if (kind === 'set') validateMealSet(recipeOrSet, recipes);
   dishes.forEach(validateRecipe);
-  const payload = { format: 'shiyuan-share', version: 1, id: recipeOrSet.shareId || recipeOrSet.id, kind: kind === 'set' ? 'menu' : 'dish', title: recipeOrSet.title, image: recipeOrSet.image || '', author, recipes: dishes.map((recipe) => ({ id: recipe.shareId || recipe.id, title: recipe.title, category: recipe.category, minutes: recipe.minutes, servings: recipe.servings, image: recipe.image || '', ...(recipe.guideImage ? { guideImage: recipe.guideImage } : {}), nutrition: recipe.nutrition || '', author, ingredients: clone(recipe.ingredients), steps: clone(recipe.steps) })) };
+  const payload = { format: 'shiyuan-share', version: 1, sourceKind: 'private', id: recipeOrSet.shareId || recipeOrSet.id, kind: kind === 'set' ? 'menu' : 'dish', title: recipeOrSet.title, image: recipeOrSet.image || '', author, recipes: dishes.map((recipe) => ({ id: canonicalRecipeId(recipe), identityVersion: 2, canonicalRecipeId: canonicalRecipeId(recipe), title: recipe.title, category: recipe.category, minutes: recipe.minutes, servings: recipe.servings, image: recipe.image || '', ...(recipe.guideImage ? { guideImage: recipe.guideImage } : {}), nutrition: recipe.nutrition || '', author, ingredients: clone(recipe.ingredients), steps: clone(recipe.steps) })) };
   dishes.forEach((recipe, index) => { if (recipe.provenance) payload.recipes[index].provenance = clone(recipe.provenance); });
   return JSON.stringify(payload);
 }

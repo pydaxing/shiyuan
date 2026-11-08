@@ -52,13 +52,13 @@ function menuContext({ entries = [], search = '', family = {}, currentDay = toda
 }
 
 function kitchenContext(familyOrders, currentDay = today) {
-  const orders = kitchenOrders(familyOrders, currentDay);
+  const orders = kitchenOrders(familyOrders, currentDay).filter(order => order.status !== 'completed');
   return {
-    orders, kitchenIntro: kitchenWelcome(orders, currentDay), todayLabel: homeDateLabel(currentDay), today: currentDay, DEFAULT_FAMILY_COVER,
+    isPendingRecord: () => false, orders, kitchenIntro: kitchenWelcome(orders, currentDay), todayLabel: homeDateLabel(currentDay), today: currentDay, DEFAULT_FAMILY_COVER,
     state: { orders: familyOrders, family: { cover: 'cloud://family-cover', members: [] } }, features: { fridge: false, shopping: false },
-    statusNames: { pending: '已预订', accepted: '已预订', completed: '已开饭', cancelled: '已取消' }, kitchenOrderAnchor, mealDateLabel,
+    statusNames: { pending: '已安排', accepted: '已安排', completed: '已开饭', cancelled: '已取消' }, kitchenOrderAnchor, mealDateLabel,
     preparationByOrder: Object.fromEntries(preparationMeals({ orders: familyOrders }, currentDay).map(order => [order.id, order])),
-    orderRows: order => order.items, orderAction() {}, openAdditions() {}, openPreparation() {}, openIngredients() {}, orderRecipe: null, tab: 'kitchen',
+    orderRows: order => order.items, orderAction() {}, openAdditions() {}, openPreparation() {}, openIngredients() {}, orderRecipe: null, tab: 'activity', mealSection: 'orders', showMenu() { this.tab = 'menu'; },
   };
 }
 
@@ -96,7 +96,7 @@ test('calendar conversion works offline without Intl and never shifts the suppli
 
 test('calendar descriptions wrap whole date segments without splitting lunar words or shrinking type', () => {
   const description = homeDateLabel('2026-10-23');
-  const context = { title: '日期', description, calendar: true, compact: true, kitchen: true, cover: '', illustration: DEFAULT_SET_COVER, primaryLabel: '', secondaryLabel: '', coverFrameStyle: () => ({}) };
+  const context = { $slots: {}, title: '日期', description, calendar: true, compact: true, kitchen: true, cover: '', illustration: DEFAULT_SET_COVER, primaryLabel: '', secondaryLabel: '', coverFrameStyle: () => ({}) };
   const nodes = allNodes(renderWelcome(context, []));
   const date = withClass(nodes, 'home-welcome-date')[0];
   assert.equal(date.props['aria-label'], description);
@@ -110,29 +110,29 @@ test('calendar descriptions wrap whole date segments without splitting lunar wor
 });
 
 test('an empty kitchen differs from a kitchen containing only cancelled or completed records', () => {
-  assert.deepEqual(kitchenWelcome([], today), { mode: 'empty', title: '今天还没安排餐食', recordTitle: '' });
-  assert.deepEqual(kitchenWelcome([meal('cancelled')], today), { mode: 'idle', title: '还没有餐食，快来预订吧！', recordTitle: '' });
+  assert.deepEqual(kitchenWelcome([], today), { mode: 'empty', title: '还没有安排', recordTitle: '' });
+  assert.deepEqual(kitchenWelcome([meal('cancelled')], today), { mode: 'idle', title: '可以继续安排下一餐', recordTitle: '' });
   assert.equal(kitchenWelcome([meal('completed')], today).recordTitle, '已开饭');
-  assert.equal(kitchenWelcome([meal('completed')], today).title, '还没有餐食，快来预订吧！');
+  assert.equal(kitchenWelcome([meal('completed')], today).title, '可以继续安排下一餐');
   assert.equal(kitchenWelcome([meal('completed'), meal('cancelled')], today).recordTitle, '餐食记录');
-  assert.equal(kitchenWelcome([meal('completed'), meal('cancelled')], today).title, '还没有餐食，快来预订吧！');
+  assert.equal(kitchenWelcome([meal('completed'), meal('cancelled')], today).title, '可以继续安排下一餐');
 });
 
 test('the header reflects pending and accepted meals without counting cancelled records', () => {
-  assert.deepEqual(kitchenWelcome([meal('pending')], today), { mode: 'active', title: '有餐食预定，快来准备吧！', recordTitle: '' });
-  assert.equal(kitchenWelcome([meal('accepted')], today).title, '有餐食预定，快来准备吧！');
-  assert.equal(kitchenWelcome([meal('pending'), meal('cancelled')], today).title, '有餐食预定，快来准备吧！');
-  assert.equal(kitchenWelcome([meal('pending'), meal('accepted'), meal('cancelled')], today).title, '有餐食预定，快来准备吧！');
-  assert.equal(kitchenWelcome([meal('accepted', 'first'), meal('accepted', 'second')], today).title, '有餐食预定，快来准备吧！');
-  assert.equal(kitchenWelcome([meal('accepted'), meal('pending', 'tomorrow', '2026-10-23')], today).title, '有餐食预定，快来准备吧！');
+  assert.deepEqual(kitchenWelcome([meal('pending')], today), { mode: 'active', title: '有餐食预定', recordTitle: '' });
+  assert.equal(kitchenWelcome([meal('accepted')], today).title, '有餐食预定');
+  assert.equal(kitchenWelcome([meal('pending'), meal('cancelled')], today).title, '有餐食预定');
+  assert.equal(kitchenWelcome([meal('pending'), meal('accepted'), meal('cancelled')], today).title, '有餐食预定');
+  assert.equal(kitchenWelcome([meal('accepted', 'first'), meal('accepted', 'second')], today).title, '有餐食预定');
+  assert.equal(kitchenWelcome([meal('accepted'), meal('pending', 'tomorrow', '2026-10-23')], today).title, '有餐食预定');
 });
 
 test('tomorrow and day-after reservations activate the header without claiming they are today or history', () => {
   const futureOrders = [meal('pending', 'tomorrow', '2026-10-23'), meal('accepted', 'day-after', '2026-10-24')];
   for (const orders of [futureOrders, [futureOrders[0]], [futureOrders[1]], [meal('completed'), ...futureOrders], [meal('cancelled'), ...futureOrders]]) {
-    assert.deepEqual(kitchenWelcome(orders, today), { mode: 'active', title: '有餐食预定，快来准备吧！', recordTitle: '' });
+    assert.deepEqual(kitchenWelcome(orders, today), { mode: 'active', title: '有餐食预定', recordTitle: '' });
   }
-  assert.equal(kitchenWelcome([meal('pending'), ...futureOrders], today).title, '有餐食预定，快来准备吧！');
+  assert.equal(kitchenWelcome([meal('pending'), ...futureOrders], today).title, '有餐食预定');
 });
 
 test('finishing the last reservation removes the preparation prompt and restoring it brings the prompt back', () => {
@@ -140,32 +140,31 @@ test('finishing the last reservation removes the preparation prompt and restorin
     for (const status of ['completed', 'cancelled']) {
       const finished = Object.freeze([Object.freeze(meal(status, 'finished', date))]);
       assert.equal(kitchenWelcome(finished, today).mode, 'idle');
-      assert.equal(kitchenWelcome(finished, today).title, '还没有餐食，快来预订吧！');
+      assert.equal(kitchenWelcome(finished, today).title, '可以继续安排下一餐');
       assert.equal(kitchenWelcome([...finished, meal('accepted', 'remaining', '2026-10-24')], today).mode, 'active');
-      assert.equal(kitchenWelcome([{ ...finished[0], status: 'accepted' }], today).title, '有餐食预定，快来准备吧！');
+      assert.equal(kitchenWelcome([{ ...finished[0], status: 'accepted' }], today).title, '有餐食预定');
       assert.equal(finished[0].status, status);
     }
   }
 });
 
-test('the existing local-day clock drives both the kitchen title and date at rollover', () => {
+test('reservation labels follow the existing local-day clock without restoring the retired cover', () => {
   const orders = Object.freeze([Object.freeze(meal('pending', 'tomorrow', '2026-10-23'))]);
-  assert.equal(kitchenWelcome(orders, today).mode, 'active');
-  assert.equal(kitchenWelcome(orders, '2026-10-23').title, '有餐食预定，快来准备吧！');
-  assert.equal(kitchenWelcome(orders, '2026-10-24').mode, 'empty');
-  assert.equal(kitchenWelcome([meal('pending', 'local-day', localDate())]).mode, 'active');
-  assert.match(indexSource, /kitchenWelcome\(orders\.value, today\.value\)/);
-  const nodes = allNodes(renderKitchen(kitchenContext(orders, '2026-10-23'), []));
-  const welcome = nodes.find(node => node.type === 'HomeWelcome');
-  assert.equal(welcome.props.title, '有餐食预定，快来准备吧！');
-  assert.equal(welcome.props.description, '10月23日 · 九月十四 · 周五');
+  for (const [day, label] of [['2026-10-22', '明天'], ['2026-10-23', '今天']]) {
+    const nodes = allNodes(renderKitchen(kitchenContext(orders, day), []));
+    assert.equal(withClass(nodes, 'order-date-tag')[0].children, label);
+    assert.equal(nodes.some(node => node.type === 'HomeWelcome'), false);
+  }
+  assert.equal(withClass(allNodes(renderKitchen(kitchenContext(orders, '2026-10-24'), [])), 'order-card').length, 0);
   assert.equal(orders[0].date, '2026-10-23');
+  assert.match(indexSource, /setInterval\(refreshDay, 60000\)/);
+  assert.match(indexSource, /onShow\(refreshDay\)/);
 });
 
 test('the welcome state and kitchen cards share the three-day window without deleting out-of-window records', () => {
   const orders = Object.freeze([Object.freeze({ ...meal('cancelled'), date: '2026-10-21' }), Object.freeze({ ...meal('pending'), date: '2026-10-25' })]);
   const original = JSON.stringify(orders);
-  assert.deepEqual(kitchenWelcome(orders, today), { mode: 'empty', title: '今天还没安排餐食', recordTitle: '' });
+  assert.deepEqual(kitchenWelcome(orders, today), { mode: 'empty', title: '还没有安排', recordTitle: '' });
   assert.deepEqual(kitchenOrders(orders, today), []);
   assert.equal(JSON.stringify(orders), original);
   assert.equal(kitchenWelcome([meal('pending')], today).mode, 'active');
@@ -178,12 +177,9 @@ test('a kitchen with only out-of-window records displays the full empty state fo
     assert.equal(context.kitchenIntro.mode, 'empty');
     assert.equal(context.kitchenIntro.recordTitle, '');
     const nodes = allNodes(renderKitchen(context, []));
-    const welcome = nodes.find(node => node.type === 'HomeWelcome');
-    assert.equal(welcome.props.compact, false);
-    assert.equal(welcome.props.kitchen, false);
-    assert.equal(welcome.props['primary-label'], '看看菜单');
-    assert.equal(welcome.props['primary-icon'], 'menu-inverse');
-    assert.equal(welcome.props.cover, context.state.family.cover);
+    assert.equal(nodes.some(node => node.type === 'HomeWelcome'), true);
+    assert.equal(Boolean(nodes.find(node => node.type === 'HomeWelcome').props.compact), false);
+    assert.equal(nodes.find(node => node.type === 'HomeWelcome').props['primary-label'], '看看菜单');
     assert.equal(withClass(nodes, 'order-card').length, 0);
     assert.equal(withClass(nodes, 'kitchen-record-title').length, 0);
     assert.equal(context.state.orders.length, 1);
@@ -191,40 +187,32 @@ test('a kitchen with only out-of-window records displays the full empty state fo
   assert.equal(kitchenContext([]).kitchenIntro.mode, 'empty');
 });
 
-test('a compact idle header only accompanies visible finished order cards', () => {
-  for (const familyOrders of [
-    [meal('completed')],
-    [meal('cancelled')],
-    [meal('completed'), meal('cancelled')],
-    [meal('completed', 'tomorrow', '2026-10-23')],
-    [meal('completed', 'old-meal', '2026-09-01'), meal('cancelled')],
-  ]) {
-    const context = kitchenContext(familyOrders);
-    const nodes = allNodes(renderKitchen(context, []));
-    const welcome = nodes.find(node => node.type === 'HomeWelcome');
-    assert.equal(context.kitchenIntro.mode, 'idle');
-    assert.equal(welcome.props.compact, true);
-    assert.equal(withClass(nodes, 'order-card').length, context.orders.length);
-    assert.ok(context.orders.length > 0);
-  }
+test('cancelled meal cards remain restorable while completed meals leave the meal list', () => {
+  const source = Object.freeze([Object.freeze(meal('completed')), Object.freeze(meal('cancelled'))]);
+  const context = kitchenContext(source);
+  const nodes = allNodes(renderKitchen(context, []));
+  assert.equal(nodes.some(node => node.type === 'HomeWelcome'), false);
+  assert.equal(withClass(nodes, 'kitchen-continue').length, 1);
+  assert.equal(withClass(nodes, 'order-card').length, 1);
+  const history = nodes.find(node => node.type === 'MealTimeline');
+  assert.equal(history, undefined, 'history only renders in its separate popup');
+  assert.equal(nodes.find(node => node.type === 'OrderActionMenu').props.status, 'cancelled');
+  assert.equal(source.length, 2);
 });
 
-test('the empty menu replaces both search and categories with one full-width welcome', () => {
-  const nodes = allNodes(renderMenu(menuContext(), []));
-  const welcome = nodes.find(node => node.type === 'HomeWelcome');
-  assert.equal(welcome.props.title, '把爱吃的，放进我家菜单');
-  assert.equal(welcome.props.description, undefined);
-  assert.equal(welcome.props['primary-label'], '创建菜品');
-  assert.equal(welcome.props['primary-icon'], 'plus-inverse');
-  assert.equal(welcome.props['secondary-label'], '看看美食');
-  assert.equal(welcome.props['secondary-icon'], 'community');
-  assert.equal(withClass(nodes, 'home-menu-tools').length, 0);
-  assert.equal(withClass(nodes, 'home-menu-layout').length, 0);
+test('an empty menu restores the illustrated welcome and its original create and discover actions', () => {
   const emitted = [];
   const context = { ...menuContext(), $emit: (...args) => emitted.push(args) };
-  const action = allNodes(renderMenu(context, [])).find(node => node.type === 'HomeWelcome');
-  action.props.onPrimary();
-  action.props.onSecondary();
+  const nodes = allNodes(renderMenu(context, []));
+  const welcome = nodes.find(node => node.type === 'HomeWelcome');
+  assert.ok(welcome);
+  assert.equal(welcome.props.title, '把爱吃的，放进我家菜单');
+  assert.equal(welcome.props['primary-label'], '创建菜品');
+  assert.equal(welcome.props['secondary-label'], '看看美食');
+  assert.equal(withClass(nodes, 'home-menu-tools').length, 0);
+  assert.equal(withClass(nodes, 'home-menu-layout').length, 0);
+  welcome.props.onPrimary();
+  welcome.props.onSecondary();
   assert.deepEqual(emitted, [['create', '荤菜', 'dish'], ['discover']]);
 });
 
@@ -233,79 +221,40 @@ test('a populated or searched menu keeps the bounded dual list and the original 
   for (const search of ['', '没有匹配', '小炒']) {
     const nodes = allNodes(renderMenu(menuContext({ entries, search }), []));
     const welcome = nodes.find(node => node.type === 'HomeWelcome');
-    assert.equal(welcome.props.title, FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-    assert.equal(welcome.props.description, homeDateLabel(today));
-    assert.equal(welcome.props.cover, 'cloud://family-cover');
+    assert.equal(welcome, undefined, 'the shared menu/reservation switch replaces the populated menu cover');
     assert.equal(withClass(nodes, 'home-menu-tools').length, 1);
     assert.equal(withClass(nodes, 'home-menu-category').length, HOME_MENU_CATEGORIES.length);
     assert.equal(withClass(nodes, 'home-menu-group').length, search === '没有匹配' ? 0 : 1);
-    assert.equal(welcome.props['primary-label'], undefined);
   }
   const clearing = allNodes(renderMenu(menuContext({ search: '不存在' }), []));
   assert.equal(withClass(clearing, 'home-menu-tools').length, 1, 'a retained query stays available to clear even after the last dish is removed');
   assert.equal(withClass(clearing, 'home-menu-empty').length, 1);
 });
 
-test('the menu welcome keeps its saved title but replaces legacy subtitles with today', () => {
-  const entries = [{ id: 'dish', key: 'dish', kind: 'dish', category: '荤菜', title: '家常小炒', ingredients: [] }];
-  for (const family of [{ coverTitle: '我的拿手菜', coverSubtitle: '每天都想回家吃饭' }, { coverTitle: '另一个家的味道', coverSubtitle: '周末一起下厨' }]) {
-    const welcome = allNodes(renderMenu(menuContext({ entries, family }), [])).find(node => node.type === 'HomeWelcome');
-    assert.equal(welcome.props.title, family.coverTitle);
-    assert.equal(welcome.props.description, homeDateLabel(today));
-    const empty = allNodes(renderMenu(menuContext({ family }), [])).find(node => node.type === 'HomeWelcome');
-    assert.equal(empty.props.title, '把爱吃的，放进我家菜单');
-    assert.equal(empty.props.description, undefined);
-  }
-  assert.match(indexSource, /:cover-title="state\.family\.coverTitle" :date-label="todayLabel"/);
-  assert.match(indexSource, /const todayLabel = computed\(\(\) => homeDateLabel\(today\.value\)\)/);
-  assert.doesNotMatch(indexSource, /:cover-subtitle=/);
-  assert.match(menuSource, /computed\(\(\) => familyAppearance\(props\)\)/);
-  assert.match(menuSource, /watch\(\(\) => \[props\.coverTitle, props\.dateLabel\], \(\) => refreshLayout\(\)/);
-});
 
-test('the menu date refreshes on day rollover without changing the saved title or meal selection', () => {
-  const entries = [{ id: 'dish', key: 'dish', kind: 'dish', category: '荤菜', title: '家常小炒', ingredients: [] }];
-  for (const currentDay of ['2026-10-23', '2026-10-24']) {
-    const context = { ...menuContext({ entries, currentDay }), date: '2026-10-25' };
-    const welcome = allNodes(renderMenu(context, [])).find(node => node.type === 'HomeWelcome');
-    assert.equal(welcome.props.description, homeDateLabel(currentDay));
-    assert.equal(welcome.props.title, FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-    assert.equal(context.date, '2026-10-25');
-  }
-  assert.match(indexSource, /setInterval\(refreshDay, 60000\)/);
-  assert.match(indexSource, /onShow\(refreshDay\)/);
-});
 
-test('a first-use kitchen selects the same large illustrated welcome as an empty menu', () => {
+
+
+test('an empty meal list restores the full welcome and original menu action', () => {
   const context = kitchenContext([]);
   const nodes = allNodes(renderKitchen(context, []));
   const welcome = nodes.find(node => node.type === 'HomeWelcome');
-  assert.equal(welcome.props.illustration, undefined);
-  assert.equal(welcome.props.kitchen, false);
-  assert.equal(welcome.props.compact, false);
-  assert.equal(welcome.props.title, '今天还没安排餐食');
-  assert.equal(welcome.props.description, '');
+  assert.equal(Boolean(welcome.props.compact), false);
+  assert.equal(Boolean(welcome.props.kitchen), false);
+  assert.equal(welcome.props.title, '还没有安排');
   assert.equal(welcome.props['primary-label'], '看看菜单');
-  assert.equal(welcome.props['primary-icon'], 'menu-inverse');
-  assert.equal(withClass(nodes, 'kitchen-date').length, 0);
-  assert.equal(nodes.some(node => node.children === homeDateLabel(today)), false);
-  assert.equal(withClass(nodes, 'order-card').length, 0);
-  assert.equal(withClass(nodes, 'kitchen-record-title').length, 0);
-  assert.equal(withClass(nodes, 'kitchen-plan-another').length, 0);
-  welcome.props.onPrimary();
+  welcome.props.onPrimary.call(context);
   assert.equal(context.tab, 'menu');
+  assert.equal(context.state.orders.length, 0);
 });
 
 test('cancelled-only kitchens retain their cards, identities, usage action and member data', () => {
   const orders = [meal('cancelled', 'first'), meal('cancelled', 'second')];
   const nodes = allNodes(renderKitchen(kitchenContext(orders), []));
-  const welcome = nodes.find(node => node.type === 'HomeWelcome');
-  assert.equal(welcome.props.title, '还没有餐食，快来预订吧！');
-  assert.equal(welcome.props.cover, 'cloud://family-cover');
-  assert.equal(welcome.props.kitchen, true);
-  assert.equal(welcome.props.description, '');
-  assert.equal(welcome.props['primary-label'], '看看菜单');
-  assert.equal(welcome.props['primary-icon'], 'menu');
+  const continueAction = withClass(nodes, 'kitchen-continue')[0];
+  assert.ok(continueAction, 'a cancelled-only meal list shows a quiet empty-arrangement status');
+  assert.equal(withClass(nodes, 'kitchen-idle-title')[0].children, '没有安排');
+  assert.equal(allNodes(continueAction).some(node => node.type === 'button'), false);
   assert.equal(withClass(nodes, 'kitchen-date').length, 0);
   assert.equal(withClass(nodes, 'kitchen-record-title').length, 0);
   assert.deepEqual(withClass(nodes, 'order-status').map(node => node.children), ['已取消', '已取消']);
@@ -319,29 +268,21 @@ test('one active order keeps its original actions without a header CTA or plan-a
   const context = kitchenContext([meal('pending')]);
   const nodes = allNodes(renderKitchen(context, []));
   const welcome = nodes.find(node => node.type === 'HomeWelcome');
-  assert.equal(welcome.props.title, '有餐食预定，快来准备吧！');
-  assert.equal(welcome.props.description, homeDateLabel(today));
-  assert.equal(welcome.props.kitchen, true);
-  assert.equal(welcome.props.compact, true);
-  assert.equal(welcome.props.cover, context.state.family.cover);
-  assert.equal(welcome.props['primary-label'], '');
+  assert.equal(welcome, undefined);
   assert.equal(withClass(nodes, 'kitchen-date').length, 0);
   assert.equal(withClass(nodes, 'order-card').length, 1);
   assert.equal(withClass(nodes, 'order-add-button').length, 1);
   assert.equal(withClass(nodes, 'order-actions').length, 1);
   assert.equal(withClass(nodes, 'kitchen-record-title').length, 0);
   assert.equal(withClass(nodes, 'kitchen-plan-another').length, 0);
-  assert.equal(context.tab, 'kitchen');
+  assert.equal(context.tab, 'activity');
 });
 
-test('future-only kitchens retain their date-labelled cards and actions below the active welcome', () => {
+test('future-only reservations retain their date-labelled cards and actions without a cover', () => {
   const context = kitchenContext([meal('pending', 'tomorrow', '2026-10-23')]);
   const nodes = allNodes(renderKitchen(context, []));
   const welcome = nodes.find(node => node.type === 'HomeWelcome');
-  assert.equal(welcome.props.title, '有餐食预定，快来准备吧！');
-  assert.equal(welcome.props.description, homeDateLabel(today));
-  assert.equal(welcome.props['primary-label'], '');
-  assert.equal(welcome.props['primary-icon'], 'menu');
+  assert.equal(welcome, undefined);
   assert.equal(withClass(nodes, 'kitchen-date').length, 0);
   assert.equal(withClass(nodes, 'kitchen-record-title').length, 0);
   assert.equal(withClass(nodes, 'kitchen-plan-another').length, 0);
@@ -349,18 +290,10 @@ test('future-only kitchens retain their date-labelled cards and actions below th
   assert.equal(withClass(nodes, 'order-date-tag')[0].children, '明天');
   assert.equal(withClass(nodes, 'order-add-button').length, 1);
   assert.equal(withClass(nodes, 'order-actions').length, 1);
-  assert.equal(context.tab, 'kitchen');
+  assert.equal(context.tab, 'activity');
 });
 
-test('only active kitchen headers keep the current date while idle headers leave room for the action', () => {
-  for (const orders of [[meal('cancelled')], [meal('completed')], [meal('pending')], [meal('accepted')], [meal('pending', 'future', '2026-10-23')]]) {
-    const nodes = allNodes(renderKitchen(kitchenContext(orders), []));
-    const welcomes = nodes.filter(node => node.type === 'HomeWelcome');
-    assert.equal(welcomes.length, 1);
-    assert.equal(welcomes[0].props.description, kitchenWelcome(orders, today).mode === 'active' ? homeDateLabel(today) : '');
-    assert.equal(withClass(nodes, 'kitchen-date').length, 0);
-  }
-});
+
 
 test('empty welcome actions render matching navigation icons and keep their original events', () => {
   for (const action of [
@@ -368,7 +301,7 @@ test('empty welcome actions render matching navigation icons and keep their orig
     { primaryLabel: '看看菜单', primaryIcon: 'menu-inverse', secondaryLabel: '', secondaryIcon: '' },
   ]) {
     const emitted = [];
-    const nodes = allNodes(renderWelcome({ title: '空态标题', description: '', compact: false, kitchen: false, illustration: DEFAULT_FAMILY_COVER, cover: '', busy: true, coverFrameStyle: () => ({}), ...action, $emit: event => emitted.push(event) }, []));
+    const nodes = allNodes(renderWelcome({ $slots: {}, title: '空态标题', description: '', compact: false, kitchen: false, illustration: DEFAULT_FAMILY_COVER, cover: '', busy: true, coverFrameStyle: () => ({}), ...action, $emit: event => emitted.push(event) }, []));
     assert.equal(withClass(nodes, 'home-welcome-description').length, 0);
     const primary = withClass(nodes, 'primary-button')[0];
     const primaryIcon = allNodes(primary).find(node => node.type === 'AppIcon');
@@ -397,56 +330,7 @@ test('empty welcome actions render matching navigation icons and keep their orig
   }
 });
 
-test('kitchen welcome keeps onboarding art and displays the family cover for every nonempty state', () => {
-  for (const orders of [[], [meal('cancelled')], [meal('completed')], [meal('completed', 'past', '2026-09-01')], [meal('pending', 'future', '2026-10-23')], [meal('pending')], [meal('accepted')]]) {
-    const context = kitchenContext(orders);
-    const before = JSON.stringify(orders);
-    const welcome = allNodes(renderKitchen(context, [])).find(node => node.type === 'HomeWelcome');
-    const props = {
-      title: welcome.props.title, description: welcome.props.description, compact: welcome.props.compact, kitchen: welcome.props.kitchen,
-      primaryLabel: welcome.props['primary-label'], primaryIcon: welcome.props['primary-icon'], secondaryLabel: '', secondaryIcon: '',
-      cover: welcome.props.cover, illustration: DEFAULT_SET_COVER, busy: false, coverFrameStyle: () => ({}),
-      $emit: event => { if (event === 'primary') welcome.props.onPrimary(); },
-    };
-    const nodes = allNodes(renderWelcome(props, []));
-    const empty = context.kitchenIntro.mode === 'empty';
-    assert.equal(withClass(nodes, 'is-compact').length, Number(!empty));
-    assert.equal(withClass(nodes, 'is-kitchen').length, Number(!empty));
-    assert.equal(withClass(nodes, 'home-welcome-art').length, Number(empty));
-    assert.equal(withClass(nodes, 'home-welcome-cover').length, Number(!empty));
-    if (empty) assert.equal(withClass(nodes, 'home-welcome-illustration')[0].props.src, DEFAULT_SET_COVER);
-    const cover = nodes.find(node => node.type === 'FamilyCoverImage');
-    if (!empty) {
-      assert.equal(cover.props.src, context.state.family.cover);
-      assert.equal(cover.props.variant, 'card');
-      const copy = withClass(nodes, 'home-welcome-copy')[0];
-      const row = withClass(nodes, 'home-welcome-row')[0];
-      const picture = withClass(nodes, 'home-welcome-cover')[0];
-      assert.ok(row.children.indexOf(copy) < row.children.indexOf(picture));
-    } else {
-      assert.equal(cover, undefined);
-    }
-    const buttons = withClass(nodes, 'home-welcome-button');
-    const actionable = context.kitchenIntro.mode !== 'active';
-    assert.equal(buttons.length, Number(actionable));
-    if (actionable) {
-      const copy = withClass(nodes, 'home-welcome-copy')[0];
-      const title = withClass(nodes, 'home-welcome-title')[0];
-      const actions = withClass(nodes, 'home-welcome-actions')[0];
-      assert.ok(copy.children.indexOf(title) < copy.children.indexOf(actions));
-      assert.ok(allNodes(buttons[0]).some(node => node.type === 'AppIcon' && node.props.name === (empty ? 'menu-inverse' : 'menu') && node.props.size === (empty ? 18 : 16) && node.props.active === !empty));
-      assert.ok(allNodes(buttons[0]).some(node => node.children === '看看菜单'));
-      buttons[0].props.onClick({ stopPropagation() {} });
-      assert.equal(context.tab, 'menu');
-    }
-    assert.equal(JSON.stringify(orders), before);
-  }
-  assert.match(welcomeSource, /\.home-welcome\.is-kitchen\s*\{[^}]*flex-direction: row;[^}]*align-items: center;/);
-  assert.match(welcomeSource, /\.is-kitchen \.home-welcome-row\s*\{[^}]*flex: 1;/);
-  assert.match(welcomeSource, /\.is-kitchen \.home-welcome-actions\s*\{[^}]*align-items: flex-start;[^}]*margin-top: 4px;/);
-  assert.match(welcomeSource, /\.is-compact \.home-welcome-button\s*\{[^}]*min-height: 44px;/);
-  assert.doesNotMatch(indexSource, /再安排一餐|kitchen-plan-another|planAnother/);
-});
+
 
 test('kitchen menu entry is a quiet text action without shrinking its readable type or touch height', () => {
   const styles = postcss.parse(parse(welcomeSource).descriptor.styles[0].content);
@@ -471,22 +355,9 @@ test('kitchen menu entry is a quiet text action without shrinking its readable t
   assert.equal(declarations('.home-welcome .home-welcome-button').get('background'), undefined);
 });
 
-test('kitchen content uses the same shared-header spacing as the menu without extra top padding', () => {
-  for (const [pageClass, contentClass] of [['menu-view', 'home-menu-panel'], ['kitchen-view', 'orders-view']]) {
-    const page = indexNodes.find(node => node.props?.some(prop => prop.name === 'class' && prop.value?.content === pageClass));
-    const children = page.children.filter(node => node.type === 1);
-    assert.equal(children[0].tag, 'PageHeader');
-    assert.ok(children[1].props.some(prop => prop.name === 'class' && prop.value?.content === contentClass));
-  }
-  const declarations = new Map();
-  postcss.parse(read('styles.css')).walkRules(rule => {
-    if (rule.selector === '.orders-view') rule.walkDecls(declaration => declarations.set(declaration.prop, declaration.value));
-  });
-  assert.equal(declarations.get('padding-top'), '0');
-  assert.equal(declarations.has('margin-top'), false);
-});
 
-test('kitchen intro uses the same 12px gap as adjacent meal cards without adding empty-state space', () => {
+
+test('kitchen intro preserves its gap while meal rows join without extra card spacing', () => {
   const spacing = new Map();
   postcss.parse(read('styles.css')).walkRules(rule => {
     if (['.kitchen-intro', '.kitchen-intro.is-empty', '.kitchen-order', '.kitchen-order .order-card'].includes(rule.selector)) {
@@ -494,7 +365,7 @@ test('kitchen intro uses the same 12px gap as adjacent meal cards without adding
     }
   });
   assert.equal(spacing.get('.kitchen-intro'), '12px');
-  assert.equal(spacing.get('.kitchen-intro'), spacing.get('.kitchen-order'));
+  assert.equal(spacing.get('.kitchen-order'), '0');
   assert.equal(spacing.get('.kitchen-intro.is-empty'), '0');
   assert.equal(spacing.get('.kitchen-order .order-card'), '0');
 });

@@ -28,7 +28,7 @@ test('dish metadata renders the category and actual cooking duration side by sid
   for (const minutes of [1, 10, 25, 600, '20']) {
     const rendered = metadata({ kind: 'dish', category: '素菜', minutes, meta: '' });
     assert.equal(rendered.children[0].children, '素菜');
-    const duration = rendered.children[1];
+    const duration = rendered.children[2];
     assert.equal(duration.type, 'view');
     assert.equal(duration.children[0].props.name, 'clock');
     assert.equal(duration.children[0].props.size, 12);
@@ -40,7 +40,7 @@ test('unknown or invalid cooking duration never hides the category or invents mi
   for (const minutes of [null, undefined, '', '  ', 0, -1, NaN, Infinity, '未填写']) {
     const rendered = metadata({ kind: 'dish', category: '主食', minutes, meta: 'undefined 分钟' });
     assert.equal(rendered.children[0].children, '主食');
-    assert.equal(rendered.children[1].type, Vue.Comment);
+    assert.equal(rendered.children[2].type, Vue.Comment);
   }
 });
 
@@ -53,7 +53,7 @@ test('set metadata renders the actual dish count with a menu icon, not cooking d
   ]) {
     const rendered = metadata({ ...entry, kind: 'set', category: '荤菜', minutes: 25, meta: '旧数量' });
     assert.equal(rendered.children[0].children, '套餐');
-    const count = rendered.children[1];
+    const count = rendered.children[2];
     assert.equal(count.type, 'view');
     assert.equal(count.children[0].props.name, 'menu');
     assert.equal(count.children[0].props.size, 12);
@@ -64,23 +64,23 @@ test('set metadata renders the actual dish count with a menu icon, not cooking d
 test('metadata reacts to edited duration and set members without a cached display string', () => {
   const entry = Vue.reactive({ kind: 'dish', category: '荤菜', minutes: 25 });
   const rendered = Vue.computed(() => metadata(entry));
-  assert.equal(rendered.value.children[1].children[1].children, '25 分钟');
+  assert.equal(rendered.value.children[2].children[1].children, '25 分钟');
   entry.minutes = 35;
-  assert.equal(rendered.value.children[1].children[1].children, '35 分钟');
+  assert.equal(rendered.value.children[2].children[1].children, '35 分钟');
   entry.minutes = null;
-  assert.equal(rendered.value.children[1].type, Vue.Comment);
+  assert.equal(rendered.value.children[2].type, Vue.Comment);
   entry.kind = 'set';
   entry.recipes = [{ id: 'first' }];
-  assert.equal(rendered.value.children[1].children[1].children, '1 道菜');
+  assert.equal(rendered.value.children[2].children[1].children, '1 道菜');
   entry.recipes.push({ id: 'second' });
-  assert.equal(rendered.value.children[1].children[1].children, '2 道菜');
+  assert.equal(rendered.value.children[2].children[1].children, '2 道菜');
 });
 
-test('metadata keeps the icon and number together when a narrow row wraps', () => {
+test('metadata keeps the icon and number together on one line in narrow rows', () => {
   const styles = source.match(/\.home-menu-secondary-meta\s*\{([^}]+)\}/)[1];
   assert.match(styles, /flex-shrink:\s*0/);
   assert.match(styles, /white-space:\s*nowrap/);
-  assert.match(source, /\.home-menu-meta\s*\{[^}]*flex-wrap:\s*wrap/);
+  assert.match(source, /\.home-menu-meta\s*\{[^}]*flex-wrap:\s*nowrap/);
 });
 
 test('menu entries always show their category even when no duration is given', () => {
@@ -230,24 +230,24 @@ test('external close and busy states cross the native bridge as scalars and rese
   }
 });
 
-test('share preparation locks the open native row without translating it closed', () => {
+test('share preparation locks the closed native row after sharing', () => {
   const menu = row({ opened: true, sharing: true });
   menu.context.dispatchAction({ action: 'share' });
-  assert.deepEqual(menu.events.map(event => event.name), ['share']);
-  menu.sync(true, true);
-  assert.equal(options.computed.swipeState.call(menu.context), 3);
+  assert.deepEqual(menu.events.map(event => event.name), ['close', 'share']);
+  menu.sync(false, true);
+  assert.equal(options.computed.swipeState.call(menu.context), 2);
   assert.equal(menu.state.disabled, true);
-  assert.equal(menu.state.open, true);
-  assert.equal(menu.paints.at(-1).transform, 'translate3d(-180px, 0, 0)');
+  assert.equal(menu.state.open, false);
+  assert.equal(menu.paints.at(-1).transform, 'translate3d(0px, 0, 0)');
   menu.touch('touchstart', 200, 100, 0);
   menu.touch('touchmove', 300, 100, 100);
   menu.touch('touchend', 300, 100, 300);
   menu.tap();
   menu.context.dispatchAction({ action: 'share' });
-  assert.deepEqual(menu.events.map(event => event.name), ['share']);
-  menu.sync(true);
+  assert.deepEqual(menu.events.map(event => event.name), ['close', 'share']);
+  menu.sync(false);
   assert.equal(menu.state.disabled, false);
-  assert.equal(menu.state.open, true);
+  assert.equal(menu.state.open, false);
   menu.sync(false, true);
   assert.equal(options.computed.swipeState.call(menu.context), 2);
   assert.equal(menu.state.offset, 0);
@@ -282,7 +282,7 @@ test('edit, share and delete forward the original dish or set without mutating i
     const entry = { id: 'original', key: `${kind}:original`, kind };
     const menu = row({ entry });
     menu.context.dispatchAction({ action });
-    assert.deepEqual(menu.events, [...(action === 'share' ? [] : [{ name: 'close', value: undefined }]), { name: action, value: entry }]);
+    assert.deepEqual(menu.events, [{ name: 'close', value: undefined }, { name: action, value: entry }]);
   }
   const menu = row();
   menu.context.handleKey({ key: 'ArrowLeft', preventDefault() {} });

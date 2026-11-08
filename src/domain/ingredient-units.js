@@ -1,6 +1,6 @@
 import { UNITS } from './kitchen.js';
 
-export const INGREDIENT_UNITS_VERSION = 2;
+export const INGREDIENT_UNITS_VERSION = 3;
 export const LEGACY_INGREDIENT_UNITS = ['g', 'kg', '斤', '两', 'ml', 'L', '个', '根', '只', '条', '块', '片', '张', '颗', '粒', '瓣', '朵', '棵', '把', '束', '勺', '茶匙', '汤匙', '杯', '碗', '瓶', '罐', '盒', '袋', '包'];
 const legacyUnits = new Set(LEGACY_INGREDIENT_UNITS);
 const measuredAmount = new RegExp(`^(\\d+(?:\\.\\d+)?)\\s*(${[...UNITS].sort((first, second) => second.length - first.length).join('|')})$`);
@@ -42,4 +42,11 @@ export function legacyIngredientAmounts(value, version) {
     return next;
   }
   return walk(value);
+}
+
+// Send the new generic spoon as text so existing cloud versions accept it.
+export function compatibleSpoonCommand(action, payload) {
+  if (action !== 'command' || payload?.name !== 'saveRecipe' || !Array.isArray(payload.args?.[0]?.ingredients)) return payload;
+  const [recipe, ...rest] = payload.args;
+  return { ...payload, args: [{ ...recipe, ingredients: recipe.ingredients.map(item => item.unit === '匙' && Number.isFinite(Number(item.quantity)) ? { ...item, quantity: null, unit: '', amountText: `${item.quantity} 匙` } : item) }, ...rest] };
 }

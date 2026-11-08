@@ -2,16 +2,15 @@ import { computed, ref, watch } from 'vue';
 
 export function useMealDraft(memberId, currentSelection, menuEntries) {
   const drafts = ref({});
-  const savedCart = computed(() => Object.fromEntries((currentSelection.value?.entries || []).filter((entry) => menuEntries.value.some((item) => item.key === entry.id)).map((entry) => [entry.id, 1])));
   const cart = computed({
-    get: () => drafts.value[memberId.value]?.cart ?? savedCart.value,
+    get: () => drafts.value[memberId.value]?.cart ?? {},
     set: (value) => { drafts.value[memberId.value] = { cart: value, note: note.value }; },
   });
   const note = computed({
-    get: () => drafts.value[memberId.value]?.note ?? currentSelection.value?.note ?? '',
+    get: () => drafts.value[memberId.value]?.note ?? '',
     set: (value) => { drafts.value[memberId.value] = { cart: { ...cart.value }, note: value }; },
   });
-  const dirty = computed(() => JSON.stringify(Object.keys(cart.value).sort()) !== JSON.stringify(Object.keys(savedCart.value).sort()) || note.value.trim() !== (currentSelection.value?.note || ''));
+  const dirty = computed(() => Object.keys(cart.value).length > 0 || Boolean(note.value.trim()));
 
   function retain() { drafts.value[memberId.value] = { cart: { ...cart.value }, note: note.value }; }
   function empty() { drafts.value[memberId.value] = { cart: {}, note: '' }; }

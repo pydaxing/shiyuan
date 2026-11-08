@@ -143,7 +143,7 @@ test('only the community entry opts into public detail metadata, not menu, kitch
   }
   assert.doesNotMatch(parse(read('src/pages/shared/index.vue')).descriptor.template.content, /post\.author|CommunityFamilyCount/);
   assert.match(read('src/components/CommunityView.vue'), /<FoodDetailSheet[^>]*\bcommunity\s/);
-  assert.match(read('src/components/CommunityView.vue'), /:publisher="communityPublisherName\(current\)" :family-count="current.importedFamilyCount"/);
+  assert.match(read('src/components/CommunityView.vue'), /:publisher="currentPublisher" :family-count="current.importedFamilyCount"/);
 });
 
 test('menu detail action uses a plus and selection label without changing selected or busy behavior', () => {
@@ -281,4 +281,14 @@ test('all mobile shells share eight-pixel gutters while immersive cover and tool
   assert.equal(declarations('.recipe-cover.is-immersive .recipe-cover-meta').get('bottom'), 'calc(var(--detail-card-overlap) + 24px)');
   assert.equal(declarations('.detail-toolbar-button').get('width'), '44px');
   assert.equal(declarations('.food-detail-title').get('font-size'), 'var(--type-title)');
+});
+
+
+test('incomplete details use a shorter sheet while complete food keeps the full layout', () => {
+  const compact = detail({ compact: true });
+  const sheet = compact.find(node => node.type?.name === 'Sheet');
+  assert.equal(sheet.props['preferred-height'], 420);
+  assert.equal(sheet.props.immersive, '');
+  compact.props.compact = false;
+  assert.equal(compact.find(node => node.type?.name === 'Sheet').props['preferred-height'], 0);
 });

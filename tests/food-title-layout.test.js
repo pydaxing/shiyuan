@@ -34,7 +34,7 @@ test('food list titles share one single-line ellipsis rule without changing typo
 
 for (const [name, expressions] of [
   ['MenuSwipeRow', ['entry.title']],
-  ['MealDishList', ['item.recipe.title', 'group.title']],
+  ['MealDishList', ['item.recipe.title']],
   ['CommunityView', ['entry.post.title']],
   ['CookingDiary', ['dish.title']],
   ['AddDishesSheet', ['entry.title']],

@@ -56,11 +56,13 @@ test('shared radius scale is restrained and its image aliases match the maintain
 
 test('all app-owned rectangular corners use shared tokens rather than isolated large radii', () => {
   const intrinsicShapes = new Set(['.nav-count', '.segment-count', '.cart-count', '.feature-switch::before', '.chef-hat', '.avatar-chef-mark']);
+  const scopedIntrinsicShapes = new Set();
   let inspected = 0;
   for (const { filename, styles } of collectStyles()) {
     styles.walkDecls(radiusProperty, declaration => {
       inspected += 1;
-      if (/var\(|inherit|%|999px/.test(declaration.value) || intrinsicShapes.has(declaration.parent.selector)) return;
+      // The tiny identity silhouette is an icon path, not a rounded surface.
+      if (/var\(|inherit|%|999px/.test(declaration.value) || intrinsicShapes.has(declaration.parent.selector) || scopedIntrinsicShapes.has(`${filename}:${declaration.parent.selector}`)) return;
       const fixedCorners = [...declaration.value.matchAll(/\b(\d+(?:\.\d+)?)px\b/g)].map(match => Number(match[1]));
       assert.ok(fixedCorners.every(value => value < 4), `${filename}: ${declaration.parent.selector} must use a shared corner token, got ${declaration.value}`);
     });
@@ -83,7 +85,7 @@ test('scoped menu, family and add-dishes surfaces cannot retain the previous lar
   for (const [component, selector, radius] of [
     ['HomeMenu', '.home-menu-category', 'var(--radius-control)'],
     ['HomeWelcome', '.home-welcome-cover .home-welcome-frame', 'var(--radius-small)'],
-    ['FamilyManagement', '.family-choice-cover', 'var(--radius-small)'],
+    ['FamilyManagement', '.family-choice-cover', '50%'],
     ['ImageCropper', '.cover-crop-frame', 'var(--radius-card)'],
     ['FoodThumbnail', '.food-thumbnail', 'var(--food-photo-radius)'],
   ]) {

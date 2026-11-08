@@ -15,12 +15,12 @@ function fixture() {
   return { get state() { return state; }, actions, collection };
 }
 
-test('same recipe IDs from distinct families create independent copies and preserve exact set membership', () => {
+test('colliding legacy IDs from distinct families retain separate local rows and exact source membership', () => {
   const context = fixture();
   for (const familyId of ['source-a', 'source-b']) context.actions.addCollection(context.collection(familyId));
   assert.equal(context.state.recipes.length, 4);
   assert.equal(new Set(context.state.recipes.map(recipe => recipe.id)).size, 4);
-  assert.equal(new Set(context.state.recipes.map(recipe => recipe.shareId)).size, 4);
+  assert.equal(new Set(context.state.recipes.map(recipe => `${recipe.sourceFamilyId}:${recipe.communityRecipeId}`)).size, 4);
   assert.equal(context.state.mealSets.length, 2);
   for (const set of context.state.mealSets) {
     assert.ok(set.shareId);
@@ -33,16 +33,20 @@ test('same recipe IDs from distinct families create independent copies and prese
   assert.equal(context.state.mealSets.length, 2);
 });
 
-test('resharing a copied recipe uses the target household and its independent share identity', () => {
+test('unchanged public imports keep their ID and only an edited private fork can be shared again', () => {
   const context = fixture();
   const original = context.collection('source-a');
   context.actions.addCollection(original);
   const copied = context.state.recipes[0];
-  context.actions.publishToCommunity(copied.id);
+  assert.equal(copied.id, original.recipes[0].id);
+  assert.throws(() => context.actions.publishToCommunity(copied.id), error => error.code === 'ALREADY_SHARED' && /美食已有，此菜品来自美食/.test(error.message));
+  const editedId = context.actions.saveRecipe({ ...copied, title: '本家调整' }, copied.id);
+  assert.notEqual(editedId, copied.id);
+  context.actions.publishToCommunity(editedId);
   const post = context.state.posts[0];
   assert.equal(post.familyId, 'target-family');
-  assert.equal(post.familyItemId, copied.id);
-  assert.equal(post.recipes[0].id, copied.shareId);
+  assert.equal(post.familyItemId, editedId);
+  assert.equal(post.recipes[0].id, editedId);
   assert.notEqual(post.recipes[0].id, original.recipes[0].id);
   assert.equal(post.recipes[0].sourceFamilyId, undefined);
   copied.ingredients[0].name = '本家调整';

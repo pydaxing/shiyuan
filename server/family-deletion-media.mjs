@@ -5,7 +5,10 @@ import { createHash, randomUUID } from 'node:crypto';
 const PAGE_SIZE = 50;
 const MAX_GROUP_RECORDS = 20;
 const MAX_GROUP_REFERENCES = 200;
-const ROOT_COLLECTIONS = ['users', 'families', 'recipes', 'meal_sets', 'orders', 'inventory', 'purchases', 'invites', 'shares', 'requests', 'imports', 'posts', 'comments', 'reports', 'media'];
+// Retained meal_posts include private participant archives as well as public
+// posts. Their photos and connected variants remain roots after family deletion;
+// access is still checked by the meal policy when a participant reads them.
+const ROOT_COLLECTIONS = ['users', 'families', 'recipes', 'meal_sets', 'orders', 'inventory', 'purchases', 'invites', 'shares', 'requests', 'imports', 'posts', 'meal_posts', 'comments', 'reports', 'media'];
 const canonical = value => Array.isArray(value) ? value.map(canonical) : value && typeof value === 'object' ? Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])])) : value;
 const fingerprint = value => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
 const fail = message => { throw Object.assign(new Error(message), { code: 'FAMILY_MEDIA_CLEANUP' }); };

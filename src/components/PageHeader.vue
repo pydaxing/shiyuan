@@ -2,7 +2,7 @@
 import { onScopeDispose, ref } from 'vue';
 import AppIcon from './AppIcon.vue';
 import { pageHeaderHeight, pageHeaderStyle } from '../domain/mobile.js';
-defineProps({ title: String, editable: Boolean });
+defineProps({ title: String, editable: Boolean, cover: Boolean, fade: { type: Number, default: null }, actionSide: { type: String, default: 'right' } });
 defineEmits(['edit']);
 
 function readLayout() {
@@ -19,9 +19,10 @@ onScopeDispose(() => uni.offWindowResize?.(refreshLayout));
 
 <template>
   <view class="page-header-space" :style="{ '--page-header-height': `${layout.height}px` }">
-    <view class="page-header-fixed">
+    <view class="page-header-fixed" :class="{ 'page-header-cover': cover, 'page-header-fade': fade !== null }">
+      <view v-if="fade !== null" class="page-header-backdrop" :style="{ opacity: fade }" aria-hidden="true" />
       <view class="page-header-frame">
-        <view class="page-header" :style="layout.safeStyle" :class="{ 'has-action': $slots.default }"><button v-if="editable" role="button" class="page-heading-edit" aria-label="编辑家庭名称与封面" @click.stop="$emit('edit')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="page-heading">{{ title }}</text><AppIcon name="edit" /></button><text v-else class="page-heading">{{ title }}</text><view class="page-header-action"><slot /></view></view>
+        <view class="page-header" :style="layout.safeStyle" :class="{ 'has-action': $slots.default }"><button v-if="editable" role="button" class="page-heading-edit" aria-label="编辑家庭名称与封面" @click.stop="$emit('edit')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="page-heading">{{ title }}</text><AppIcon name="edit" /></button><text v-else class="page-heading">{{ title }}</text><view class="page-header-action" :class="{ 'action-left': actionSide === 'left' }"><slot /></view></view>
       </view>
       <slot name="extension" />
     </view>

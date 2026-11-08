@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { activeSpaceId, personalSpaceId } from './workspaces.mjs';
 
 const unavailable = () => Object.assign(new Error('家庭已变更，请重新上传'), { code: 'NO_FAMILY' });
 
@@ -7,7 +8,7 @@ const unavailable = () => Object.assign(new Error('家庭已变更，请重新�
 export function createFamilyMediaOperations({ repository, now = Date.now }) {
   async function fence(db, userId, familyId) {
     const [family, user] = await Promise.all([db.get('families', familyId), db.get('users', userId)]);
-    if (!family || family.deletedAt || user?.familyId !== familyId || !family.members.some(member => member.id === userId)) throw unavailable();
+    if (!family || family.deletedAt || activeSpaceId(user) !== familyId || (family.kind === 'personal' && (family.ownerId !== userId || familyId !== personalSpaceId(userId))) || !family.members.some(member => member.id === userId)) throw unavailable();
     await db.set('families', familyId, { ...family, mediaWriteVersion: (family.mediaWriteVersion || 0) + 1 });
     return family;
   }

@@ -23,7 +23,7 @@ const error = ref('');
 const submitted = ref(false);
 const fieldRefs = {};
 const draft = computed(() => ({ title: title.value, image: image.value, recipeIds: selected.value }));
-const fieldErrors = computed(() => submitted.value ? mealSetFieldErrors(draft.value, state.value.recipes) : {});
+const fieldErrors = computed(() => submitted.value ? mealSetFieldErrors(draft.value, state.value.recipes, { requireCover: true }) : {});
 function toggle(id) { if (!busy.value && !saving.value) selected.value = selected.value.includes(id) ? selected.value.filter((entry) => entry !== id) : [...selected.value, id]; }
 async function save() {
   if (busy.value || saving.value) return;
@@ -38,13 +38,24 @@ async function save() {
 </script>
 
 <template>
-  <Sheet ref="sheet" :title="mealSet ? '编辑套餐' : '创建套餐'" @close="!saving && $emit('close')">
-    <ImagePicker v-model="image" :fallback="DEFAULT_SET_COVER" label="拍照/相册" :disabled="saving" @busy="busy = $event" />
-    <view class="field-label" @click.stop><text class="subheading">套餐名称</text><FormField :ref="field => fieldRefs.title = field" v-model="title" :error="fieldErrors.title" :disabled="saving" field-class="input" placeholder="例如：清爽轻食餐" maxlength="30" aria-label="套餐名称" /></view>
-    <view class="section-line"><text class="subheading">搭配菜品</text><text class="muted">已选 {{ selected.length }} 道</text></view>
+  <Sheet ref="sheet" page variant="menu-editor" :title="mealSet ? '编辑套餐' : '创建套餐'" @close="!saving && !busy && $emit('close')">
+    <view class="menu-editor-body">
+    <view class="editor-list-section editor-cover-section">
+    <ImagePicker v-model="image" :fallback="DEFAULT_SET_COVER" label="拍照/相册" :caption-error="Boolean(fieldErrors.image)" :caption="fieldErrors.image ? '请添加封面' : '拍照/相册'" inline-crop :disabled="saving" @busy="busy = $event" />
+    <view class="editor-validation-accessible"><FieldError :ref="field => fieldRefs.image = field" :error="fieldErrors.image" /></view>
+    <view class="field-label editor-title-field" @click.stop><text class="subheading">套餐名称<text class="editor-required-mark" aria-hidden="true">*</text></text><FormField :ref="field => fieldRefs.title = field" v-model="title" :error="fieldErrors.title" :disabled="saving" field-class="input" :placeholder-style="fieldErrors.title ? 'color: var(--danger)' : ''" :placeholder="fieldErrors.title ? '请输入套餐名称' : '例如：清爽轻食餐'" maxlength="30" aria-label="套餐名称" /></view>
+    </view>
+    <view class="editor-list-section editor-set-section">
+    <view class="section-line"><text class="subheading">搭配菜品<text class="editor-required-mark" aria-hidden="true">*</text></text><text class="editor-section-count">已选 {{ selected.length }} 道</text></view>
     <FieldError :ref="field => fieldRefs.recipeIds = field" :error="fieldErrors.recipeIds" />
-    <view class="set-pick-list"><button v-for="recipe in state.recipes" :key="recipe.id" role="button" class="set-pick-row" :class="{ selected: selected.includes(recipe.id) }" :aria-label="`套餐选择${recipe.title}`" :aria-pressed="selected.includes(recipe.id)" :disabled="saving || busy" @click="$feedback(); toggle(recipe.id)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><FoodThumbnail :src="recipe.image" /><view class="set-pick-copy"><text class="stock-name food-list-title">{{ recipe.title }}</text><RecipeListMeta :category="recipe.category" :minutes="recipe.minutes" /></view><view class="pick-check"><AppIcon :name="selected.includes(recipe.id) ? 'check-inverse' : 'plus'" /></view></button></view>
+    <view class="set-pick-list"><button v-for="recipe in state.recipes" :key="recipe.id" role="button" class="set-pick-row" :class="{ selected: selected.includes(recipe.id) }" :aria-label="`套餐选择${recipe.title}`" :aria-pressed="selected.includes(recipe.id)" :disabled="saving || busy" @click="$feedback(); toggle(recipe.id)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><FoodThumbnail :src="recipe.image" /><view class="set-pick-copy"><text class="stock-name food-list-title">{{ recipe.title }}</text><RecipeListMeta :category="recipe.category" :minutes="recipe.minutes" /></view><view class="pick-check"><AppIcon :name="selected.includes(recipe.id) ? 'check-inverse' : 'plus-inverse'" :size="14" /></view></button></view>
     <text v-if="state.recipes.length < 2" class="hint">先添加至少两道菜，就可以搭配套餐。</text>
-    <template #footer><text v-if="error" class="error-message" role="alert">{{ error }}</text><button role="button" class="primary-button full" :disabled="busy || saving" @click="save" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">{{ saving ? '正在保存…' : '保存套餐' }}</button></template>
+    </view>
+    <view class="menu-editor-actions"><text v-if="error" class="error-message" role="alert">{{ error }}</text><button role="button" class="primary-button full" :disabled="busy || saving" @click="save" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">{{ saving ? '正在保存…' : '保存套餐' }}</button></view>
+    </view>
   </Sheet>
 </template>
+
+<style scoped>
+.menu-editor-body .editor-set-section .set-pick-row { min-height: 0; padding: 6px 0; }
+</style>

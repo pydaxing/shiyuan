@@ -1,8 +1,9 @@
+import { workspaceDisplayName } from './domain/workspace-identity.js';
 import { computed, ref } from 'vue';
 import { createSeed, communityPosts } from './data/seed.js';
 import { normalizeSnapshot } from './domain/kitchen.js';
 import { createKitchenActions } from './domain/actions.js';
-import { cloudMode, refreshCloud, cloudStatus, remoteAction, bindCloudState, commandQueueStatus } from './services/cloud.js';
+import { cloudMode, refreshCloud, cloudStatus, remoteAction, bindCloudState, commandQueueStatus, accountProfile, accountProfilePreview } from './services/cloud.js';
 import { emptySnapshot } from './domain/empty.js';
 import { hasIngredientManagement } from './domain/navigation.js';
 export { cloudMode, cloudStatus };
@@ -31,8 +32,11 @@ function load() {
 export const state = ref(load());
 bindCloudState(state);
 export const activeMember = computed(() => {
-  return state.value.family.members.find((entry) => entry.id === state.value.activeMemberId) || state.value.family.members[0];
+  const member = state.value.family.members.find((entry) => entry.id === state.value.activeMemberId) || state.value.family.members[0];
+  const profile = accountProfilePreview.value || accountProfile.value;
+  return cloudMode && member?.id === cloudStatus.value.userId && profile.name ? { ...member, name: profile.name, avatar: profile.avatar || '' } : member;
 });
+export const workspaceName = computed(() => workspaceDisplayName(state.value.family, activeMember.value));
 export const familyFeatures = computed(() => state.value.family.features);
 export const ingredientManagementEnabled = computed(() => hasIngredientManagement(familyFeatures.value));
 export const preferencePending = computed(() => commandQueueStatus.value.operations.some(operation => ['setChef', 'setFeature', 'setPreferences'].includes(operation.name) && operation.status !== 'failed'));

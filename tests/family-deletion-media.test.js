@@ -124,7 +124,7 @@ test('rechecks candidate fingerprints before any storage deletion and rescans a 
   while (true) {
     await f.cleanup(familyId, { maxSteps: 1 });
     const state = (await f.repository.get('families', familyId)).deletion.media;
-    if (state.phase === 'roots' && state.scanCollection === 14) break;
+    if (state.phase === 'roots' && state.scanCollection === 15) break;
   }
   await f.media('private', { variants: { card: { fileId: file('late-variant') } } });
   await f.cleanup(familyId, { maxSteps: 1 });

@@ -1,21 +1,23 @@
 <script setup>
 import { computed, getCurrentInstance, onMounted, onUnmounted, provide, ref, watch } from 'vue';
-import { keyboardLayout, nativeKeyboardInset, sheetTopInset, visualKeyboardFrame } from '../domain/mobile.js';
+import { useNavigationAppearance } from '../composables/useNavigationAppearance.js';
+import { keyboardLayout, nativeKeyboardInset, sheetPageHeaderStyle, sheetTopInset, visualKeyboardFrame } from '../domain/mobile.js';
 import { afterNativeRender } from '../composables/nativeRender.js';
 import { useSheetScroll } from '../composables/useSheetScroll.js';
 import { useSheetSizing } from '../composables/useSheetSizing.js';
 import { registerSheet } from '../composables/sheetStack.js';
 import { createFieldReveal } from '../composables/fieldReveal.js';
 import { blurKeyboardField, createKeyboardDismissGesture, dismissFocusedKeyboard } from '../services/keyboard.js';
-const props = defineProps({ title: String, eyebrow: { type: String, default: '' }, preferredHeight: { type: Number, default: 0 }, footerVisible: { type: Boolean, default: true }, fitContent: { type: Boolean, default: true }, scrollAnchor: { type: String, default: '' }, immersive: Boolean, variant: String });
-const emit = defineEmits(['close', 'scroll']);
+const props = defineProps({ title: String, eyebrow: { type: String, default: '' }, preferredHeight: { type: Number, default: 0 }, footerVisible: { type: Boolean, default: true }, fitContent: { type: Boolean, default: true }, scrollAnchor: { type: String, default: '' }, immersive: Boolean, variant: String, page: Boolean });
+const emit = defineEmits(['close', 'scroll', 'reach-bottom']);
 const instance = getCurrentInstance();
 const info = uni.getWindowInfo?.() || uni.getSystemInfoSync();
 let capsule = null;
 // #ifdef MP-WEIXIN
 capsule = uni.getMenuButtonBoundingClientRect?.() || {};
 // #endif
-const topInset = sheetTopInset(info, capsule);
+const topInset = props.page ? 0 : sheetTopInset(info, capsule);
+const pageHeaderStyle = computed(() => props.page ? sheetPageHeaderStyle(info, capsule) : {});
 const keyboard = ref(0);
 const availableHeight = ref(info.windowHeight);
 const restHeight = ref(info.windowHeight);
@@ -26,6 +28,8 @@ function handleScroll(event) {
   if (props.immersive) emit('scroll', event);
 }
 const layer = registerSheet();
+useNavigationAppearance(computed(() => ['profile-avatar', 'profile-cover'].includes(props.variant) ? 'dark' : props.page ? 'light' : null));
+function reachBottom() { if (layer.isTop()) emit('reach-bottom'); }
 let viewportCleanup;
 let syncViewport;
 let focusedToken;
@@ -66,25 +70,27 @@ function dismissKeyboard() {
   if (!dismissFocusedKeyboard()) { releaseField(); uni.hideKeyboard(); }
 }
 const layout = computed(() => webFrame.value || keyboardLayout(availableHeight.value, nativeKeyboardInset(restHeight.value, availableHeight.value, keyboard.value), topInset));
-const maxHeight = computed(() => Math.min(layout.value.maxHeight, Math.floor(restHeight.value * (info.windowWidth <= 760 ? .93 : .9))));
+const maxHeight = computed(() => props.page ? layout.value.maxHeight : Math.min(layout.value.maxHeight, Math.floor(restHeight.value * (info.windowWidth <= 760 ? .93 : .9))));
 const { contentRef, contentHeight, ready: sizeReady, request: resizeContent } = useSheetSizing({
   instance,
-  enabled: () => props.fitContent,
+  enabled: () => props.fitContent && !props.page,
   canMeasure: () => !keyboard.value && !focusedToken && layer.isTop(),
   hasFooter: () => props.footerVisible && Boolean(instance.slots.footer),
 });
 provide('sheetReady', sizeReady);
 const sheetStyle = computed(() => ({
-  height: `${keyboard.value ? maxHeight.value : Math.min(props.preferredHeight || maxHeight.value, maxHeight.value, props.fitContent && contentHeight.value ? contentHeight.value : Infinity)}px`,
+  height: `${props.page || keyboard.value ? maxHeight.value : Math.min(props.preferredHeight || maxHeight.value, maxHeight.value, props.fitContent && contentHeight.value ? contentHeight.value : Infinity)}px`,
   maxHeight: `${maxHeight.value}px`,
-  visibility: props.fitContent && !sizeReady.value ? 'hidden' : 'visible',
+  visibility: !props.page && props.fitContent && !sizeReady.value ? 'hidden' : 'visible',
 }));
 watch([maxHeight, keyboard, layer.isTop, () => props.preferredHeight, () => props.footerVisible, () => props.fitContent], resizeContent, { flush: 'post' });
-const backdropStyle = computed(() => ({ paddingBottom: `${layout.value.bottom + (info.windowWidth > 760 ? 24 : 0)}px` }));
+const backdropStyle = computed(() => ({ paddingBottom: `${layout.value.bottom + (!props.page && info.windowWidth > 760 ? 24 : 0)}px` }));
 function cancelReveal() { fields.interrupt(); }
 function startSurfaceGesture(event) {
   surfaceGesture.begin(event);
 }
+function endSurfaceGesture(event) { surfaceGesture.end(event); }
+function cancelSurfaceGesture() { surfaceGesture.cancel(); }
 defineExpose({ resetScroll({ preserveFocus = false } = {}) { if (preserveFocus) fields.interrupt(); else fields.clear(); void reset(); } });
 function blurField(token) {
   fields.blur(token);
@@ -192,17 +198,20 @@ onUnmounted(() => {
   <root-portal>
   <view class="app-shell sheet-root">
   <!-- #endif -->
-  <view class="sheet-backdrop" :style="backdropStyle" @click.stop>
+  <view class="sheet-backdrop" :class="{ 'is-page-backdrop': page }" :style="backdropStyle" @click.stop>
     <view class="sheet-mask" aria-hidden="true" @touchmove.stop.prevent @click.stop="keyboard ? dismissKeyboard() : $emit('close')" />
-    <view class="sheet" :class="{ 'is-food-detail': immersive, 'is-preparation': variant === 'preparation', 'is-action-picker': variant === 'action-picker' }" :style="sheetStyle" role="dialog" aria-modal="true" :aria-label="title" @touchstart="startSurfaceGesture" @touchmove="surfaceGesture.move" @touchend="surfaceGesture.end" @touchcancel="surfaceGesture.cancel" @mousedown="startSurfaceGesture" @click.stop="surfaceGesture.end">
-      <view class="sheet-header" @touchmove.stop.prevent>
+    <view class="sheet" :class="{ 'is-page': page, 'is-help': variant === 'help', 'is-settings': variant === 'settings', 'is-profile-editor': ['profile-editor', 'profile-cover'].includes(variant), 'is-profile-cover': variant === 'profile-cover', 'is-profile-avatar': variant === 'profile-avatar', 'is-food-detail': immersive, 'is-preparation': variant === 'preparation', 'is-action-picker': variant === 'action-picker', 'is-publication': variant === 'publication', 'is-meal-diary': variant === 'meal-diary', 'is-meal-editor': variant === 'meal-editor', 'is-menu-editor': variant === 'menu-editor', 'is-checkout': variant === 'checkout', 'is-meal-addition': variant === 'meal-addition' }" :style="sheetStyle" role="dialog" aria-modal="true" :aria-label="title" @touchstart="startSurfaceGesture" @touchmove="surfaceGesture.move" @touchend="endSurfaceGesture" @touchcancel="cancelSurfaceGesture" @mousedown="startSurfaceGesture" @click.stop="surfaceGesture.end">
+      <view class="sheet-header" :style="pageHeaderStyle" @touchmove.stop.prevent>
         <slot name="header">
+        <view v-if="page" class="sheet-page-navigation"><button role="button" class="sheet-back-button" aria-label="返回上一页" @click.stop="$emit('close')" hover-class="touch-feedback"><image class="sheet-back-icon" src="/static/icon-arrow-left.png" mode="aspectFit" aria-hidden="true" /></button><text class="sheet-title sheet-page-title">{{ title }}</text></view>
+        <template v-else>
         <view class="sheet-header-leading"><button role="button" class="keyboard-done" :class="{ 'keyboard-done-hidden': !keyboard }" :disabled="!keyboard" :aria-hidden="!keyboard" aria-label="收起键盘" @click.stop="dismissKeyboard" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">完成</button></view>
         <view class="sheet-heading"><text v-if="eyebrow" class="eyebrow">{{ eyebrow }}</text><text class="sheet-title">{{ title }}</text></view>
         <view class="sheet-header-actions"><button role="button" class="icon-button sheet-close" aria-label="关闭弹窗" @click.stop="$emit('close')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><image class="sheet-close-icon" src="/static/icon-close.png" mode="aspectFit" aria-hidden="true" /></button></view>
+        </template>
         </slot>
       </view>
-      <scroll-view scroll-y class="sheet-scroll" :scroll-top="scrollTop" :scroll-into-view="scrollAnchor" :scroll-with-animation="false" :scroll-anchoring="false" @scroll="handleScroll"><view ref="contentRef" class="sheet-content"><slot /><view v-if="!footerVisible || !$slots.footer" class="sheet-safe-space" /></view></scroll-view>
+      <scroll-view scroll-y :enhanced="immersive" :show-scrollbar="!immersive" class="sheet-scroll" :scroll-top="scrollTop" :scroll-into-view="scrollAnchor" :scroll-with-animation="false" :scroll-anchoring="false" @scroll="handleScroll" @scrolltolower="reachBottom"><view ref="contentRef" class="sheet-content"><slot /><view v-if="!footerVisible || !$slots.footer" class="sheet-safe-space" /></view></scroll-view>
       <view v-if="footerVisible && $slots.footer" class="sheet-footer" :style="keyboard ? { paddingBottom: '14px' } : {}" @touchmove.stop.prevent><slot name="footer" /></view>
     </view>
   </view>

@@ -112,12 +112,33 @@ test('before the categories fit, gestures scroll the page rather than either inn
   for (const kind of ['rail', 'list']) {
     const menu = rail({ kind, docked: false });
     menu.start(300);
-    assert.equal(menu.move(200), undefined);
-    assert.equal(menu.move(100), undefined);
-    assert.deepEqual(menu.calls, []);
+    assert.equal(menu.move(200), false);
+    assert.equal(menu.move(100), false);
+    assert.deepEqual(menu.calls, [
+      { name: 'scrollPage', category: { distance: 100, start: true } },
+      { name: 'scrollPage', category: { distance: 100, start: false } },
+    ]);
     menu.data.docked = true;
     menu.start(300);
     assert.equal(menu.move(200), undefined);
+  }
+});
+
+test('pulling the cover open preserves native scrolling from retained list offsets', () => {
+  for (const kind of ['rail', 'list']) {
+    for (const top of [200, 816]) {
+      const menu = rail({ kind, viewport: 384, content: 1200, top });
+      for (let cycle = 0; cycle < 3; cycle += 1) {
+        menu.data.docked = false;
+        menu.start(200);
+        assert.equal(menu.move(250), undefined);
+        menu.scroll(top - 50);
+        assert.equal(menu.move(200), undefined);
+        menu.scroll(top);
+        menu.data.docked = true;
+      }
+      assert.ok(!menu.calls.some(call => call.name === 'scrollPage'));
+    }
   }
 });
 

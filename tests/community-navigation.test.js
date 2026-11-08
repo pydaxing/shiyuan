@@ -142,8 +142,8 @@ test('one fixed header owns the single toolbar without duplicating inputs or rem
   assert.match(component, /:aria-hidden="navigationHidden"/);
   assert.match(component, /:tabindex="navigationHidden \? -1 : 0"/);
   assert.match(component, /@focus="searchFocused = true"/);
-  assert.match(component, /@blur="searchFocused = false; searchFocus = false"/);
-  assert.match(component, /searchFocused\.value \|\| categoryOpen\.value/);
+  assert.match(component, /@blur="blurSearch"/);
+  assert.match(component, /useCommunityNavigation\(feedLocked, categoryOpen\)/);
   assert.doesNotMatch(extension.loc.source, /community-share|share-feed|\$emit\('share'\)/);
   assert.match(component, /<FoodDetailSheet[^>]*:share-card="friendCard"/);
   assert.doesNotMatch(component.slice(component.indexOf('<template>'), component.indexOf('</PageHeader>')), /name="plus"/);

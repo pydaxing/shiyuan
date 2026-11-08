@@ -139,7 +139,7 @@ test('loading, editing and open sheets prevent new refresh work and release nati
   for (const [control, blocked] of [[viewport.loading, true], [viewport.locked, true], [viewport.enabled, false]]) {
     const previous = control.value;
     control.value = blocked;
-    assert.equal(viewport.refresherEnabled.value, false);
+    assert.equal(viewport.refresherEnabled.value, control === viewport.loading, 'loading blocks requests without disabling native restoration');
     await viewport.onRefresh();
     assert.equal(viewport.refreshing.value, false);
     assert.equal(calls, 0);

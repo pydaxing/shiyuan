@@ -91,13 +91,20 @@ test('purchase expiry is always present outside the fridge-only location control
   assert.match(template, /v-if="!purchase \|\| state.family.features.fridge" v-model="draft.image" frame="recipe"/);
 });
 
-test('diary days cross leap days and years continuously, and only completed meals mark cooking', () => {
+test('diary days include planned and legacy completed meals but exclude cancellations', () => {
   const recipe = { id: 'dish', title: '米饭' };
   const orders = ['completed', 'pending', 'cancelled', 'accepted'].map((status, index) => ({ date: dateOffset(index, new Date('2024-02-28T12:00:00')), status, meal: '晚餐', items: [{ recipe }] }));
   const days = cookingDays(orders, '2024-02-28', 5);
   assert.deepEqual(days.map((day) => day.date), ['2024-02-28', '2024-02-29', '2024-03-01', '2024-03-02', '2024-03-03']);
-  assert.deepEqual(days.map((day) => day.meals.length), [1, 0, 0, 0, 0]);
+  assert.deepEqual(days.map((day) => day.meals.length), [1, 1, 0, 1, 0]);
   assert.deepEqual(cookingDays([], '2026-12-31', 2).map((day) => day.date), ['2026-12-31', '2027-01-01']);
+});
+
+test('diary describes planned meals without claiming they were cooked', () => {
+  const source = component('CookingDiary');
+  assert.match(source, /餐单记录/);
+  assert.match(source, /已安排/);
+  assert.doesNotMatch(source, /开火日记|已开火|未开火|开火记录/);
 });
 
 test('diary keeps the same day and pixel offset when prepending, without scroll feedback', async () => {
@@ -171,7 +178,7 @@ test('kitchen headings group date, meal and status in compact matching tags with
   const page = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   const heading = page.match(/<view class="section-line compact order-card-heading">([\s\S]*?)<MealDishList/)[1];
-  assert.match(page, /pending: '已预订', accepted: '已预订', completed: '已开饭', cancelled: '已取消'/);
+  assert.match(page, /pending: '已安排', accepted: '已安排', completed: '已开饭', cancelled: '已取消'/);
   assert.doesNotMatch(page, /待备菜/);
   assert.match(heading, /class="order-tag order-date-tag">{{ mealDateLabel\(order.date, today\) }}/);
   assert.match(heading, /class="order-tag order-meal-tag">{{ order.meal }}/);
@@ -210,21 +217,23 @@ test('kitchen keeps a left-aligned add action during preparation and retains rec
   assert.match(toolbar, /<AppIcon name="plus" :size="16" \/><text>加菜<\/text>/);
   assert.doesNotMatch(page, /备菜用量|cookingDetail|order-usage-button|mealPreparationRequirements/);
   assert.match(page, /<MealDishList[^>]*@open="orderRecipe = \$event"/);
-  assert.match(page, /<RecipeSheet v-if="orderRecipe"[^>]*:recipe="orderRecipe"/);
+  assert.match(page, /<RecipeSheet v-if="orderRecipe"[^>]*:recipe="orderMenuRecipe \|\| orderRecipe"[^>]*:read-only="!orderMenuRecipe"/);
   assert.match(css, /\.order-actions \.text-button\s*\{[^}]*margin-right: auto;/);
   assert.doesNotMatch(page, /class="order-tools"/);
   assert.doesNotMatch(toolbar, /chevron/);
 });
 
-test('kitchen preparation and serving share fixed dimensions without a separate start step', () => {
+test('kitchen separates preparation from the opening confirmation sheet', () => {
   const page = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   const actions = page.match(/<view class="order-progress-actions">([\s\S]*?)<\/view>/)[1];
   const dimensions = css.match(/\.order-progress-actions \.primary-button, \.order-progress-actions \.secondary-button\s*\{([^}]+)\}/)[1];
   assert.doesNotMatch(actions, /开始备菜|去备菜|做好了|orderAction\(order, 'accepted'\)/);
-  assert.match(actions, /@click="openPreparation\(order\)"[^>]*><AppIcon name="chef" active :size="16" \/><text>备菜 \{\{ preparationByOrder\[order.id\]\?\.preparedCount \|\| 0 \}\}\/\{\{ order.items.length \}\}<\/text><\/button>/);
+  assert.match(actions, /@click="openPreparation\(order\)"[^>]*><text>备菜清单<\/text><\/button>/);
   assert.doesNotMatch(actions, /features\.shopping|features\.fridge|openIngredients/);
-  assert.match(actions, /<button role="button" class="primary-button"[^>]*@click="orderAction\(order, 'completed'\)"[^>]*><AppIcon name="menu-inverse" :size="16" \/><text>开饭<\/text><\/button>/);
+  assert.doesNotMatch(actions, /<button role="button" class="primary-button"[^>]*@click="orderAction\(order, 'completed'\)"/);
+  assert.match(actions, /@click="recordMeal\(order\)"/);
+  assert.match(actions, /order.date !== today/);
   assert.match(dimensions, /flex: 0 0 96px;/);
   assert.match(dimensions, /width: 96px;/);
   assert.match(dimensions, /height: 44px;/);
@@ -247,10 +256,12 @@ test('community import stays in the detail, requires confirmation and ignores du
   globalThis.uni = { showModal: (options) => { modal = options; } };
   try {
     const api = scope.run(() => setup({}, { expose() {}, emit() {} }));
+    api.detailReady.value = true;
     api.add(post);
     assert.deepEqual(imported, []);
     modal.success({ confirm: false });
     assert.deepEqual(imported, []);
+    api.detailReady.value = true;
     api.add(post);
     modal.success({ confirm: true });
     assert.deepEqual(imported, [post]);

@@ -47,7 +47,7 @@ function createEditor(props = {}, overrides = {}, name = 'RecipeEditor') {
   return new Function('modules', script.replace('export default', 'return'))(modules).setup(props, { expose() {}, emit() {} });
 }
 
-test('new recipe and set editors can save without a photo and keep defaults out of persisted image fields', async () => {
+test('recipes and sets both require a chosen cover before saving', async () => {
   for (const name of ['RecipeEditor', 'SetEditor']) {
     const saves = [];
     const notices = [];
@@ -55,36 +55,37 @@ test('new recipe and set editors can save without a photo and keep defaults out 
     const editor = createEditor({}, { saveRecipe: value => saves.push(value), saveMealSet: value => saves.push(value), notify: value => notices.push(value) }, name);
     editor.sheet.value = { resetScroll() { resets += 1; } };
     editor.title.value = '测试封面';
-    if (name === 'RecipeEditor') { editor.ingredients.value[0].name = '盐'; editor.steps.value[0].title = '拌匀调味'; }
+    if (name === 'RecipeEditor') { editor.addIngredient(); editor.steps.value.push(editor.newStep()); editor.ingredients.value[0].name = '盐'; editor.steps.value[0].title = '拌匀调味'; }
     else editor.selected.value = ['dish-one', 'dish-two'];
     await editor.save();
-    assert.equal(saves.length, 1);
-    assert.equal(saves[0].image, '');
+    assert.equal(saves.length, 0);
+    assert.match(editor.fieldErrors.value.image, /封面图/);
     assert.deepEqual(notices, []);
     assert.equal(resets, 0);
     assert.equal(editor.saving.value, false);
-    editor.image.value = 'cloud://chosen-cover';
+    editor.image.value = 'cloud://test-env/chosen-cover.jpg';
     await editor.save();
-    assert.equal(saves.length, 2);
-    assert.equal(saves[1].image, 'cloud://chosen-cover');
+    assert.equal(saves.length, 1);
+    assert.equal(saves.at(-1).image, 'cloud://test-env/chosen-cover.jpg');
   }
 });
 
-test('editing legacy recipes and sets without a photo preserves their empty cover value', async () => {
+test('legacy recipe and set editing asks for a cover without mutating the original', async () => {
   const recipe = { id: 'legacy-dish', title: '旧菜品', category: '素菜', image: '', minutes: 10, ingredients: [{ name: '盐', amountText: '适量', quantity: null, unit: '' }], steps: [{ title: '拌匀调味', text: '', images: [] }] };
   const mealSet = { id: 'legacy-set', title: '旧套餐', image: '', recipeIds: ['dish-one', 'dish-two'] };
   for (const [name, props] of [['RecipeEditor', { recipe }], ['SetEditor', { mealSet }]]) {
     const saves = [];
     const editor = createEditor(props, { saveRecipe: value => saves.push(value), saveMealSet: value => saves.push(value) }, name);
     await editor.save();
-    assert.equal(saves.length, 1);
-    assert.equal(saves[0].image, '');
+    assert.equal(saves.length, 0);
+    assert.match(editor.fieldErrors.value.image, /封面图/);
+    assert.equal((props.recipe || props.mealSet).image, '');
   }
 });
 
 test('recipe editor omits nutrition fields without clearing existing recipe nutrition', async () => {
   assert.doesNotMatch(parse(editorSource).descriptor.template.content, /营养疗效|v-model="nutrition"|介绍营养特点/);
-  const recipe = { id: 'legacy-dish', title: '旧菜品', category: '素菜', image: '', minutes: 10, nutrition: '已有营养说明', ingredients: [{ name: '盐', amountText: '适量', quantity: null, unit: '' }], steps: [{ title: '拌匀调味', text: '', images: [] }] };
+  const recipe = { id: 'legacy-dish', title: '旧菜品', category: '素菜', image: 'cloud://test-env/cover.jpg', minutes: 10, nutrition: '已有营养说明', ingredients: [{ name: '盐', amountText: '适量', quantity: null, unit: '' }], steps: [{ title: '拌匀调味', text: '', images: [] }] };
   const saves = [];
   const editor = createEditor({ recipe }, { saveRecipe: value => saves.push(value) });
   editor.title.value = '调整后的菜名';
@@ -97,7 +98,7 @@ test('recipe editor omits nutrition fields without clearing existing recipe nutr
 
 test('recipe field headings reuse the ingredient heading typography without enlarging optional hints or inputs', () => {
   const headings = editorNodes.filter(node => hasClass(node, 'subheading')).map(node => node.children.find(child => child.type === 2)?.content);
-  assert.deepEqual(headings, ['菜名', '分类', '耗时 / 分钟', '食材', '做法']);
+  assert.deepEqual(headings, ['菜名', '分类', '耗时 / 分钟', '食材与做法', '食材/配料', '做法']);
   assert.equal(declarationsFor('.subheading').get('font-size'), 'var(--type-section)');
   assert.equal(declarationsFor('.subheading').get('font-weight'), '600');
   assert.equal(declarationsFor('.optional-label').get('font-size'), 'var(--type-meta)');
@@ -108,19 +109,20 @@ test('recipe field headings reuse the ingredient heading typography without enla
   assert.equal(declarationsFor('.recipe-field-heading').get('align-items'), 'baseline');
 });
 
-test('optional recipe hints sit beside their headings with the same typography and spacing', () => {
+test('recipe headings omit optional captions and preserve row spacing', () => {
   const groups = editorNodes.filter(node => hasClass(node, 'recipe-field-heading'));
   const labels = groups.map(group => group.children.filter(node => node.type === 1).map(node => ({
     text: node.children.find(child => child.type === 2)?.content,
     className: attribute(node, 'class'),
   })));
   assert.deepEqual(labels, [
-    [{ text: '耗时 / 分钟', className: 'subheading' }, { text: '选填', className: 'optional-label' }],
-    [{ text: '做法', className: 'subheading' }, { text: '标题必填，介绍和图片选填', className: 'optional-label' }],
+    [{ text: '耗时 / 分钟', className: 'subheading' }],
+    [{ text: '做法', className: 'subheading' }],
   ]);
   const methodSection = editorNodes.find(node => hasClass(node, 'section-line') && node.children.includes(groups[1]));
   assert.ok(methodSection);
-  assert.equal(methodSection.children.filter(node => node.type === 1).length, 1);
+  assert.equal(methodSection.children.filter(node => node.type === 1).length, 2);
+  assert.ok(methodSection.children.some(node => hasClass(node, 'editor-section-count')));
   assert.equal(declarationsFor('.recipe-field-heading').get('align-items'), 'baseline');
   assert.equal(declarationsFor('.recipe-field-heading').get('gap'), '2px 6px');
   assert.equal(declarationsFor('.recipe-field-heading .optional-label').get('margin-left'), '0');
@@ -139,20 +141,17 @@ test('set name uses the same heading typography as its recipe selection and reci
   assert.equal(attribute(input, 'aria-label'), '套餐名称');
 });
 
-test('family appearance field headings reuse the recipe and set heading typography', () => {
+test('family field editing reuses the profile input and keeps native keyboard handling', () => {
   const nodes = templateNodes(read('../src/components/FamilyEditor.vue'));
-  const headings = nodes.filter(node => hasClass(node, 'subheading')).map(node => node.children.find(child => child.type === 2)?.content);
-  assert.deepEqual(headings, ['家庭封面', '家庭名称', '菜单主标题']);
-  assert.equal(declarationsFor('.subheading').get('font-size'), 'var(--type-section)');
-  assert.equal(declarationsFor('.subheading').get('font-weight'), '600');
-  assert.equal(declarationsFor('.subheading').get('line-height'), '24px');
-  const fields = nodes.filter(node => node.tag === 'FormField');
-  assert.deepEqual(fields.map(node => attribute(node, 'aria-label')), ['家庭名称', '菜单主标题']);
-  assert.ok(fields.every(node => attribute(node, 'field-class') === 'input'));
+  const field = nodes.find(node => node.tag === 'FormField');
+  assert.equal(attribute(field, 'variant'), 'profile-nickname');
+  assert.equal(attribute(field, 'field-class'), 'input profile-nickname-native-input');
+  assert.equal(binding(field, 'aria-label'), 'label');
+  assert.ok(nodes.some(node => hasClass(node, 'family-field-actions')));
 });
 
 test('recipe, set and family cover pickers retain accessible camera or album labels', () => {
-  for (const component of ['RecipeEditor', 'SetEditor', 'FamilyEditor']) {
+  for (const component of ['RecipeEditor', 'SetEditor']) {
     const source = read(`../src/components/${component}.vue`);
     const picker = templateNodes(source).find(node => node.tag === 'ImagePicker');
     assert.equal(attribute(picker, 'label'), '拍照/相册', component);
@@ -162,7 +161,11 @@ test('recipe, set and family cover pickers retain accessible camera or album lab
 
 test('step cards use one text surface and preserve the keyboard-aware field boundaries', () => {
   const card = classNode(editorNodes, 'step-editor');
-  const fields = classNode(editorNodes, 'step-entry-fields').children.filter(node => node.type === 1);
+  const fields = classNode(editorNodes, 'step-entry-fields').children.filter(node => node.tag === 'FormField');
+  assert.deepEqual(classNode(editorNodes, 'step-entry-fields').children.filter(node => node.type === 1).map(node => node.tag), ['view', 'FormField', 'FormField']);
+  const stepPlaceholder = new Function('fieldErrors', 'index', `return ${binding(fields[0], 'placeholder')}`);
+  assert.equal(stepPlaceholder({}, 0), '标题：小火慢炖');
+  assert.equal(stepPlaceholder({ 'steps.0.title': '必填' }, 0), '请输入步骤标题');
   assert.equal(binding(card, 'key'), 'step.id');
   assert.equal(attribute(card, 'role'), 'group');
   assert.deepEqual(fields.map(node => node.tag), ['FormField', 'FormField']);
@@ -196,8 +199,8 @@ test('recipe and meal preparation share the deletion icon with separate row-coun
   assert.equal(binding(remove, 'aria-label'), '`删除食材${index + 1}`');
   const trash = remove.children.find(node => node.tag === 'AppIcon');
   assert.equal(attribute(trash, 'name'), 'trash-danger');
-  assert.equal(binding(trash, 'size'), '16');
-  assert.equal(binding(remove, 'disabled'), 'ingredients.length === 1');
+  assert.equal(binding(trash, 'size'), '20');
+  assert.equal(binding(remove, 'disabled'), undefined);
   assert.equal(preparationNodes.some(node => node.loc.source.includes('@click="removeIngredient(index)"')), false);
   const preparationRemove = preparationNodes.find(node => node.tag === 'button' && node.loc.source.includes('@click="removeIngredient(ingredient)"'));
   assert.ok(hasClass(preparationRemove, 'icon-button'));
@@ -206,7 +209,9 @@ test('recipe and meal preparation share the deletion icon with separate row-coun
   assert.match(binding(preparationRemove, 'aria-label'), /删除本餐食材/);
   const preparationTrash = preparationRemove.children.find(node => node.tag === 'AppIcon');
   assert.equal(attribute(preparationTrash, 'name'), attribute(trash, 'name'));
-  assert.equal(binding(preparationTrash, 'size'), binding(trash, 'size'));
+  assert.equal(binding(preparationTrash, 'size'), '16');
+  const stepTrash = classNode(editorNodes, 'step-remove').children.find(node => node.tag === 'AppIcon');
+  assert.equal(binding(trash, 'size'), binding(stepTrash, 'size'));
   assert.equal(preparationNodes.some(node => attribute(node, 'role') === 'switch'), false);
   for (const nodes of [editorNodes, preparationNodes]) {
     const add = nodes.find(node => node.tag === 'button' && node.loc.source.includes('@click="addIngredient"'));
@@ -214,7 +219,7 @@ test('recipe and meal preparation share the deletion icon with separate row-coun
     if (nodes === preparationNodes) {
       assert.match(add.loc.source, /aria-label="添加食材或配料"/);
       assert.match(add.loc.source, /<AppIcon name="plus" active :size="16" \/><text>添加食材\/配料<\/text>/);
-    } else assert.match(add.loc.source, /<AppIcon name="plus"(?: :size="16")? \/><text>添加食材 \/ 配料<\/text>/);
+    } else assert.match(add.loc.source, /<view class="editor-add-circle"><AppIcon name="plus" :size="22" \/><\/view><text>添加食材 \/ 配料<\/text>/);
     assert.match(binding(add, 'disabled'), /ingredients.length >= 30/);
   }
 });
@@ -259,7 +264,7 @@ test('step attachment thumbnails and the add control share compact square geomet
   assert.equal(declarationsFor('.step-photo-preview').get('height'), '100%');
   assert.equal(declarationsFor('.step-photo-tile .card-remove').get('min-height'), '44px');
   assert.match(pickerSource, /chooseLocalImages\(9 - props.modelValue.length/);
-  assert.match(pickerSource, /await persistSelectedImages\(failedPaths.value, report\)/);
+  assert.match(pickerSource, /await persistSelectedImages\(failedPaths.value, report, \[\], '', props.purpose\)/);
   assert.match(pickerSource, /@click="preview\(image\)"/);
   assert.match(pickerSource, /previewImages\(props.modelValue, image\)/);
   assert.match(pickerSource, /v-if="modelValue.length \+ pendingPhotos.length < 9"/);
@@ -272,6 +277,7 @@ test('step attachment thumbnails and the add control share compact square geomet
 
 test('reordering steps preserves stable identities, text, images and valid boundaries', () => {
   const editor = createEditor();
+  editor.steps.value.push(editor.newStep());
   const first = editor.steps.value[0];
   Object.assign(first, { title: '准备食材', text: '洗净切块', images: ['local-photo-one'] });
   editor.steps.value.push({ ...editor.newStep(), title: '小火慢炖', text: '炖煮二十分钟', images: ['local-photo-two'] });
@@ -292,6 +298,7 @@ test('reordering steps preserves stable identities, text, images and valid bound
 
 test('repeated swaps preserve contents and upload-in-progress blocks reordering', () => {
   const editor = createEditor();
+  editor.steps.value.push(editor.newStep());
   editor.steps.value.push(editor.newStep(), editor.newStep());
   const original = [...editor.steps.value];
   for (let cycle = 0; cycle < 8; cycle++) {
@@ -308,6 +315,7 @@ test('repeated swaps preserve contents and upload-in-progress blocks reordering'
 
 test('step removal and addition retain optional content without reusing field identities', () => {
   const editor = createEditor();
+  editor.steps.value.push(editor.newStep());
   const initialId = editor.steps.value[0].id;
   assert.deepEqual(editor.draft.value.steps, []);
   editor.steps.value.splice(0, 1);
@@ -322,10 +330,12 @@ test('step removal and addition retain optional content without reusing field id
 });
 
 
-test('saving requires at least one titled step, reveals missing titles, and accepts an empty optional body', async () => {
+test('optional details allow quick save but entered steps require titles and can be cleared', async () => {
   const saves = [];
   const editor = createEditor({}, { saveRecipe: value => saves.push(value) });
   editor.title.value = '凉拌菜';
+  editor.image.value = 'cloud://test-env/cover.jpg';
+  editor.addIngredient(); editor.steps.value.push(editor.newStep());
   editor.ingredients.value[0].name = '盐';
   await editor.save();
   assert.equal(saves.length, 0);
@@ -341,6 +351,43 @@ test('saving requires at least one titled step, reveals missing titles, and acce
   assert.equal(saves[0].steps[0].text, '');
   editor.steps.value = [];
   await editor.save();
+  assert.equal(saves.length, 2);
+  assert.deepEqual(saves[1].steps, []);
+});
+
+test('opening and saving an imported recipe preserves uneditable serving and attribution fields', async () => {
+  const recipe = { id: 'public-dish', title: '清炒菜心', category: '素菜', servings: 4, image: 'cloud://test-env/chosen-cover.jpg', minutes: 10, provenance: { source: '原作者', note: '保留出处' }, ingredients: [{ name: '盐', amountText: '适量', quantity: null, unit: '' }], steps: [{ title: '拌匀调味', text: '', images: [] }] };
+  const saves = [];
+  const editor = createEditor({ recipe }, { saveRecipe: value => saves.push(value) });
+  await editor.save();
   assert.equal(saves.length, 1);
-  assert.match(editor.fieldErrors.value.steps, /至少/);
+  assert.equal(saves[0].servings, 4);
+  assert.deepEqual(saves[0].provenance, recipe.provenance);
+});
+
+
+test('quick recipe saves without optional details or duration and expands invalid hidden details', async () => {
+  const saves = [];
+  const editor = createEditor({}, { saveRecipe: value => saves.push(JSON.parse(JSON.stringify(value))) });
+  assert.equal(editor.detailsOpen.value, false);
+  editor.title.value = '快速小菜';
+  editor.image.value = 'cloud://test-env/cover.jpg';
+  await editor.save();
+  assert.equal(saves.length, 1);
+  assert.deepEqual(saves[0].ingredients, []);
+  assert.deepEqual(saves[0].steps, []);
+  assert.equal(saves[0].minutes, '20');
+  editor.addIngredient();
+  editor.detailsOpen.value = false;
+  await editor.save();
+  assert.equal(saves.length, 1);
+  assert.equal(editor.detailsOpen.value, true);
+  editor.ingredients.value[0].name = '盐';
+  editor.steps.value.push({ ...editor.newStep(), title: '拌匀', text: '拌匀即可' });
+  editor.detailsOpen.value = false;
+  await editor.save();
+  assert.equal(saves.length, 2);
+  assert.equal(saves[1].ingredients[0].name, '盐');
+  assert.equal(saves[1].steps[0].title, '拌匀');
+  assert.equal(createEditor({ expandDetails: true }).detailsOpen.value, true);
 });

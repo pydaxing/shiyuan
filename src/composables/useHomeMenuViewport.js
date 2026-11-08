@@ -2,14 +2,15 @@ import { computed, getCurrentInstance, onScopeDispose, ref, watch } from 'vue';
 import { homeMenuGeometry } from '../domain/home-menu.js';
 import { afterNativeRender } from './nativeRender.js';
 
-function readGeometry() {
+function readGeometry(headerExtension = 0) {
   const info = uni.getSystemInfoSync();
-  return { ...homeMenuGeometry(info, info.uniPlatform === 'mp-weixin' ? uni.getMenuButtonBoundingClientRect?.() : null), windowHeight: Number(info.windowHeight || info.screenHeight) || 780 };
+  const geometry = homeMenuGeometry(info, info.uniPlatform === 'mp-weixin' ? uni.getMenuButtonBoundingClientRect?.() : null);
+  return { ...geometry, searchTop: geometry.searchTop + headerExtension, listTop: geometry.listTop + headerExtension, windowHeight: Number(info.windowHeight || info.screenHeight) || 780 };
 }
 
-export function useHomeMenuViewport(visible, locked) {
+export function useHomeMenuViewport(visible, locked, headerExtension = 0) {
   const instance = getCurrentInstance();
-  const geometry = ref(readGeometry());
+  const geometry = ref(readGeometry(headerExtension));
   const pinned = ref(false);
   const docked = computed(() => visible.value && pinned.value);
   let menuLimit = null;
@@ -36,7 +37,7 @@ export function useHomeMenuViewport(visible, locked) {
   }
 
   async function measure(request) {
-    geometry.value = readGeometry();
+    geometry.value = readGeometry(headerExtension);
     await afterNativeRender();
     if (disposed || !visible.value || locked.value || request !== revision) return false;
     const query = uni.createSelectorQuery();

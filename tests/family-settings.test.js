@@ -26,8 +26,9 @@ function mount(context, name, overrides = {}, props = {}) {
     ...Vue, ...familyHelpers, presentMutation, NATIVE_UI_COLORS, coverFrameStyle, onMounted: callback => mounted.push(callback), onUnmounted: callback => unmounted.push(callback),
     state: Vue.ref({ family: { name: '我们的小家', cover: '', coverTitle: '', ownerId: 'me', members }, activeMemberId: 'me' }),
     cloudMode: true, cloudStatus: Vue.ref({ userId: 'me', familyId: 'current' }), preferencePending: Vue.ref(false),
+    familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null),
     familyFeatures: Vue.ref({ fridge: false, shopping: false }),
-    activeMember: Vue.ref(members[0]), dismissFocusedKeyboard() {}, notify: message => notices.push(message), useSheetContentResize: () => () => {},
+    activeMember: Vue.ref(members[0]), sheetOpen: Vue.ref(false), useNavigationAppearance() {}, dismissFocusedKeyboard() {}, notify: message => notices.push(message), useSheetContentResize: () => () => {},
     ...overrides,
   };
   const previous = globalThis.uni;
@@ -46,8 +47,12 @@ function renderTemplate(name, api, props, templateContext = {}) {
   const template = compileTemplate({ id: 'family-render', source: descriptor.template.content, filename: `${name}.vue`, compilerOptions: { bindingMetadata: script.bindings } });
   assert.deepEqual(template.errors, []);
   const code = template.code.replace(/import \{([^}]+)\} from "vue"/g, (_, imports) => `const {${imports.replace(/ as /g, ': ')}} = Vue;`).replace('export function render', 'return function render');
-  const render = new Function('Vue', code)({ ...Vue, resolveComponent: tag => tag });
-  return render({ $feedback() {}, ...templateContext }, [], props, Vue.proxyRefs(api), {}, {});
+  const render = new Function('Vue', code)({
+    ...Vue,
+    resolveComponent: tag => tag,
+    renderSlot: (slots, name, slotProps, fallback) => Vue.h(Vue.Fragment, slots[name]?.(slotProps) ?? fallback?.() ?? []),
+  });
+  return render({ $feedback() {}, $slots: {}, ...templateContext }, [], props, Vue.proxyRefs(api), {}, {});
 }
 
 function renderedNodes(node) {
@@ -55,22 +60,16 @@ function renderedNodes(node) {
   return [node, ...(Array.isArray(node.children) ? node.children.flatMap(renderedNodes) : [])];
 }
 
-test('family banner follows the persisted public ID without exposing or changing relationship IDs', context => {
-  const { api, modules } = mount(context, 'FamilyView');
-  const label = () => renderedNodes(renderTemplate('FamilyView', api, {})).find(node => node.props?.class === 'family-banner-caption family-id')?.children;
-  const internalId = 'family-1792647111258-fcb7c18538b6245e1029dcec';
-  modules.state.value.family.id = internalId;
-  assert.equal(label(), undefined, 'unallocated IDs must not be fabricated or expose the long key');
-  modules.state.value.family.publicId = 'sy-a1b2c3';
-  assert.equal(label(), 'ID: sy-a1b2c3');
-  assert.equal(modules.state.value.family.id, internalId);
-  modules.state.value = { ...modules.state.value, family: { ...modules.state.value.family, id: 'parents-internal', publicId: 'sy-000001' } };
-  assert.equal(label(), 'ID: sy-000001', 'switching family must update the visible ID immediately');
-  modules.state.value.family.publicId = 'sy-ABC123';
-  assert.equal(label(), undefined, 'only the exact lowercase six-character format is displayed');
-});
+function familyNodes(api, context = {}) {
+  function descend(node) {
+    if (!node || typeof node !== 'object') return [];
+    const children = Array.isArray(node.children) ? node.children : [...(node.children?.navigation?.() || []), ...(node.children?.default?.() || []), ...(node.children?.content?.() || [])];
+    return [node, ...children.flatMap(descend)];
+  }
+  return descend(renderTemplate('FamilyView', api, {}, context));
+}
 
-test('family management cards share golden covers, select without checkmarks and expose actions per family', context => {
+test('family management shows current check and reveals protected actions only in management mode', context => {
   const props = { active: true };
   const { api, modules } = mount(context, 'FamilyManagement', {}, props);
   modules.state.value.family.ownerId = 'other';
@@ -86,31 +85,34 @@ test('family management cards share golden covers, select without checkmarks and
   assert.deepEqual(nodes.filter(node => node.props?.class === 'family-choice-name').map(node => node.children), ['我们的小家', '爸妈家', '朋友家']);
   for (const card of cards) {
     const cardNodes = renderedNodes(card);
-    assert.equal(cardNodes.find(node => node.props?.class === 'family-choice-cover-frame').props.style.paddingTop, coverFrameStyle('family').paddingTop);
+    assert.ok(cardNodes.find(node => node.props?.class === 'family-choice-cover-frame'));
     const selector = cardNodes.find(node => node.props?.class === 'family-choice-select');
     assert.equal(renderedNodes(selector).filter(node => node.type === 'button').length, 1, 'destructive buttons are siblings, never inside the switch button');
-    const actions = cardNodes.find(node => node.props?.class === 'family-choice-actions');
-    assert.equal(renderedNodes(actions).filter(node => node.type === 'text').length, 0, 'right-side actions are icon-only');
-    for (const icon of renderedNodes(actions).filter(node => node.type === api.AppIcon)) assert.equal(icon.props.size, 18);
+    assert.equal(cardNodes.some(node => node.props?.class === 'family-choice-actions'), false);
   }
-  assert.deepEqual(nodes.filter(node => node.type === api.FamilyCoverImage).map(node => [node.props.src, node.props.variant]), [['', 'card'], ['cloud://parents-cover', 'card'], ['', 'card']]);
+  assert.deepEqual(nodes.filter(node => node.type === api.FamilyCoverImage).map(node => [node.props.src, node.props.variant]), [['', 'cover'], ['cloud://parents-cover', 'card'], ['', 'card']]);
   assert.deepEqual(nodes.filter(node => node.props?.class === 'family-choice-select').map(node => node.props['aria-pressed']), [true, false, false]);
-  assert.equal(nodes.filter(node => node.props?.['aria-label']?.startsWith('退出「')).length, 3);
-  assert.deepEqual(nodes.filter(node => node.props?.['aria-label']?.startsWith('删除「')).map(node => node.props['aria-label']), ['删除「爸妈家」']);
-  assert.doesNotMatch(source('FamilyManagement'), /family-choice-check|family-group-grid|family-group-hint|family-exit-actions|selectedMember|FamilyInviteCard/);
-  assert.doesNotMatch(source('FamilyManagement'), />\s*text:first-child/);
-  assert.match(source('FamilyManagement'), /\.family-choice-card\s*\{[^}]*display:\s*flex;[^}]*align-items:\s*center;/);
-  assert.match(source('FamilyManagement'), /\.family-choice-action\s*\{[^}]*width:\s*44px;[^}]*height:\s*44px;/);
-  assert.doesNotMatch(source('FamilyManagement'), /\.family-choice-actions\s*\{[^}]*border-top/);
+  assert.equal(nodes.filter(node => node.props?.class === 'family-choice-check').length, 1);
+  const list = nodes.find(node => node.props?.class === 'family-choice-list');
+  assert.equal(renderedNodes(list).filter(node => node.props?.class === 'family-add-row').length, 1);
+  nodes.find(node => node.props?.class === 'family-manage-toggle').props.onClick();
+  const editing = renderedNodes(renderTemplate('FamilyManagement', api, props));
+  assert.deepEqual(editing.filter(node => node.props?.['aria-label']?.startsWith('退出「')).map(node => node.props['aria-label']), ['退出「我们的小家」', '退出「爸妈家」', '退出「朋友家」']);
+  assert.equal(editing.filter(node => node.props?.class === 'family-choice-check').length, 0);
+  assert.equal(editing.some(node => node.props?.class === 'family-add-row'), false);
+  assert.ok(editing.filter(node => node.props?.class === 'family-choice-select').every(node => node.props.disabled));
+  assert.equal(editing.filter(node => node.props?.class?.includes('is-current-locked')).length, 0);
+  assert.doesNotMatch(source('FamilyManagement'), /selectedMember|is-self|member-profile-button/);
 });
 
 test('family action icons stop the row tap and retain confirmation without switching households', async context => {
   const calls = [];
   const props = { active: true };
   const { api, modals } = mount(context, 'FamilyManagement', { manageFamily: async (...args) => calls.push(args) }, props);
-  api.families.value = [{ id: 'current', name: '我们的小家', memberCount: 2, owner: true }];
+  api.families.value = [{ id: 'parents', name: '爸妈家', memberCount: 2, owner: true }];
+  api.editingFamilies.value = true;
   const nodes = renderedNodes(renderTemplate('FamilyManagement', api, props));
-  const buttons = nodes.filter(node => node.type === 'button' && /^(退出|删除)「/.test(node.props?.['aria-label'] || ''));
+  const buttons = nodes.filter(node => node.type === 'button' && /^退出「/.test(node.props?.['aria-label'] || ''));
   assert.equal(buttons.length, 2);
   let stopped = 0;
   for (const button of buttons) {
@@ -123,7 +125,10 @@ test('family action icons stop the row tap and retain confirmation without switc
     assert.equal(api.busy.value, false);
   }
   assert.equal(stopped, 2);
-  assert.deepEqual(calls, [], 'cancelling either icon never switches, exits or deletes a family');
+  assert.deepEqual(calls, [], 'cancelling removal never switches, exits or deletes a family');
+  api.editingFamilies.value = false;
+  await api.exitFamily({ id: 'current' });
+  assert.equal(modals.length, 2, 'stale actions outside management cannot start an exit');
 });
 
 test('family card selection is a no-op for the current family and still uses the existing switch flow', async context => {
@@ -135,47 +140,61 @@ test('family card selection is a no-op for the current family and still uses the
   assert.deepEqual(calls, [['switchFamily', { familyId: 'parents' }]]);
 });
 
-test('the family member count sits beside its heading without moving the other section headings', () => {
-  const familyView = source('FamilyView');
-  assert.match(familyView, /class="section-line family-members-heading"/);
-  assert.match(familyView, /\.section-line\.family-members-heading\s*\{[^}]*justify-content:\s*flex-start;[^}]*gap:\s*8px;/);
+test('the family member count sits beside its heading in the direct management page', () => {
+  const management = source('FamilyManagement');
+  assert.match(management, /class="section-line family-members-heading"/);
+  assert.match(management, /\.section-line\.family-members-heading\s*\{[^}]*justify-content:\s*flex-start;[^}]*gap:\s*8px;/);
 });
 
-test('family members share a card with their heading and invitation without changing profile editing', context => {
+test('the family entry directly opens selection, members and creation without a nested management route', context => {
+  const { api } = mount(context, 'FamilyView');
+  assert.equal(familyNodes(api).some(node => node.type === api.FamilyManagement), false);
+  familyNodes(api).find(node => node.props?.['aria-label'] === '查看我的家庭').props.onClick({ stopPropagation() {} });
+  assert.equal(familyNodes(api).filter(node => node.type === api.FamilyManagement).length, 1);
+  const management = mount(context, 'FamilyManagement', {}, { active: true });
+  const nodes = renderedNodes(renderTemplate('FamilyManagement', management.api, { active: true }));
+  const sections = nodes.filter(node => ['family-selection-section', 'family-members-section', 'family-create-section'].includes(node.props?.class));
+  assert.deepEqual(sections.map(node => node.props.class), ['family-selection-section', 'family-members-section']);
+  assert.equal(nodes.filter(node => node.props?.class === 'family-add-row').length, 1);
+  assert.equal(nodes.filter(node => node.props?.class === 'member-avatar-image').length, management.modules.state.value.family.members.length);
+  assert.equal(nodes.filter(node => node.type === management.api.FamilyInviteCard).length, 1);
+  assert.equal(nodes.some(node => node.props?.class?.includes('is-self') || node.props?.class === 'member-profile-button'), false);
+});
+
+test('the current household and updated self profile are visible before the remote family list arrives', async context => {
+  let finish;
+  const { api, modules } = mount(context, 'FamilyManagement', { invokeCloud: () => new Promise(resolve => { finish = resolve; }) }, { active: true });
+  const pending = api.load();
+  assert.equal(api.loading.value, true);
+  assert.deepEqual(api.familyChoices.value.map(family => family.id), ['current']);
+  const nodes = renderedNodes(renderTemplate('FamilyManagement', api, { active: true }));
+  assert.equal(nodes.find(node => node.props?.class === 'family-choice-name').children, '我们的小家');
+  for (const node of nodes.filter(node => node.type === 'button')) assert.equal(Boolean(node.props?.disabled), false, 'background refresh must not disable existing actions');
+  assert.equal(nodes.some(node => node.props?.class === 'family-loading-label'), false);
+  api.create();
+  assert.equal(api.creating.value, true, 'creation form opens before the background list returns');
+  api.back();
+  modules.activeMember.value = { id: 'me', name: '刚保存的昵称', avatar: 'cloud://updated-avatar' };
+  assert.equal(api.displayedMembers.value[0].name, '刚保存的昵称');
+  assert.equal(api.displayedMembers.value[0].avatar, 'cloud://updated-avatar');
+  finish({ families: [{ id: 'parents', name: '爸妈家', memberCount: 2 }] });
+  await pending;
+  assert.deepEqual(api.familyChoices.value.map(family => family.id), ['current', 'parents']);
+  modules.state.value.family.kind = 'personal';
+  modules.cloudStatus.value.familyId = 'personal';
+  assert.deepEqual(api.familyChoices.value.map(family => family.id), ['parents']);
+  assert.equal(renderedNodes(renderTemplate('FamilyManagement', api, { active: true })).some(node => node.props?.class === 'family-members-section'), false);
+});
+
+test('my home page responds to personal and family modes without remounting the view', context => {
   const { api, modules } = mount(context, 'FamilyView');
-  const page = renderTemplate('FamilyView', api, {});
-  const panel = renderedNodes(page).find(node => node.props?.class === 'feature-panel family-members-panel');
-  assert.ok(panel);
-  assert.equal(panel.type, 'view');
-  assert.equal(panel.props.onClick, undefined);
-  const heading = panel.children.find(node => node.props?.class === 'section-line family-members-heading');
-  const grid = panel.children.find(node => node.props?.class === 'member-grid family-member-grid');
-  assert.ok(heading && grid);
-  assert.equal(heading.children[1].children, `${modules.state.value.family.members.length} 人`);
-  assert.equal(renderedNodes(grid).filter(node => node.props?.class === 'member-avatar-image').length, modules.state.value.family.members.length);
-  assert.equal(renderedNodes(grid).filter(node => node.type === api.FamilyInviteCard).length, 1);
-  const preferences = renderedNodes(page).find(node => node.props?.class === 'feature-panel family-preferences');
-  assert.ok(page.children.indexOf(panel) < page.children.indexOf(preferences));
-  let stopped = 0;
-  const edit = renderedNodes(panel).find(node => node.props?.['aria-label'] === '编辑我的头像与昵称');
-  edit.props.onClick({ stopPropagation() { stopped += 1; } });
-  assert.equal(stopped, 1);
-  assert.equal(api.editingProfile.value, true);
-});
-
-test('my home page title reacts to family changes without remounting the view', context => {
-  const { api, modules } = mount(context, 'FamilyView', { ingredientManagementEnabled: Vue.ref(false) });
-  const title = () => renderedNodes(renderTemplate('FamilyView', api, {})).find(node => node.type === api.PageHeader).props.title;
-  assert.equal(title(), '我们的小家');
-  const originalFamily = modules.state.value.family;
-  modules.state.value = { ...modules.state.value, family: { ...originalFamily, id: 'parents', name: '爸妈家' } };
-  assert.equal(title(), '爸妈家');
-  modules.state.value.family.name = '  三餐小家  ';
-  assert.equal(title(), '三餐小家');
-  modules.state.value.family.name = '';
-  assert.equal(title(), '我们的小家');
-  modules.state.value.family = originalFamily;
-  assert.equal(title(), '我们的小家');
+  const title = () => familyNodes(api).find(node => node.type === api.PageHeader).props.title;
+  assert.equal(title(), '');
+  modules.state.value.family.kind = 'personal';
+  assert.equal(title(), '');
+  assert.equal(familyNodes(api).some(node => node.props?.['aria-label'] === '编辑菜单外观'), false);
+  modules.state.value.family.kind = undefined;
+  assert.equal(title(), '');
 });
 
 for (const failure of ['write', 'reload']) {
@@ -487,105 +506,7 @@ test('family photo selection still uses the shared crop flow and preserves the c
   assert.equal(props.modelValue, 'cloud://family-cover');
 });
 
-test('restore defaults resets name, cover and menu title only in the draft until an explicit save', async context => {
-  const family = { name: '周末小家', cover: 'cloud://family-cover', coverTitle: '一起好好吃饭', coverSubtitle: '周末一起做拿手菜' };
-  const calls = [];
-  const { api, modules, events } = mount(context, 'FamilyEditor', { state: Vue.ref({ family }), customizeFamily: async value => calls.push(value) });
-  for (const field of ['busy', 'saving', 'managing', 'confirming']) {
-    api[field].value = true;
-    api.restoreDefaults();
-    assert.equal(api.name.value, family.name);
-    assert.equal(api.cover.value, family.cover);
-    assert.equal(api.coverTitle.value, family.coverTitle);
-    assert.equal(api.coverSubtitle, undefined);
-    api[field].value = false;
-  }
-  api.error.value = '上次保存失败';
-  api.restoreDefaults();
-  assert.equal(api.cover.value, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.cover);
-  assert.equal(api.coverTitle.value, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-  assert.equal(api.coverSubtitle, undefined);
-  assert.equal(api.name.value, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.name);
-  assert.equal(api.error.value, '');
-  assert.equal(api.dirty.value, true);
-  assert.deepEqual(modules.state.value.family, family);
-  assert.deepEqual(calls, []);
-  assert.deepEqual(events, []);
-  await api.save();
-  assert.deepEqual(calls, [{ ...editableDefaults }]);
-  assert.deepEqual(events, [['close']]);
-});
-
-test('family photo selection uses a centered camera capsule without external controls, and reset remains red footer text', () => {
-  const editor = source('FamilyEditor');
-  const picker = source('ImagePicker');
-  const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-  assert.match(editor, /:preferred-height="tab === 'management' && !creatingFamily \? 660 : 0"/);
-  assert.match(editor, /<template v-if="tab === 'appearance' \|\| creatingFamily" #footer>\s*<view v-if="tab === 'appearance'" class="family-appearance-footer">\s*<text v-if="error"[^>]*role="alert"[^>]*>\{\{ error \}\}<\/text>\s*<button role="button" class="text-button family-cover-reset" :disabled="locked"[^>]*>恢复默认设置<\/button>\s*<button role="button" class="primary-button full"/);
-  assert.match(css, /\.family-appearance-footer \.family-cover-reset\s*\{[^}]*justify-content: center;[^}]*width: 100%;[^}]*min-height: 44px;[^}]*color: var\(--danger\);/);
-  assert.match(picker, /<AppIcon name="camera-inverse" :size="compact \? 14 : 16"/);
-  assert.match(picker, /\.cover-image-picker:not\(\.compact-image-picker\) \.upload-caption\s*\{[^}]*top: 50%; left: 50%;[^}]*transform: translate\(-50%, -50%\);[^}]*border-radius: 999px;/);
-  assert.match(picker, /<text v-if="!compact" class="upload-caption-label">拍照\/相册<\/text>/);
-  assert.match(css, /\.hero-edit, \.upload-caption\s*\{[^}]*right: 6px; bottom: 6px;[^}]*width: 44px; height: 44px; min-height: 44px;/);
-  assert.doesNotMatch(picker, /\.cover-image-picker \.upload-caption\s*\{/);
-  assert.doesNotMatch(picker, /family-cover-remove|删除家庭封面|调整展示位置|移除图片|photo-count/);
-});
-
-test('empty legacy appearance uses editable defaults without dirtying or mutating the saved family', context => {
-  const family = { name: '我们的小家', cover: '', coverTitle: '', members: [{ id: 'me', name: '我' }] };
-  const { api, modules, events } = mount(context, 'FamilyEditor', { state: Vue.ref({ family }) });
-  assert.equal(api.name.value, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.name);
-  assert.equal(api.coverTitle.value, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-  assert.equal(api.dirty.value, false);
-  api.restoreDefaults();
-  assert.equal(api.dirty.value, false);
-  assert.equal(modules.state.value.family.coverTitle, '');
-  assert.deepEqual(modules.state.value.family.members, family.members);
-  assert.deepEqual(events, []);
-});
-
-test('reset drafts can be abandoned without changing the family and failed saves keep the draft for retry', async context => {
-  const family = { name: '旧名称', cover: 'cloud://old-cover', coverTitle: '旧标题' };
-  let fail = true;
-  const calls = [];
-  const { api, modules, modals, events } = mount(context, 'FamilyEditor', {
-    state: Vue.ref({ family }),
-    customizeFamily: async value => { calls.push(value); if (fail) throw new Error('保存失败，请重试'); },
-  });
-  api.restoreDefaults();
-  const closing = api.close();
-  assert.equal(modals.length, 1);
-  modals[0].success({ confirm: false });
-  await closing;
-  assert.deepEqual(events, []);
-  assert.deepEqual(modules.state.value.family, family);
-  await api.save();
-  assert.equal(api.error.value, '保存失败，请重试');
-  assert.equal(api.saving.value, false);
-  assert.equal(api.dirty.value, true);
-  assert.deepEqual(events, []);
-  fail = false;
-  await api.save();
-  assert.deepEqual(calls, [{ ...editableDefaults }, { ...editableDefaults }]);
-  assert.deepEqual(events, [['close']]);
-});
-
-test('blank family names show an inline error while cleared menu titles retain their default', async context => {
-  const family = { name: '原来的家', cover: 'cloud://family-cover', coverTitle: '周末做饭' };
-  const calls = [];
-  const { api } = mount(context, 'FamilyEditor', { state: Vue.ref({ family }), customizeFamily: async value => calls.push(value) });
-  assert.deepEqual(familyHelpers.familyAppearance(family), { ...family, coverSubtitle: familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverSubtitle });
-  api.name.value = '  ';
-  api.coverTitle.value = '';
-  await api.save();
-  assert.deepEqual(calls, []);
-  assert.ok(api.fieldErrors.value.name);
-  api.name.value = '新的小家';
-  await api.save();
-  assert.deepEqual(calls, [{ ...editableDefaults, name: '新的小家', cover: family.cover }]);
-});
-
-test('title edits confirm discard and retry without overwriting saved legacy subtitles', async context => {
+test('household name edits confirm discard and retry without overwriting saved legacy menu copy', async context => {
   const family = { name: '我们的小家', cover: '', coverTitle: '我家的拿手菜', coverSubtitle: '一起认真吃饭' };
   const savedState = Vue.ref({ family: { ...family } });
   const calls = [];
@@ -598,7 +519,8 @@ test('title edits confirm discard and retry without overwriting saved legacy sub
       savedState.value.family = { ...savedState.value.family, ...value };
     },
   });
-  api.coverTitle.value = '  三餐有家人陪伴  ';
+  api.openEditor('name');
+  api.name.value = '  三餐有家人陪伴  ';
   assert.equal(api.dirty.value, true);
   const closing = api.close();
   modals[0].success({ confirm: false });
@@ -607,16 +529,19 @@ test('title edits confirm discard and retry without overwriting saved legacy sub
   assert.deepEqual(savedState.value.family, family);
   await api.save();
   assert.equal(api.error.value, '保存失败，请重试');
-  assert.equal(api.coverTitle.value, '  三餐有家人陪伴  ');
+  assert.equal(api.name.value, '  三餐有家人陪伴  ');
   assert.deepEqual(savedState.value.family, family);
   fail = false;
   await api.save();
-  assert.deepEqual(events, [['close']]);
-  assert.equal(savedState.value.family.coverTitle, '三餐有家人陪伴');
+  assert.deepEqual(events, []);
+  assert.equal(api.section.value, '');
+  assert.equal(savedState.value.family.name, '三餐有家人陪伴');
+  assert.equal(savedState.value.family.coverTitle, family.coverTitle);
   assert.equal(savedState.value.family.coverSubtitle, family.coverSubtitle);
   assert.ok(calls.every(value => !Object.hasOwn(value, 'coverSubtitle')));
   const reopened = mount(context, 'FamilyEditor', { state: savedState });
-  assert.equal(reopened.api.coverTitle.value, '三餐有家人陪伴');
+  assert.equal(reopened.api.name.value, '三餐有家人陪伴');
+  assert.equal(reopened.api.coverTitle, undefined);
   assert.equal(reopened.api.coverSubtitle, undefined);
   assert.equal(reopened.api.dirty.value, false);
 });
@@ -630,128 +555,70 @@ test('missing and whitespace menu lines use the shared defaults while custom cop
   assert.equal(familyHelpers.familyAppearance({ coverSubtitle: '  吃饱了才有力气  ' }).coverSubtitle, '吃饱了才有力气');
 });
 
-test('family appearance presents the cover before the name and both menu lines', context => {
-  const { api } = mount(context, 'FamilyEditor');
-  const tree = renderTemplate('FamilyEditor', api, {});
-  const panel = tree.children.default().flatMap(renderedNodes).find(node => node.props?.class === 'family-appearance-panel');
-  const nodes = renderedNodes(panel);
-  assert.deepEqual(nodes.filter(node => node.props?.class === 'subheading').map(node => node.children), ['家庭封面', '家庭名称', '菜单主标题']);
-  assert.deepEqual(nodes.filter(node => node.type === api.ImagePicker || node.type === api.FormField).map(node => node.props['aria-label'] || node.props.frame), ['family', '家庭名称', '菜单主标题']);
-  assert.equal(api.dirty.value, false);
-});
-
-test('only the menu title remains configurable and saving sends exactly the displayed copy', async context => {
-  const calls = [];
-  const { api } = mount(context, 'FamilyEditor', { customizeFamily: async value => calls.push(value) });
-  assert.equal(api.coverTitle.value, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-  assert.equal(api.coverSubtitle, undefined);
-  assert.equal(api.dirty.value, false);
-  const tree = renderTemplate('FamilyEditor', api, {});
-  const fields = tree.children.default().flatMap(renderedNodes);
-  const field = fields.find(node => node.props?.['aria-label'] === '菜单主标题');
-  assert.equal(field.props.placeholder, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-  assert.equal(field.props.modelValue, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-  assert.equal(field.props.maxlength, '30');
-  assert.equal(fields.some(node => node.props?.['aria-label'] === '菜单副标题'), false);
-  await api.save();
-  assert.equal(calls[0].coverTitle, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-  assert.equal(Object.hasOwn(calls[0], 'coverSubtitle'), false);
-});
-
-test('family management thumbnail uses the active family photo without a large cover or title overlay', context => {
-  const { api, modules } = mount(context, 'FamilyView');
-  for (const cover of ['', 'cloud://family-photo']) {
-    for (const coverTitle of [undefined, '', '  ', '  一起吃饭  ']) {
-      modules.state.value.family = { ...modules.state.value.family, name: '三餐四季的小家', cover, coverTitle };
-      const nodes = renderedNodes(renderTemplate('FamilyView', api, {}));
-      const frame = nodes.find(node => node.props?.class === 'family-banner-frame');
-      assert.equal(frame.props.style.paddingTop, coverFrameStyle('family').paddingTop);
-      const image = nodes.find(node => node.type === api.FamilyCoverImage);
-      assert.equal(image.props.src, cover);
-      assert.equal(image.props.variant, 'card');
-      assert.equal(nodes.find(node => node.props?.class === 'subheading family-banner-name').children, '三餐四季的小家');
-      assert.ok(!nodes.some(node => /hero/.test(node.props?.class || '')));
-    }
-  }
-});
-
-test('compact family card and edit button both open appearance settings exactly once', context => {
-  const { api } = mount(context, 'FamilyView');
-  const events = [];
-  let stopped = 0;
-  const nodes = renderedNodes(renderTemplate('FamilyView', api, {}, { $emit: event => events.push(event) }));
-  const banner = nodes.find(node => node.props?.class === 'family-banner');
-  assert.equal(banner.children.filter(node => node.type === 'button').length, 2);
-  for (const label of ['家庭设置', '编辑家庭名称与封面']) {
-    const button = nodes.find(node => node.props?.['aria-label'] === label);
-    button.props.onClick({ stopPropagation() { stopped += 1; } });
-  }
-  assert.deepEqual(events, ['customize', 'customize']);
-  assert.equal(stopped, 2);
-  const editButton = nodes.find(node => node.props?.class === 'family-banner-edit');
-  const surface = editButton.children.find(node => node.props?.class === 'action-icon-circle');
-  assert.ok(surface);
-  const icon = renderedNodes(surface).find(node => node.type === api.AppIcon);
-  assert.equal(icon.props.name, 'edit');
-  assert.equal(icon.props.size, 18);
-  assert.equal(renderedNodes(editButton).filter(node => node.type === 'button').length, 1);
-});
-
-test('shared settings card keeps fridge-only toggling immediate and silent with accessible state and help', context => {
-  const features = Vue.ref({ fridge: false, shopping: true });
-  const updates = [];
-  const { api, modules } = mount(context, 'FamilyView', {
-    familyFeatures: features,
-    runAction: action => action(),
-    setFridgeEnabled(value) { updates.push(value); features.value.fridge = value; },
-  });
-  for (const checked of [false, true]) {
-    const nodes = renderedNodes(renderTemplate('FamilyView', api, {}));
-    const panel = nodes.find(node => node.props?.class === 'feature-panel family-preferences');
-    const control = renderedNodes(panel).find(node => node.props?.role === 'switch');
-    assert.equal(control.props['aria-label'], '冰箱');
-    assert.equal(control.props['aria-checked'], checked);
-    control.props.onClick();
-  }
-  assert.deepEqual(updates, [true, false]);
-  assert.equal(features.value.shopping, true);
-  modules.preferencePending.value = true;
-  const nodes = renderedNodes(renderTemplate('FamilyView', api, {}));
-  assert.equal(nodes.find(node => node.props?.class === 'feature-row').props['aria-busy'], true);
-  assert.equal(nodes.find(node => node.props?.class === 'preference-saving'), undefined);
-  assert.equal(nodes.some(node => typeof node.children === 'string' && /保存中|正在同步/.test(node.children)), false);
-  nodes.find(node => node.props?.class === 'family-info-row family-help-entry').props.onClick();
+test('family mode switch sends a scoped request, prevents duplicate taps and retains help', async context => {
+  const requests = []; let finish;
+  const { api, modules, notices } = mount(context, 'FamilyView', { manageFamily: (...args) => { requests.push(args); return new Promise(resolve => { finish = resolve; }); } });
+  modules.state.value.family.id = 'family-one';
+  assert.equal(familyNodes(api).some(node => node.props?.role === 'switch'), true);
+  assert.equal(api.settingsOpen, undefined);
+  const control = () => familyNodes(api).find(node => node.props?.role === 'switch');
+  const identity = () => familyNodes(api).find(node => node.props?.class === 'account-identity-label').children;
+  assert.equal(control().props['aria-label'], '家庭模式');
+  assert.equal(control().props['aria-checked'], true);
+  assert.equal(identity(), '家庭');
+  const pending = api.toggleMode(); await api.toggleMode();
+  assert.deepEqual(requests, [['switchWorkspace', { mode: 'personal', expectedSpaceId: 'family-one' }]]);
+  assert.equal(control().props.disabled, true);
+  assert.equal(identity(), '个人', 'identity and switch respond before the cloud request completes');
+  assert.equal(familyNodes(api).some(node => node.props?.class === 'account-family-name'), false);
+  assert.deepEqual(notices, ['关闭家庭模式'], 'announce the requested mode immediately');
+  finish(); await pending;
+  assert.deepEqual(notices, ['关闭家庭模式']);
+  assert.equal(control().props.disabled, undefined);
+  assert.equal(modules.state.value.family.id, 'family-one', 'view never deletes or edits household membership locally');
+  modules.state.value.family = { ...modules.state.value.family, id: 'personal-one', kind: 'personal' };
+  const enabling = api.toggleMode(); await api.toggleMode();
+  assert.deepEqual(requests.at(-1), ['switchWorkspace', { mode: 'family', expectedSpaceId: 'personal-one' }]);
+  assert.deepEqual(notices, ['关闭家庭模式', '开启家庭模式']);
+  modules.state.value.family = { ...modules.state.value.family, id: 'family-one', kind: 'family' };
+  finish(); await enabling;
+  assert.deepEqual(notices, ['关闭家庭模式', '开启家庭模式'], 'notice uses the requested mode even after the cloud snapshot changes');
+  familyNodes(api).find(node => node.props?.class === 'account-row family-help-entry').props.onClick({ stopPropagation() {} });
   assert.equal(api.about.value, true);
-  assert.ok(renderedNodes(renderTemplate('FamilyView', api, {})).some(node => node.type === api.Sheet && node.props.title === '使用说明'));
 });
 
-test('onboarding opens directly on the creation form without creation or invitation tabs', context => {
-  const { api } = mount(context, 'CloudConnection', { accountProfile: Vue.ref({ name: '小厨师', avatar: 'cloud://avatar' }), cloudStatus: Vue.ref({ phase: 'onboarding' }) });
+test('ordinary onboarding has no family choice and starts a personal workspace', async context => {
+  const calls = [];
+  const { api } = mount(context, 'CloudConnection', { accountProfile: Vue.ref({ name: '小厨师', avatar: 'cloud://avatar' }), cloudStatus: Vue.ref({ phase: 'onboarding' }), manageFamily: async (...args) => calls.push(args) });
   assert.equal(api.name.value, '小厨师');
-  assert.equal(api.avatar.value, 'cloud://avatar');
-  assert.equal(api.familyName.value, '我们的小家');
-  const rendered = renderTemplate('CloudConnection', api, {});
-  const card = rendered.children.find(node => node.props?.class === 'cloud-card');
-  const children = card.children.filter(node => node.type !== Vue.Comment && node.type !== Vue.Text);
-  assert.equal(children[0].type, api.ProfileFields);
-  const familyNameField = children[1];
-  const heading = familyNameField.children.find(node => node.type === 'text');
-  assert.equal(heading.children, '家庭名称');
-  assert.equal(heading.props.class, 'subheading');
-  assert.match(source('ProfileFields'), /<text class="subheading profile-field-heading">昵称<\/text>/);
-  assert.deepEqual(children.slice(1).map(node => node.type), ['view', 'button', api.FieldError, 'button']);
-  assert.equal(children.at(-1).children, '创建小家');
-  assert.doesNotMatch(source('CloudConnection'), /joining|content-types|invitation-help|加入家庭/);
+  assert.equal(api.consent.value, false);
+  assert.equal(api.mode, undefined);
+  assert.doesNotMatch(source('CloudConnection'), /onboarding-modes|createFamily|家庭名称/);
+  api.consent.value = true;
+  await api.enter();
+  assert.deepEqual(calls, [['updateProfile', { name: '小厨师', avatar: 'cloud://avatar' }], ['switchWorkspace', { mode: 'personal', expectedSpaceId: '' }]]);
 });
 
-test('simplified onboarding retains consent, upload guards, duplicate protection and retry identity', async context => {
+test('onboarding receives late profile defaults but never overwrites an edited nickname or avatar', async context => {
+  const profile = Vue.ref({ name: '', avatar: '' });
+  const { api } = mount(context, 'CloudConnection', { accountProfile: profile, cloudStatus: Vue.ref({ phase: 'connecting' }) });
+  profile.value = { name: '一口小饭团', avatar: '/static/default-avatars/food-01.png' };
+  await Vue.nextTick();
+  assert.equal(api.name.value, profile.value.name);
+  assert.equal(api.avatar.value, profile.value.avatar);
+  api.name.value = '自己填写'; api.avatar.value = 'cloud://picked';
+  profile.value = { name: '后台新昵称', avatar: '/static/default-avatars/food-02.png' };
+  await Vue.nextTick();
+  assert.equal(api.name.value, '自己填写'); assert.equal(api.avatar.value, 'cloud://picked');
+});
+
+test('personal onboarding guards consent, upload, duplicate submission and profile failure', async context => {
   const calls = [];
   let finish;
-  const { api, notices } = mount(context, 'CloudConnection', { accountProfile: Vue.ref({ name: '我', avatar: '' }), manageFamily: (...args) => { calls.push(args); return new Promise(resolve => { finish = resolve; }); } });
+  const { api } = mount(context, 'CloudConnection', { accountProfile: Vue.ref({ name: '我', avatar: '' }), manageFamily: (...args) => { calls.push(args); return args[0] === 'updateProfile' ? new Promise(resolve => { finish = resolve; }) : Promise.resolve(); } });
   await api.enter();
   assert.equal(calls.length, 0);
-  assert.equal(api.fieldErrors.value.consent, '请先确认云端保存说明');
-  assert.deepEqual(notices, []);
+  assert.equal(api.fieldErrors.value.consent, '请先阅读并同意隐私协议');
   api.consent.value = true;
   api.uploading.value = true;
   await api.enter();
@@ -760,14 +627,15 @@ test('simplified onboarding retains consent, upload guards, duplicate protection
   const pending = api.enter();
   await api.enter();
   assert.equal(calls.length, 1);
-  assert.equal(calls[0][0], 'createFamily');
-  assert.equal(calls[0][1].familyName, '我们的小家');
-  assert.equal(calls[0][1].name, '我');
   finish(); await pending;
+  assert.deepEqual(calls.map(call => call[0]), ['updateProfile', 'switchWorkspace']);
   assert.equal(api.busy.value, false);
-  const repeated = api.enter();
-  assert.equal(calls[0][1].requestId, calls[1][1].requestId);
-  finish(); await repeated;
+  const failed = mount(context, 'CloudConnection', { accountProfile: Vue.ref({ name: '我', avatar: '' }), manageFamily: async action => { assert.equal(action, 'updateProfile'); throw new Error('网络不可用'); } }).api;
+  failed.consent.value = true;
+  await failed.enter();
+  assert.equal(failed.error.value, '网络不可用');
+  assert.equal(failed.busy.value, false);
+  assert.equal(failed.name.value, '我');
 });
 
 test('compiled management template follows the active prop across repeated tab roundtrips', context => {
@@ -783,7 +651,7 @@ test('compiled management template follows the active prop across repeated tab r
   }
 });
 
-test('family member profile is launched only from the self card and shared settings contain no duplicate management entry', context => {
+test('profile editing is launched from the unified account entry and member cards have no duplicate editor', context => {
   const { api } = mount(context, 'FamilyView');
   assert.equal(api.editingProfile.value, false);
   api.editProfile();
@@ -792,52 +660,12 @@ test('family member profile is launched only from the self card and shared setti
   function walk(node) { if (node.type === 1) { nodes.push(node); node.children.forEach(walk); } }
   baseParse(parse(source('FamilyView')).descriptor.template.content).children.forEach(walk);
   const attribute = (node, name) => node.props.find(prop => prop.name === name);
-  const button = nodes.find(node => attribute(node, 'class')?.value?.content === 'member-profile-button');
-  assert.equal(attribute(button, 'if').exp.content, 'activeMember.id === member.id');
-  assert.ok(attribute(button, 'on').modifiers.includes('stop'));
-  const tools = nodes.find(node => attribute(node, 'class')?.value?.content === 'feature-panel family-preferences');
-  assert.equal(tools.children.filter(node => node.type === 1).length, 2);
-  assert.equal(tools.children.filter(node => node.type === 1 && attribute(node, 'aria-label')?.value?.content === '家庭管理').length, 0);
-  assert.doesNotMatch(source('FamilyView'), /dataOpen|resetDemo|FamilyManagement|switchMember/);
+  const profile = nodes.find(node => attribute(node, 'class')?.value?.content === 'account-profile');
+  assert.equal(attribute(profile, 'aria-label').value.content, '编辑我的资料与封面');
+  assert.ok(attribute(profile, 'on').modifiers.includes('stop'));
+  assert.doesNotMatch(source('FamilyView'), /dataOpen|resetDemo|switchMember|member-profile-button|FamilyAppearanceDetails/);
+  assert.doesNotMatch(source('FamilyManagement'), /member-profile-button|ProfileEditor/);
   assert.match(source('FamilyView'), /<ProfileEditor v-if="editingProfile"/);
-});
-
-test('reopening family settings starts on appearance after closing from management', async context => {
-  const page = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
-  assert.match(page, /<FamilyView[^>]*@customize="editFamily\(\)"/);
-  assert.doesNotMatch(page, /@manage="editFamily\('management'\)"/);
-  const current = mount(context, 'FamilyEditor');
-  current.api.selectTab('management');
-  assert.equal(current.api.tab.value, 'management');
-  await current.api.close();
-  assert.deepEqual(current.events, [['close']]);
-  assert.equal(current.modals.length, 0);
-  const reopened = mount(context, 'FamilyEditor');
-  assert.equal(reopened.api.tab.value, 'appearance');
-  assert.equal(reopened.api.managementVisited.value, false);
-  assert.equal(reopened.api.dirty.value, false);
-});
-
-test('settings tabs retain appearance drafts and management mounts lazily only once', context => {
-  let dismissals = 0;
-  const { api } = mount(context, 'FamilyEditor', { dismissFocusedKeyboard: () => { dismissals += 1; } });
-  assert.equal(api.tab.value, 'appearance');
-  assert.equal(api.managementVisited.value, false);
-  api.name.value = '周末小家'; api.cover.value = 'cloud://cover'; api.coverTitle.value = '一起吃饭';
-  api.selectTab('management');
-  assert.equal(api.managementVisited.value, true);
-  api.selectTab('appearance');
-  assert.equal(api.managementVisited.value, true);
-  assert.equal(api.name.value, '周末小家');
-  assert.equal(api.cover.value, 'cloud://cover');
-  assert.equal(api.coverTitle.value, '一起吃饭');
-  assert.equal(api.dirty.value, true);
-  assert.equal(dismissals, 2);
-  assert.match(source('FamilyEditor'), /<FamilyManagement v-if="cloudMode && managementVisited" :active="tab === 'management'"/);
-  assert.match(source('FamilyEditor'), /v-if="tab === 'appearance'" class="family-appearance-panel"/);
-  assert.match(source('FamilyManagement'), /v-if="props.active" class="family-management-panel"/);
-  assert.doesNotMatch(source('FamilyEditor'), /v-show/);
-  assert.doesNotMatch(source('FamilyManagement'), /<Sheet|import Sheet/);
 });
 
 test('entering creation resets synchronously before a new input can acquire focus', async context => {
@@ -849,21 +677,18 @@ test('entering creation resets synchronously before a new input can acquire focu
   assert.deepEqual(events, [['section-change']]);
 });
 
-test('new family uses the appearance cover and shared menu copy but keeps the name blank', context => {
+test('new family asks only for cover and name while retaining a compatible hidden menu default', context => {
   const props = { active: true };
   const { api } = mount(context, 'FamilyManagement', {}, props);
   api.create();
   const nodes = renderedNodes(renderTemplate('FamilyManagement', api, props));
-  const picker = nodes.find(node => node.type === api.ImagePicker);
-  assert.equal(picker.props.frame, 'family');
-  assert.equal(picker.props.modelValue, '');
-  assert.match(picker.props['family-draft-request'], /^create-family-/);
-  const fields = nodes.filter(node => node.type === api.FormField);
-  assert.deepEqual(fields.map(node => node.props['aria-label']), ['新家庭名称', '新家庭菜单主标题']);
-  assert.deepEqual(fields.map(node => node.props.modelValue), ['', familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle]);
-  assert.deepEqual(nodes.filter(node => node.props?.class === 'subheading').map(node => node.children), ['新建一个家', '家庭封面', '家庭名称', '菜单主标题']);
+  const fields = nodes.find(node => node.type === api.FamilyCreationFields);
+  assert.equal(fields.props.name, '');
+  assert.equal(fields.props.cover, '');
+  assert.match(fields.props['request-id'], /^create-family-/);
+  assert.equal(api.coverTitle.value, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
   assert.equal(api.coverSubtitle, undefined);
-  assert.ok(nodes.indexOf(picker) < nodes.indexOf(fields[0]));
+  assert.equal(nodes.some(node => node.props?.class === 'family-management-heading'), false);
   assert.equal(api.canCreate.value, true);
   assert.doesNotMatch(source('FamilyManagement'), /family-avatar-picker|FAMILY_AVATARS|每个家庭有独立的菜单/);
 });
@@ -937,51 +762,9 @@ test('family section navigation cannot schedule a hideKeyboard after a new field
   assert.deepEqual(operations, ['dismiss-old', 'reset', 'focus-delete']);
 });
 
-test('closing clean settings needs no confirmation; dirty settings may be kept or discarded', async context => {
-  const { api, events, modals } = mount(context, 'FamilyEditor');
-  await api.close();
-  assert.deepEqual(events, [['close']]);
-  events.length = 0;
-  api.name.value = '新名称';
-  const cancelled = api.close();
-  assert.equal(api.locked.value, true);
-  api.selectTab('management');
-  assert.equal(api.tab.value, 'appearance');
-  modals[0].success({ confirm: false });
-  await cancelled;
-  assert.deepEqual(events, []);
-  assert.equal(api.name.value, '新名称');
-  const confirmed = api.close();
-  modals[1].success({ confirm: true });
-  await confirmed;
-  assert.deepEqual(events, [['close']]);
-});
-
-test('upload, save and family writes block closing and tab changes; saving submits only once', async context => {
-  const calls = [];
-  let finish;
-  const { api, events } = mount(context, 'FamilyEditor', { customizeFamily: payload => { calls.push(payload); return new Promise(resolve => { finish = resolve; }); } });
-  for (const field of ['busy', 'saving', 'managing']) {
-    api[field].value = true;
-    api.selectTab('management');
-    await api.close(); await api.save();
-    assert.equal(api.tab.value, 'appearance');
-    assert.deepEqual(events, []);
-    assert.equal(calls.length, 0);
-    api[field].value = false;
-  }
-  api.name.value = '周末小家';
-  const saving = api.save();
-  await api.save(); await api.close();
-  assert.equal(calls.length, 1);
-  assert.equal(calls[0].name, '周末小家');
-  finish(); await saving;
-  assert.deepEqual(events, [['close']]);
-  assert.equal(api.locked.value, false);
-});
-
 test('failed appearance save preserves edits and shows an error without closing', async context => {
   const { api, events } = mount(context, 'FamilyEditor', { customizeFamily: async () => { throw new Error('网络暂时不可用'); } });
+  api.openEditor('name');
   api.name.value = '保留我的修改';
   await api.save();
   assert.equal(api.name.value, '保留我的修改');
@@ -1227,8 +1010,9 @@ test('family deletion stays owner-only and never offers the prompt to an ordinar
   const management = source('FamilyManagement');
   assert.match(management, /state.value.family.ownerId === cloudStatus.value.userId/);
   assert.match(management, /confirmation.content !== familyName/);
-  assert.match(management, /v-if="family.owner" class="family-choice-action danger"/);
-  assert.match(management, /<AppIcon name="trash-danger" :size="18"/);
+  assert.match(management, /v-if="editingFamilies" class="family-choice-actions"/);
+  assert.match(management, /class="family-choice-action-label">退出<\/text>/);
+  assert.doesNotMatch(management, /class="family-choice-action-label">解散<\/text>/);
   assert.doesNotMatch(management, /<text>删除家庭<\/text>/);
 });
 
@@ -1236,7 +1020,7 @@ test('owner exit uses one confirmation and lets the server choose a successor', 
   const calls = [];
   const { api, modals, events, notices } = mount(context, 'FamilyManagement', { manageFamily: async (...args) => calls.push(args) });
   const cancelled = api.leave();
-  assert.equal(api.subheading.value, '');
+  assert.equal(api.creating.value, false);
   assert.equal(modals.length, 1);
   assert.match(modals[0].content, /自动交接给最早加入/);
   assert.equal(modals[0].editable, undefined);
@@ -1295,7 +1079,7 @@ test('exit combines discarding unsaved appearance edits into the same confirmati
   assert.equal(discardPrompts, 0);
   assert.equal(modals.length, 1);
   assert.equal(calls.length, 1);
-  assert.match(source('FamilyEditor'), /:unsaved-changes="dirty"/);
+  assert.doesNotMatch(source('FamilyEditor'), /family-settings-tabs/);
 });
 
 for (const change of ['family', 'unmount', 'hidden']) {
@@ -1382,34 +1166,350 @@ test('invitation entry reuses a prewarmed card immediately and cold entry keeps 
 });
 
 test('management hides the native footer container, not just the save button', () => {
-  assert.match(source('FamilyEditor'), /:footer-visible="tab === 'appearance' \|\| creatingFamily"/);
+  assert.match(source('FamilyEditor'), /:footer-visible="false"/);
   assert.match(source('Sheet'), /footerVisible: \{ type: Boolean, default: true \}/);
   assert.match(source('Sheet'), /v-if="footerVisible && \$slots.footer"/);
   assert.match(source('Sheet'), /v-if="!footerVisible \|\| !\$slots.footer"/);
 });
 
-test('new family shares the fixed footer while the management list keeps its footer hidden', context => {
-  const { api } = mount(context, 'FamilyEditor');
-  let submissions = 0;
-  api.management.value = Vue.reactive({ creating: false, canCreate: false, busy: false, submitCreation: () => { submissions += 1; } });
-  api.selectTab('management');
+test('new family uses an inline creation action and the common page header without a fixed footer', context => {
+  const { api } = mount(context, 'FamilyEditor', {}, { initialTab: 'management' });
+  api.management.value = Vue.reactive({ creating: false });
   assert.equal(renderTemplate('FamilyEditor', api, {}).props['footer-visible'], false);
   api.management.value.creating = true;
-  let tree = renderTemplate('FamilyEditor', api, {});
-  assert.equal(tree.props['footer-visible'], true);
+  const tree = renderTemplate('FamilyEditor', api, {});
+  assert.equal(tree.props['footer-visible'], false);
+  assert.equal(tree.props.title, '新建家庭');
   assert.equal(tree.props['preferred-height'], 0);
-  let button = tree.children.footer().flatMap(renderedNodes).find(node => node.type === 'button');
-  assert.equal(button.children, '创建并切换');
-  assert.equal(button.props.disabled, true);
-  api.management.value.canCreate = true;
-  tree = renderTemplate('FamilyEditor', api, {});
-  button = tree.children.footer().flatMap(renderedNodes).find(node => node.type === 'button');
-  assert.equal(button.props.disabled, false);
-  button.props.onClick();
-  assert.equal(submissions, 1);
-  api.managing.value = true;
-  api.management.value.busy = true;
-  button = renderTemplate('FamilyEditor', api, {}).children.footer().flatMap(renderedNodes).find(node => node.type === 'button');
-  assert.equal(button.props.disabled, true);
-  assert.equal(button.children, '正在创建…');
+  assert.match(source('FamilyManagement'), /class="family-creation-controls"/);
+});
+
+test('creation name edits are local, validate blank input and cancel without replacing the draft', async context => {
+  const { api, events } = mount(context, 'FamilyCreationFields', {}, { name: '周末小家', cover: '', requestId: 'create-family-1' });
+  api.editName(); api.draft.value = '另一个名字'; api.close();
+  assert.equal(events.length, 0);
+  api.editName(); assert.equal(api.draft.value, '周末小家');
+  api.draft.value = '  '; await api.save();
+  assert.ok(api.error.value); assert.equal(api.section.value, 'name');
+  assert.equal(events.length, 0);
+  api.draft.value = ' 新名字 '; await api.save();
+  assert.deepEqual(events, [['update:name', '新名字']]);
+  assert.equal(api.section.value, '');
+});
+
+test('creation cover errors preserve the draft and unlocking allows a successful retry', async context => {
+  const { api, events } = mount(context, 'FamilyCreationFields', {}, { name: '周末小家', cover: '', requestId: 'create-family-1' });
+  api.edit('cover');
+  api.photo.value = { save: async () => { throw new Error('网络暂不可用'); } };
+  await api.save();
+  assert.equal(api.section.value, 'cover'); assert.equal(api.error.value, '网络暂不可用');
+  assert.equal(api.locked.value, false);
+  assert.equal(events.some(([key]) => key === 'update:cover'), false);
+  api.photo.value = { save: async () => 'cloud://draft' };
+  await api.save();
+  assert.ok(events.some(([key, value]) => key === 'update:cover' && value === 'cloud://draft'));
+  assert.equal(api.section.value, '');
+});
+
+test('appearance details expose a full cover and independent fields without displaying family IDs', context => {
+  const props = Vue.reactive({ family: { id: 'private-key', name: '三餐四季', cover: 'cloud://photo', coverTitle: '一起吃饭' } });
+  const { api } = mount(context, 'FamilyAppearanceDetails', {}, props);
+  const events = []; let stops = 0;
+  const nodes = () => renderedNodes(renderTemplate('FamilyAppearanceDetails', api, props, { $emit: (...args) => events.push(args) }));
+  assert.equal(nodes().some(node => node.props?.class === 'family-detail-row family-id-row'), false);
+  for (const publicId of ['sy-a1b2c3', 'sy-000001', 'sy-ABC123']) {
+    props.family.publicId = publicId;
+    assert.equal(nodes().some(node => node.props?.class === 'family-detail-row family-id-row'), false);
+    assert.equal(nodes().some(node => typeof node.children === 'string' && /家庭 ID|sy-|private-key/.test(node.children)), false);
+    assert.equal(props.family.publicId, publicId, 'hiding the ID does not change the household data');
+  }
+  for (const button of nodes().filter(node => node.type === 'button')) button.props.onClick({ stopPropagation() { stops += 1; } });
+  assert.deepEqual(events, [['edit', 'cover'], ['edit', 'name']]);
+  assert.equal(stops, 2);
+  const frame = nodes().find(node => node.props?.class === 'family-full-cover-frame');
+  assert.equal(frame.props.style.paddingTop, coverFrameStyle('family').paddingTop);
+  const photo = nodes().find(node => node.type === api.FamilyCoverImage);
+  assert.equal(photo.props.src, 'cloud://photo'); assert.equal(photo.props.variant, 'detail');
+  props.family.kind = 'personal'; props.family.publicId = 'sy-a1b2c3';
+  assert.equal(nodes().some(node => node.props?.class === 'family-detail-row family-id-row'), false);
+  assert.equal(nodes().some(node => node.props?.['aria-label'] === '编辑空间名称'), false);
+  assert.deepEqual(nodes().filter(node => node.type === 'button').map(node => node.props['aria-label']), ['编辑个人封面']);
+});
+
+test('both account modes share the same cover layout and retain only the household-specific management entry', context => {
+  let navigationAppearance;
+  const { api, modules } = mount(context, 'FamilyView', { useNavigationAppearance: value => { navigationAppearance = value; } });
+  modules.state.value.family.cover = 'cloud://family-cover';
+  const events = [];
+  for (const personal of [true, false]) {
+    modules.state.value.family.kind = personal ? 'personal' : 'family';
+    const nodes = familyNodes(api, { $emit: (...args) => events.push(args) });
+    assert.equal(nodes.filter(node => node.props?.role === 'switch').length, 1);
+    assert.equal(api.pageTitle.value, '');
+    const cover = nodes.find(node => node.type === api.StretchCover);
+    assert.equal(cover.props.enabled, true);
+    assert.equal(navigationAppearance.value, 'dark');
+    assert.equal(cover.props.src, 'cloud://family-cover');
+    assert.equal(cover.props.active, true);
+    assert.equal(cover.props['at-top'], true);
+    api.onScroll({ scrollTop: 30 });
+    assert.equal(api.headerOpacity.value, 0.47);
+    assert.equal(navigationAppearance.value, 'light');
+    api.onScroll({ scrollTop: 64 });
+    assert.equal(api.headerOpacity.value, 1);
+    assert.equal(navigationAppearance.value, 'light');
+    api.onScroll({ scrollTop: 0 });
+    assert.equal(api.headerOpacity.value, 0);
+    assert.equal(navigationAppearance.value, 'dark');
+    assert.equal(nodes.some(node => node.props?.['aria-label'] === '查看我的家庭'), !personal);
+    assert.equal(nodes.some(node => node.props?.['aria-label'] === '编辑菜单外观'), false);
+    assert.equal(nodes.some(node => node.props?.['aria-label'] === '打开设置'), false);
+    assert.equal(nodes.find(node => node.props?.class === 'account-identity-label').children, personal ? '个人' : '家庭');
+    const familyName = nodes.find(node => node.props?.class === 'account-family-name');
+    assert.equal(familyName?.children, personal ? undefined : modules.state.value.family.name);
+    const symbol = nodes.find(node => node.props?.class?.includes('account-identity-symbol'));
+    assert.ok(symbol);
+    assert.equal(symbol.props.class.includes('is-family'), !personal);
+  }
+  assert.deepEqual(events, []);
+});
+
+test('family switch failures preserve mode and missing family routes to management', async context => {
+  let code = 'NETWORK';
+  const { api, modules, events, notices } = mount(context, 'FamilyView', { manageFamily: async () => { throw Object.assign(new Error('切换失败'), { code }); } });
+  modules.state.value.family.kind = 'personal';
+  const identity = () => familyNodes(api).find(node => node.props?.class === 'account-identity-label').children;
+  const pending = api.toggleMode();
+  assert.equal(identity(), '家庭');
+  assert.equal(familyNodes(api).some(node => node.props?.class === 'account-family-name'), false, 'personal workspace name must never appear as a household name');
+  assert.equal(familyNodes(api).find(node => node.type === api.StretchCover).props.enabled, true);
+  assert.equal(api.familyDisplay.value.cover, '', 'enabling family mode projects the default cover immediately even without a remembered family');
+  assert.equal(api.pageTitle.value, '');
+  await pending; assert.equal(api.modeError.value, '切换失败');
+  assert.equal(identity(), '个人', 'failed switch restores the previous identity badge');
+  assert.equal(modules.state.value.family.kind, 'personal'); assert.equal(api.modeBusy.value, false);
+  code = 'FAMILY_REQUIRED'; await api.toggleMode();
+  assert.deepEqual(events, [['manage']]); assert.equal(api.modeError.value, '');
+  assert.deepEqual(notices, ['开启家庭模式', '切换失败', '开启家庭模式', '请先创建或加入家庭'], 'failed optimistic switches replace the immediate notice with actionable feedback');
+});
+
+test('the whole profile projects the requested mode before cloud acknowledgement and rolls back together', async context => {
+  const family = { id: 'household', kind: 'family', name: '共同的小家', cover: 'cloud://family-cover', members: [{ id: 'me', name: '我' }, { id: 'other' }] };
+  const personal = { id: 'personal', kind: 'personal', name: '个人空间', cover: 'cloud://personal-cover', members: [family.members[0]] };
+  let finish; const calls = [];
+  const { api, modules } = mount(context, 'FamilyView', {
+    state: Vue.ref({ family: personal, activeMemberId: 'me' }),
+    familyModePreview: Vue.ref({ userId: 'me', id: family.id, name: family.name, cover: family.cover, memberCount: 2 }),
+    personalModePreview: Vue.ref({ userId: 'me', id: personal.id, name: personal.name, cover: personal.cover, memberCount: 1 }),
+    manageFamily: (...args) => { calls.push(args); return new Promise((resolve, reject) => { finish = { resolve, reject }; }); },
+  });
+  const pending = api.toggleMode();
+  const projected = familyNodes(api);
+  assert.equal(projected.find(node => node.type === api.StretchCover).props.enabled, true);
+  assert.equal(api.familyDisplay.value.cover, family.cover);
+  assert.equal(projected.find(node => node.props?.class === 'account-family-name').children, family.name);
+  const entry = projected.find(node => node.props?.['aria-label'] === '查看我的家庭');
+  assert.equal(Boolean(entry.props.disabled), false);
+  assert.equal(entry.props.class.includes('is-pending'), false);
+  entry.props.onClick({ stopPropagation() {} });
+  assert.equal(api.familyOpen.value, true, 'family entry opens before the mode request finishes');
+  assert.equal(projected.some(node => node.props?.['aria-label'] === '编辑菜单外观'), false);
+  assert.equal(modules.state.value.family.id, personal.id, 'visual preview never grants household identity');
+  await api.toggleMode(); assert.equal(calls.length, 1);
+  modules.state.value.family = family;
+  finish.resolve(); await pending;
+  assert.equal(api.familyDisplay.value.cover, family.cover);
+  assert.equal(Boolean(familyNodes(api).find(node => node.props?.['aria-label'] === '查看我的家庭').props.disabled), false);
+  assert.equal(api.familyOpen.value, true, 'mode acknowledgement keeps the opened family page visible');
+  const closing = api.toggleMode();
+  assert.equal(familyNodes(api).find(node => node.type === api.StretchCover).props.enabled, true);
+  assert.equal(api.familyDisplay.value.cover, personal.cover);
+  assert.equal(api.pageTitle.value, '');
+  assert.equal(familyNodes(api).some(node => node.props?.['aria-label'] === '编辑菜单外观'), false);
+  finish.reject(new Error('网络断开')); await closing;
+  assert.equal(familyNodes(api).find(node => node.type === api.StretchCover).props.enabled, true);
+  assert.equal(api.familyDisplay.value.cover, family.cover);
+  assert.match(api.modeError.value, /网络断开/);
+});
+
+test('a previous account appearance is ignored and confirmed space changes close nested editors', async context => {
+  const { api, modules } = mount(context, 'FamilyView', {
+    familyModePreview: Vue.ref({ userId: 'someone-else', name: '别人的家庭', cover: 'cloud://private' }),
+    personalModePreview: Vue.ref({ userId: 'someone-else', name: '别人的个人空间', cover: 'cloud://private-personal' }),
+  });
+  modules.state.value.family.kind = 'personal';
+  api.requestedFamilyMode.value = true;
+  assert.equal(api.displayedFamily.value, null);
+  assert.equal(familyNodes(api).some(node => node.props?.class === 'account-family-name'), false);
+  modules.state.value.family.kind = 'family';
+  api.requestedFamilyMode.value = false;
+  assert.equal(api.displayedPersonal.value, null);
+  assert.equal(api.familyDisplay.value.cover, '', 'foreign-account personal covers cannot flash during a pending mode change');
+  api.familyOpen.value = true; api.editingProfile.value = true;
+  api.onScroll({ scrollTop: 50 });
+  modules.state.value.family.id = 'another-space'; await Vue.nextTick();
+  assert.equal(api.familyOpen.value, false);
+  assert.equal(api.editingProfile.value, false);
+  assert.equal(api.headerOpacity.value, 0);
+  const page = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
+  assert.match(page, /<FamilyView[^>]*:key="cloudStatus.userId \|\| state.activeMemberId"/);
+});
+
+test('the family manager stays open for its own confirmed switch and returns from creation without losing the list', async context => {
+  const { api, modules } = mount(context, 'FamilyView');
+  let returned = 0;
+  let reloads = 0;
+  api.familyManagement.value = Vue.reactive({ creating: false, back() { returned += 1; this.creating = false; }, load() { reloads += 1; } });
+  api.familyOpen.value = true;
+  api.familyManaging.value = true;
+  api.closeFamily();
+  assert.equal(api.familyOpen.value, true, 'navigation cannot interrupt an in-flight household operation');
+  modules.state.value.family.id = 'switched-household';
+  await Vue.nextTick();
+  assert.equal(api.familyOpen.value, true);
+  api.familyChanged();
+  assert.equal(reloads, 1);
+  api.familyManaging.value = false;
+  api.familyManagement.value.creating = true;
+  api.closeFamily();
+  assert.equal(returned, 1);
+  assert.equal(api.familyOpen.value, true);
+  modules.cloudStatus.value.userId = 'another-account';
+  await Vue.nextTick();
+  assert.equal(api.familyOpen.value, false, 'the old account manager never survives an identity change');
+});
+
+for (const edited of ['name', 'cover']) {
+  test(`saving ${edited} preserves newer values of the other appearance fields`, async context => {
+    const family = { id: 'one', name: '原来的家', cover: 'cloud://old', coverTitle: '原来的标题', coverSubtitle: '保留副标题' };
+    const current = Vue.ref({ family }); const calls = [];
+    const { api, events } = mount(context, 'FamilyEditor', { state: current, customizeFamily: async payload => { calls.push(payload); } }, { initialTab: edited });
+    const updates = { name: '新的名称', cover: 'cloud://new', coverTitle: '新的标题' };
+    api[edited].value = updates[edited];
+    current.value.family = { ...family, name: '其他成员改的名字', cover: 'cloud://other', coverTitle: '其他成员改的标题' };
+    await api.save();
+    assert.deepEqual(calls, [{ name: current.value.family.name, cover: current.value.family.cover, coverTitle: current.value.family.coverTitle, [edited]: updates[edited] }]);
+    assert.equal(Object.hasOwn(calls[0], 'coverSubtitle'), false);
+    assert.deepEqual(events, [['close']]);
+  });
+}
+
+test('single-field edits validate names, preserve legacy title defaults and refuse writes after a space change', async context => {
+  const calls = []; const current = Vue.ref({ family: { id: 'one', name: '小家', cover: '', coverTitle: '原标题' } });
+  const name = mount(context, 'FamilyEditor', { state: current, customizeFamily: async p => calls.push(p) }, { initialTab: 'name' });
+  name.api.name.value = ' '; await name.api.save(); assert.ok(name.api.fieldErrors.value.name); assert.equal(calls.length, 0);
+  name.api.name.value = '正确名称'; current.value.family.id = 'two'; await name.api.save();
+  assert.match(name.api.error.value, /空间已变化/); assert.equal(calls.length, 0);
+  current.value.family.coverTitle = '';
+  const cover = mount(context, 'FamilyEditor', { state: current, customizeFamily: async p => calls.push(p) }, { initialTab: 'cover' });
+  cover.api.cover.value = 'cloud://new'; await cover.api.save();
+  assert.equal(calls[0].cover, 'cloud://new');
+  assert.equal(calls[0].coverTitle, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
+});
+
+test('unchanged legacy fields can be saved and default cover only changes its own draft', async context => {
+  const family = { id: 'one', name: '小家', cover: 'cloud://custom', coverTitle: '' }; const calls = [];
+  const { api, modules } = mount(context, 'FamilyEditor', { state: Vue.ref({ family }), customizeFamily: async p => calls.push(p) });
+  api.openEditor('name'); assert.equal(api.dirty.value, false); await api.save();
+  assert.equal(calls.length, 1); assert.equal(calls[0].coverTitle, familyHelpers.FAMILY_APPEARANCE_DEFAULTS.coverTitle);
+  assert.equal(api.section.value, '');
+  api.openEditor('cover'); api.restoreDefault();
+  assert.equal(api.cover.value, ''); assert.equal(api.name.value, family.name); assert.equal(modules.state.value.family.cover, family.cover);
+  await api.save(); assert.equal(calls[1].cover, ''); assert.equal(calls[1].name, family.name);
+  assert.equal(api.section.value, '');
+});
+
+for (const section of ['name', 'cover']) test(`unchanged family ${section} remains enabled and saves the latest other fields`, async context => {
+  const calls = [];
+  const current = Vue.ref({ family: { id: 'one', name: '小家', cover: 'cloud://original', coverTitle: '原标题' } });
+  const props = { initialTab: section };
+  const { api, events } = mount(context, 'FamilyEditor', { state: current, customizeFamily: async p => calls.push(p) }, props);
+  assert.equal(api.dirty.value, false);
+  const tree = renderTemplate('FamilyEditor', api, props);
+  const controls = tree.children.default().flatMap(renderedNodes);
+  const saveButton = controls.find(node => node.type === 'button' && node.props?.class?.includes('family-field-save'));
+  assert.equal(saveButton.props.disabled, false);
+  current.value.family[section === 'name' ? 'coverTitle' : 'name'] = '家人刚更新';
+  await saveButton.props.onClick({ stopPropagation() {} });
+  const { id, ...appearance } = current.value.family;
+  assert.deepEqual(calls, [appearance]);
+  assert.deepEqual(events, [['close']]);
+});
+
+test('field return asks about dirty drafts and returns to the overview without closing it', async context => {
+  const { api, modals, events } = mount(context, 'FamilyEditor');
+  api.openEditor('name'); api.name.value = '未保存';
+  const kept = api.close(); modals[0].success({ confirm: false }); await kept;
+  assert.equal(api.section.value, 'name'); assert.equal(api.name.value, '未保存');
+  const discarded = api.close(); modals[1].success({ confirm: true }); await discarded;
+  assert.equal(api.section.value, ''); assert.deepEqual(events, []);
+  api.openEditor('name'); assert.notEqual(api.name.value, '未保存');
+  await api.close(); await api.close(); assert.deepEqual(events, [['close']]);
+});
+
+test('upload and save lock field navigation and a double tap submits only once', async context => {
+  const calls = []; let finish;
+  const { api, events } = mount(context, 'FamilyEditor', { customizeFamily: p => { calls.push(p); return new Promise(resolve => { finish = resolve; }); } }, { initialTab: 'name' });
+  api.name.value = '新名称';
+  for (const key of ['busy', 'saving', 'managing', 'confirming']) {
+    api[key].value = true; await api.close(); await api.save(); api.restoreDefault(); api.openEditor('cover');
+    assert.equal(api.section.value, 'name'); assert.equal(api.name.value, '新名称');
+    assert.equal(calls.length, 0); assert.deepEqual(events, []); api[key].value = false;
+  }
+  const pending = api.save(); await api.save(); await api.close();
+  assert.equal(calls.length, 1); assert.deepEqual(events, []);
+  finish(); await pending; assert.deepEqual(events, [['close']]); assert.equal(api.locked.value, false);
+});
+
+test('an accepted cover edit returns immediately and recovers its draft when saving fails', async context => {
+  let reject;
+  const { api } = mount(context, 'FamilyEditor', {
+    customizeFamily: () => Object.assign(new Promise((resolve, fail) => { reject = fail; }), { accepted: true }),
+  });
+  api.openEditor('cover'); api.cover.value = 'cloud://chosen-cover';
+  const pending = api.save();
+  assert.equal(api.section.value, '');
+  assert.equal(api.saving.value, true);
+  api.openEditor('name');
+  assert.equal(api.section.value, '', 'a second appearance edit cannot race the first save');
+  reject(new Error('封面保存失败')); await pending;
+  assert.equal(api.section.value, 'cover');
+  assert.equal(api.cover.value, 'cloud://chosen-cover');
+  assert.equal(api.error.value, '封面保存失败');
+  assert.equal(api.dirty.value, true);
+});
+
+test('a save failure after leaving the cover editor is reported without reopening an unmounted page', async context => {
+  let reject;
+  const { api, events, notices, unmounted } = mount(context, 'FamilyEditor', {
+    customizeFamily: () => Object.assign(new Promise((resolve, fail) => { reject = fail; }), { accepted: true }),
+  }, { initialTab: 'cover' });
+  api.cover.value = 'cloud://chosen-cover';
+  const pending = api.save();
+  assert.deepEqual(events, [['close']]);
+  unmounted.forEach(callback => callback());
+  reject(new Error('封面未保存，请重试')); await pending;
+  assert.deepEqual(notices, ['封面未保存，请重试']);
+});
+
+test('management is an independent entry and reopening appearance never remembers that route', async context => {
+  const managed = mount(context, 'FamilyEditor', {}, { initialTab: 'management' });
+  assert.equal(managed.api.isManagement, true); assert.equal(managed.api.title.value, '我的家庭');
+  await managed.api.close(); assert.deepEqual(managed.events, [['close']]);
+  const overview = mount(context, 'FamilyEditor');
+  assert.equal(overview.api.section.value, ''); assert.equal(overview.api.isManagement, false);
+  const page = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
+  assert.match(page, /@customize="editFamily\(\$event\)"/);
+  assert.match(page, /@manage="editFamily\('management'\)"/);
+});
+
+test('privacy link navigates independently of consent and has a registered standalone page', context => {
+  const { api, events } = mount(context, 'PrivacyConsent');
+  const routes = [];
+  globalThis.uni.navigateTo = options => routes.push(options.url);
+  api.openAgreement();
+  assert.deepEqual(routes, ['/pages/privacy/index']);
+  assert.deepEqual(events, [], 'reading the agreement must not accept it');
+  const pages = JSON.parse(readFileSync(new URL('../src/pages.json', import.meta.url), 'utf8'));
+  assert.ok(pages.pages.some(page => page.path === 'pages/privacy/index'));
 });

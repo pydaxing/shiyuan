@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createSeed } from '../src/data/seed.js';
-import { aggregateItems, completeOrder, getShoppingRequirements, makeOrder, normalizeSnapshot, validateMealSet, validateSnapshot } from '../src/domain/kitchen.js';
+import { aggregateItems, completeOrder, getShoppingRequirements, makeOrder, normalizeSnapshot, mealSetFieldErrors, validateMealSet, validateSnapshot } from '../src/domain/kitchen.js';
 import { makeShare, parseShare } from '../src/domain/sharing.js';
 
 const seed = () => normalizeSnapshot(createSeed());
@@ -127,4 +127,16 @@ test('malformed and unsafe share contents never import', () => {
   const text = JSON.parse(makeShare(seed().recipes[0], seed().recipes, '我'));
   text.recipes[0].image = 'javascript:alert(1)';
   assert.throws(() => parseShare(JSON.stringify(text)), /图片/);
+});
+
+test('set editor requires a real cover and title while legacy sets remain readable', () => {
+  const recipes = seed().recipes;
+  const legacy = { title: '家常双拼', recipeIds: ['tomato', 'broccoli'] };
+  assert.doesNotThrow(() => validateMealSet(legacy, recipes));
+  for (const image of ['', undefined, '/static/meal-set-default.jpg']) {
+    assert.ok(mealSetFieldErrors({ ...legacy, image }, recipes, { requireCover: true }).image);
+  }
+  const complete = { ...legacy, image: 'cloud://test-env/chosen-cover.jpg' };
+  assert.deepEqual(mealSetFieldErrors(complete, recipes, { requireCover: true }), {});
+  assert.ok(mealSetFieldErrors({ ...complete, title: ' ' }, recipes, { requireCover: true }).title);
 });

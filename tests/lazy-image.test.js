@@ -8,7 +8,7 @@ import { imageVersion } from '../src/domain/image-variants.js';
 import { imageFrameStyle } from '../src/domain/image-crop.js';
 
 const script = readFileSync(new URL('../src/components/LazyImage.vue', import.meta.url), 'utf8').match(/<script setup>([\s\S]*?)<\/script>/)[1].replace(/^import .*;$/gm, '');
-function mount(src, cache, overrides = {}, sheetReady = null) {
+function mount(src, cache, overrides = {}, sheetReady = null, imageViewActive = null, afterRender = nextTick) {
   const scope = effectScope();
   let intersect;
   let mounted;
@@ -20,10 +20,10 @@ function mount(src, cache, overrides = {}, sheetReady = null) {
   const mediaRecovery = ref(0);
   const mediaScopeRevision = ref(0);
   const observer = { relativeToViewport() { return observer; }, observe(selector, callback) { intersect = callback; }, disconnect() { disconnects += 1; } };
-  const component = scope.run(() => runInNewContext(`${script}\n;({ image, retry, failed, retrying, imageError, imageLoaded, frameStyle, avatarFallbackVisible });`, {
+  const component = scope.run(() => runInNewContext(`${script}\n;({ image, retry, failed, retrying, imageError, imageLoaded, frameStyle, avatarFallbackVisible, coverLayers, displayedImage });`, {
     computed, ref, watch, nextTick, imageVersion, imageFrameStyle,
-    inject: () => sheetReady,
-    afterNativeRender: nextTick,
+    inject: key => key === 'sheetReady' ? sheetReady : key === 'imageViewActive' ? imageViewActive : null,
+    afterNativeRender: afterRender,
     defineProps: () => props,
     getCurrentInstance: () => ({ proxy: {} }),
     useSheetContentResize: enabled => () => { if (enabled()) resizeRequests += 1; },
@@ -38,8 +38,71 @@ function mount(src, cache, overrides = {}, sheetReady = null) {
     uni: { createIntersectionObserver: (owner, options) => { observerOptions = options; return observer; } },
   }));
   mounted();
-  return { ...component, props, resizes: () => resizeRequests, observerOptions: () => observerOptions, reconnect: () => { mediaRecovery.value += 1; }, resetScope: () => { mediaScopeRevision.value += 1; }, enter: () => intersect?.({ intersectionRatio: 1 }), leave: () => intersect?.({ intersectionRatio: 0 }), disconnects: () => disconnects, stop: () => { unmount(); scope.stop(); } };
+  return { ...component, props, resizes: () => resizeRequests, observerOptions: () => observerOptions, intersectionCallback: () => intersect, reconnect: () => { mediaRecovery.value += 1; }, resetScope: () => { mediaScopeRevision.value += 1; }, enter: () => intersect?.({ intersectionRatio: 1 }), leave: () => intersect?.({ intersectionRatio: 0 }), disconnects: () => disconnects, stop: () => { unmount(); scope.stop(); } };
 }
+
+test('hidden meal tabs observe only after native rendering and discard stale visibility callbacks on return', async () => {
+  const active = ref(false), requests = [], renders = [];
+  const cache = createMediaCache({ urls: ref({}), fetchImage: async key => { requests.push(key); return 'photo'; }, writeImage: async () => '/meal-photo', removeImage() {} });
+  const photo = mount('cloud://meal/photo.png', cache, {}, null, active, () => new Promise(resolve => renders.push(resolve)));
+  const settle = async () => { await nextTick(); await new Promise(resolve => setImmediate(resolve)); };
+  try {
+    assert.equal(photo.observerOptions(), undefined);
+    active.value = true;
+    assert.equal(photo.observerOptions(), undefined, 'v-show must reach the native layer before observation');
+    renders.shift()(); await settle();
+    const oldIntersection = photo.intersectionCallback();
+    active.value = false;
+    oldIntersection({ intersectionRatio: 1 }); await settle();
+    assert.deepEqual(requests, [], 'queued callbacks cannot fetch hidden thumbnails');
+    active.value = true;
+    oldIntersection({ intersectionRatio: 1 }); await settle();
+    assert.deepEqual(requests, [], 'previous observer remains invalid while native rendering is pending');
+    renders.shift()(); await settle();
+    photo.enter(); await settle();
+    assert.equal(photo.image.value, '/meal-photo');
+    assert.equal(requests.length, 1);
+    oldIntersection({ intersectionRatio: 0 }); await settle();
+    assert.equal(photo.image.value, '/meal-photo');
+  } finally { photo.stop(); }
+});
+
+test('leaving a meal tab during native layout prevents a late observer', async () => {
+  const active = ref(true), renders = [];
+  const cache = createMediaCache({ urls: ref({}), fetchImage: async () => 'photo', writeImage: async () => '/photo', removeImage() {} });
+  const photo = mount('photo', cache, {}, null, active, () => new Promise(resolve => renders.push(resolve)));
+  try {
+    active.value = false;
+    renders.shift()(); await nextTick(); await nextTick();
+    assert.equal(photo.observerOptions(), undefined);
+  } finally { photo.stop(); }
+});
+
+for (const variant of ['card', 'avatar']) test(`returning after ${variant} authorization expires renders the reauthorized cached file`, async () => {
+  let clock = 0, downloads = 0, authorizations = 0;
+  const source = 'cloud://meal/return.png';
+  const cache = createMediaCache({
+    urls: ref({}), now: () => clock,
+    fetchImage: async (key, knownVersion) => {
+      authorizations += 1;
+      return knownVersion ? { unchanged: true, version: key } : 'photo';
+    },
+    writeImage: async () => { downloads += 1; return '/cached-meal-photo'; },
+    removeImage() {},
+  });
+  await cache.load(imageVersion(source, variant));
+  clock = 300001;
+  const photo = mount(source, cache, { variant, avatar: variant === 'avatar', mode: 'aspectFill' }, null, ref(true));
+  try {
+    assert.equal(photo.image.value, '', 'expired authorization must be checked before displaying on a new page');
+    await nextTick(); await new Promise(resolve => setImmediate(resolve));
+    photo.enter();
+    await nextTick(); await new Promise(resolve => setImmediate(resolve)); await nextTick();
+    assert.equal(photo.image.value, '/cached-meal-photo', 'an unchanged file path still needs to invalidate the blank render');
+    assert.equal(downloads, 1, 'returning must reuse the existing thumbnail bytes');
+    assert.equal(authorizations, 2);
+  } finally { photo.stop(); }
+});
 
 test('image visibility requests the native observer instead of the compatibility slow path', () => {
   const cache = createMediaCache({ urls: ref({}), fetchImage: async () => 'photo', writeImage: async () => '/photo', removeImage() {} });
@@ -226,16 +289,21 @@ test('updated avatar sources load immediately and ignore delayed events from the
 });
 
 test('returning from a share or family scope refresh does not cover a cached avatar with anonymity', async () => {
-  const cache = createMediaCache({ urls: ref({}), fetchImage: async () => 'avatar', writeImage: async () => '/cached-avatar', removeImage() {} });
+  let fetches = 0;
+  const cache = createMediaCache({ urls: ref({}), fetchImage: async () => { fetches++; return 'avatar'; }, writeImage: async () => '/cached-avatar', removeImage() {} });
+  cache.activate('alice:family');
   const photo = mount('cloud://family/member.png', cache, { avatar: true, round: true, mode: 'aspectFill', variant: 'card' });
   try {
     await nextTick(); await new Promise(resolve => setImmediate(resolve)); await nextTick();
     photo.imageLoaded.value({ detail: { width: 128, height: 128 } });
     assert.equal(photo.avatarFallbackVisible.value, false);
+    cache.activate('alice:personal', { retain: [imageVersion(photo.props.src, 'card')] });
     photo.resetScope();
+    assert.equal(photo.image.value, '/cached-avatar', 'the image never goes blank between scope reset and the next render');
     await nextTick();
     assert.equal(photo.image.value, '/cached-avatar');
     assert.equal(photo.avatarFallbackVisible.value, false, 'an unchanged image source will not emit another native load event');
+    assert.equal(fetches, 1);
   } finally { photo.stop(); }
 });
 
@@ -413,5 +481,26 @@ test('source changes clear old geometry and ignore stale load events', async () 
     assert.equal(photo.resizes(), 1);
     for (const dimensions of [{ width: 0, height: 100 }, { width: 100, height: NaN }, { width: Infinity, height: 100 }]) photo.imageLoaded.value({ detail: dimensions });
     assert.deepEqual(photo.frameStyle.value, {});
+  } finally { photo.stop(); }
+});
+
+
+test('detail covers retain the decoded image until its replacement loads, and clear it on scope changes', async () => {
+  const urls = ref({});
+  const cache = { peek: () => urls.value.path || '', resolve: () => urls.value.path || '', load: async () => urls.value.path || '' };
+  urls.value.path = '/cached-card';
+  const photo = mount('cloud://cover', cache, { mode: 'aspectFill' });
+  try {
+    photo.imageLoaded.value({ detail: { width: 400, height: 300 } });
+    assert.deepEqual(Array.from(photo.coverLayers.value), ['/cached-card']);
+    urls.value.path = '/detail'; await nextTick();
+    assert.deepEqual(Array.from(photo.coverLayers.value), ['/cached-card', '/detail']);
+    assert.equal(photo.displayedImage.value, '/cached-card');
+    photo.imageLoaded.value({ detail: { width: 1200, height: 900 } });
+    assert.deepEqual(Array.from(photo.coverLayers.value), ['/detail']);
+    photo.resetScope();
+    assert.equal(photo.displayedImage.value, '', 'private cover cannot survive a scope reset');
+    photo.props.src = 'cloud://different';
+    assert.equal(photo.displayedImage.value, '');
   } finally { photo.stop(); }
 });

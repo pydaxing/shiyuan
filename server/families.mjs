@@ -4,20 +4,34 @@ import { FAMILY_AVATARS, familyAvatar, familyAppearance } from '../src/domain/fa
 import { readDocuments } from './repository-reads.mjs';
 import { reserveFamilyPublicId, retryFamilyPublicIdAllocation, newFamilyPublicId } from './family-public-id.mjs';
 import { createFamilyDeletion, familyDeletionStatus, familyDeletionTombstone } from './family-deletion.mjs';
+import { DEFAULT_PROFILE_VERSION, profileWithDefaults, defaultNicknameForUser, defaultAvatarIdForUser, defaultAvatarIdForPath, isDefaultAvatar, isDefaultAvatarId } from '../src/domain/default-profile.js';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = (message, code = 'INVALID') => { const error = new Error(message); error.code = code; throw error; };
 const text = (value, max, label) => { if (typeof value !== 'string' || !value.trim() || value.trim().length > max) fail(`${label}需要 1～${max} 个字`); return value.trim(); };
 export const userFamilyIds = user => [...new Set([...(user?.familyIds || []), user?.familyId].filter(Boolean))];
-export const userProfile = user => ({ name: user?.name || '', avatar: user?.avatar || '' });
-export const familyActions = ['createFamily', 'createFamilyWithAppearance', 'createFamilyWithSubtitle', 'joinFamily', 'prepareInvite', 'readInvite', 'listFamilies', 'switchFamily', 'leaveFamily', 'leaveFamilyWithCleanup', 'removeMember', 'deleteFamily', 'deleteFamilyWithCleanup', 'continueFamilyDeletion', 'updateProfile', 'setFamilyHead', 'transferFamilyOwner'];
+export const userProfile = (user, userId, defaultProfileVersion) => defaultProfileVersion === DEFAULT_PROFILE_VERSION
+  ? profileWithDefaults(user, userId)
+  : { name: user?.name || '', avatar: user?.avatar || '' };
+function matchesProfile(profile, user, userId) {
+  if (profile.defaultAvatarId && profile.defaultAvatarId !== defaultAvatarIdForUser(userId, user?.defaultAvatarId)) return false;
+  const current = userProfile(user);
+  if (profile.name === current.name && profile.avatar === current.avatar) return true;
+  const expected = profileWithDefaults(profile, userId), effective = profileWithDefaults(user, userId);
+  return expected.name === effective.name && expected.avatar === effective.avatar;
+}
+function defaultAvatarFields(userId, avatar, preferredId, requestedAvatar = '') {
+  if (preferredId !== undefined && preferredId !== '' && !isDefaultAvatarId(preferredId)) fail('请选择有效的默认头像');
+  return { defaultAvatarId: avatar ? '' : defaultAvatarIdForUser(userId, defaultAvatarIdForPath(requestedAvatar) || preferredId) };
+}
+export const familyActions = ['createFamily', 'createFamilyWithAppearance', 'createFamilyWithSubtitle', 'joinFamily', 'joinFamilyWithProfile', 'prepareInvite', 'readInvite', 'listFamilies', 'switchFamily', 'leaveFamily', 'leaveFamilyWithCleanup', 'removeMember', 'deleteFamily', 'deleteFamilyWithCleanup', 'continueFamilyDeletion', 'updateProfile', 'setFamilyHead', 'transferFamilyOwner'];
 
 export async function readFamilyInvitation(db, token, now) {
   if (!/^[a-f0-9]{48}$/.test(token || '')) fail('邀请链接无效', 'INVITE_INVALID');
   const invite = await db.get('invites', hash(token));
   if (!invite || invite.revoked || invite.expiresAt <= now()) fail('邀请已过期，请让家人重新发送', 'INVITE_EXPIRED');
   const family = await db.get('families', invite.familyId);
-  if (!family || family.deletedAt || family.ownerId !== invite.createdBy) fail('这个家庭的邀请已失效', 'INVITE_INVALID');
+  if (!family || family.deletedAt || family.kind === 'personal' || family.ownerId !== invite.createdBy) fail('这个家庭的邀请已失效', 'INVITE_INVALID');
   return { invite, family };
 }
 
@@ -28,7 +42,7 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
     const records = await readDocuments(repository, 'families', ids);
     return ids.map(id => records.get(id)).filter(family => family?.deletion?.requestedBy === userId && family.deletion.status === 'pending').map(familyDeletionStatus);
   }
-  async function finishDeletion(familyId, userId) {
+  async function finishDeletion(familyId, userId, defaultProfileVersion) {
     let deletion;
     try { deletion = await continueDeletion(familyId, userId); }
     catch (error) {
@@ -37,7 +51,7 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
       if (!deletion || deletion.status === 'complete') throw error;
       deletion = { ...deletion, retryRequired: true };
     }
-    return { ...await bootstrap(userId, { includeFeed: false }), deletion };
+    return { ...await bootstrap(userId, { includeFeed: false, defaultProfileVersion }), deletion };
   }
   async function revokeInvites(db, family) {
     for (const inviteId of [family.inviteId, family.friendInviteToken && hash(family.friendInviteToken)].filter(Boolean)) {
@@ -51,7 +65,7 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
     const records = batch ? await readDocuments(db, 'families', ids) : null;
     for (const familyId of ids) {
       const family = batch ? records.get(familyId) : await db.get('families', familyId);
-      if (family && !family.deletedAt && family.members.some(member => member.id === userId)) families.push(family);
+      if (family && !family.deletedAt && family.kind !== 'personal' && family.members.some(member => member.id === userId)) families.push(family);
     }
     return families;
   }
@@ -65,12 +79,19 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
   }
   async function validateAvatar(db, userId, avatar) {
     if (!avatar) return '';
+    // Only this immutable asset allowlist may stand for a default avatar. Do not
+    // accept arbitrary static paths, remote URLs or another user's cloud media.
+    if (isDefaultAvatar(avatar)) return '';
     if (typeof avatar !== 'string' || !avatar.startsWith('cloud://')) fail('请重新选择头像');
     const media = await db.get('media', hash(avatar));
     if (!media?.confirmed || media.userId !== userId || !media.profile) fail('头像不属于当前账号', 'FORBIDDEN');
     return avatar;
   }
   return async function handle(action, event, userId) {
+    if (action === 'joinFamilyWithProfile') {
+      if (event.expectedProfile === undefined) fail('请重新打开邀请后修改资料');
+      action = 'joinFamily';
+    }
     if (action === 'leaveFamilyWithCleanup') action = 'leaveFamily';
     if (action === 'deleteFamilyWithCleanup') action = 'deleteFamily';
     if (['createFamilyWithAppearance', 'createFamilyWithSubtitle'].includes(action)) {
@@ -80,9 +101,9 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
     if (action === 'listFamilies') {
       const user = await repository.get('users', userId);
       const families = await validFamilies(repository, userId, user, true);
-      return { profile: userProfile(user), families: families.map(family => ({ id: family.id, publicId: family.publicId || '', name: family.name, cover: family.cover || '', avatar: familyAvatar(family), memberCount: family.members.length, owner: family.ownerId === userId, current: family.id === user?.familyId })), pendingDeletions: await pendingDeletions(userId, user) };
+      return { profile: userProfile(user, userId, event.defaultProfileVersion), ...(event.defaultProfileVersion === DEFAULT_PROFILE_VERSION ? { defaultProfileVersion: DEFAULT_PROFILE_VERSION, profileBaseline: userProfile(user) } : {}), families: families.map(family => ({ id: family.id, publicId: family.publicId || '', name: family.name, cover: family.cover || '', avatar: familyAvatar(family), memberCount: family.members.length, owner: family.ownerId === userId, current: user?.activeMode !== 'personal' && family.id === user?.familyId })), pendingDeletions: await pendingDeletions(userId, user) };
     }
-    if (action === 'continueFamilyDeletion') return finishDeletion(event.familyId, userId);
+    if (action === 'continueFamilyDeletion') return finishDeletion(event.familyId, userId, event.defaultProfileVersion);
     if (action === 'readInvite') {
       await throttle(userId, 'readInvite', 30);
       const { family } = await readInvite(repository, event.token);
@@ -91,6 +112,7 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
     if (action === 'prepareInvite') {
       return repository.transaction(async db => {
         const { family } = await membership(db, userId);
+        if (family.kind === 'personal') fail('个人空间不能邀请成员', 'FORBIDDEN');
         if (family.ownerId !== userId) fail('只有管理员可以邀请家人', 'FORBIDDEN');
         if (event.familyId && family.id !== event.familyId) fail('当前家庭已变更，请重试', 'CONFLICT');
         if (family.friendInviteToken) {
@@ -117,9 +139,22 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
       }
       if (action === 'createFamily' || action === 'joinFamily') {
         const families = await validFamilies(db, userId, user);
-        if (action === 'createFamily' && !event.requestId && families.some(family => family.id === user?.familyId)) return;
-        const name = text(event.name || user?.name || '家人', 16, '昵称');
-        const avatar = await validateAvatar(db, userId, event.avatar ?? user?.avatar ?? '');
+        if (action === 'createFamily' && !event.requestId && families.some(family => family.id === user?.familyId)) {
+          await db.set('users', userId, { ...user, activeMode: 'family' });
+          return;
+        }
+        // Joining/creating a workspace is not a profile edit. Old clients may send
+        // stale profile fields; the existing account remains authoritative.
+        const explicitProfile = action === 'joinFamily' && event.expectedProfile !== undefined;
+        const name = text(explicitProfile ? event.name : (user?.name || event.name || defaultNicknameForUser(userId)), 16, '昵称');
+        const requestedAvatar = explicitProfile ? (event.avatar || '') : (user ? (user.avatar || '') : (event.avatar || ''));
+        const avatar = await validateAvatar(db, userId, requestedAvatar);
+        const defaults = defaultAvatarFields(userId, avatar, explicitProfile || !user ? event.defaultAvatarId : user.defaultAvatarId, requestedAvatar);
+        if (explicitProfile) {
+          const expected = event.expectedProfile;
+          if (!expected || typeof expected.name !== 'string' || typeof expected.avatar !== 'string') fail('资料版本无效，请重新打开');
+          if (!matchesProfile(expected, user, userId) && !matchesProfile({ name, avatar, ...defaults }, user, userId)) fail('个人资料已更新，请重新打开后保存', 'CONFLICT');
+        }
         let family;
         let invite;
         let inviteKey;
@@ -131,10 +166,10 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
             invite = await db.get('invites', inviteKey);
             if (!invite || invite.revoked || invite.expiresAt <= now()) fail('邀请码无效或已过期');
             family = await db.get('families', invite.familyId);
-            if (!family || family.deletedAt || family.ownerId !== invite.createdBy) fail('邀请码已失效');
+            if (!family || family.deletedAt || family.kind === 'personal' || family.ownerId !== invite.createdBy) fail('邀请码已失效');
           }
           if (family.members.some(member => member.id === userId)) {
-            await db.set('users', userId, { ...user, familyId: family.id, familyIds: [...new Set([...families.map(item => item.id), family.id])] });
+            await db.set('users', userId, { ...user, activeMode: 'family', familyId: family.id, familyIds: [...new Set([...families.map(item => item.id), family.id])] });
             return;
           }
           if (family.members.length >= 20 || invite.remaining <= 0) fail('家庭成员已满，请联系管理员');
@@ -151,7 +186,7 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
             if (receipt.kind === 'retired_family_request_v1') fail('请求已处理，请重新创建家庭', 'CONFLICT');
             const previousAppearance = familyAppearance(receipt);
             if (receipt.name !== event.familyName || (receipt.cover || '') !== cover || previousAppearance.coverTitle !== coverTitle || previousAppearance.coverSubtitle !== coverSubtitle || !families.some(item => item.id === receipt.familyId)) fail('请求已处理，请刷新后重试', 'CONFLICT');
-            await db.set('users', userId, { ...user, familyId: receipt.familyId });
+            await db.set('users', userId, { ...user, activeMode: 'family', familyId: receipt.familyId });
             return;
           }
           if (event.familyAvatar !== undefined && !FAMILY_AVATARS.includes(event.familyAvatar)) fail('请选择一个家庭头像');
@@ -166,25 +201,41 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
           if (receiptId) await db.set('requests', receiptId, { familyId: family.id, name: event.familyName, cover, coverTitle, coverSubtitle, createdAt: now() });
         }
         if (families.length >= 10) fail('最多加入或创建 10 个家庭');
-        family.members.push({ id: userId, membershipId: randomBytes(16).toString('hex'), name, avatar, isChef: false, role: family.ownerId === userId ? '家庭管理员' : '家庭成员' });
+        // Explicit invitation edits commit with membership; invalid invites never change profiles.
+        if (explicitProfile) {
+          const profileFamilies = [...families];
+          const personal = user?.personalSpaceId ? await db.get('families', user.personalSpaceId) : null;
+          if (personal?.kind === 'personal' && personal.ownerId === userId) profileFamilies.push(personal);
+          for (const previous of profileFamilies) await db.set('families', previous.id, { ...previous, members: previous.members.map(member => member.id === userId ? { ...member, name, avatar, ...defaults } : member), revision: previous.revision + 1 });
+        }
+        family.members.push({ id: userId, membershipId: randomBytes(16).toString('hex'), name, avatar, ...defaults, isChef: false, role: family.ownerId === userId ? '家庭管理员' : '家庭成员' });
         family.revision += 1;
         await db.set('families', family.id, family);
         if (invite) await db.set('invites', inviteKey, { ...invite, remaining: invite.remaining - 1 });
-        await db.set('users', userId, { ...user, familyId: family.id, familyIds: [...families.map(item => item.id), family.id], name, avatar, createdAt: user?.createdAt || now() });
+        await db.set('users', userId, { ...user, activeMode: 'family', familyId: family.id, familyIds: [...families.map(item => item.id), family.id], name, avatar, ...defaults, createdAt: user?.createdAt || now() });
         return;
       }
       if (action === 'updateProfile') {
         const name = text(event.name, 16, '昵称');
-        const avatar = await validateAvatar(db, userId, event.avatar ?? user?.avatar ?? '');
+        const requestedAvatar = event.avatar ?? user?.avatar ?? '';
+        const avatar = await validateAvatar(db, userId, requestedAvatar);
+        const defaults = defaultAvatarFields(userId, avatar, event.defaultAvatarId ?? user?.defaultAvatarId, requestedAvatar);
+        if (event.expectedProfile !== undefined) {
+          const expected = event.expectedProfile;
+          if (!expected || typeof expected.name !== 'string' || typeof expected.avatar !== 'string') fail('资料版本无效，请重新打开');
+          if (!matchesProfile(expected, user, userId) && !matchesProfile({ name, avatar, ...defaults }, user, userId)) fail('个人资料已更新，请重新打开后保存', 'CONFLICT');
+        }
         const families = await validFamilies(db, userId, user);
-        for (const family of families) await db.set('families', family.id, { ...family, members: family.members.map(member => member.id === userId ? { ...member, name, avatar } : member), revision: family.revision + 1 });
-        await db.set('users', userId, { ...user, name, avatar, familyIds: families.map(item => item.id), createdAt: user?.createdAt || now() });
+        const personal = user?.personalSpaceId ? await db.get('families', user.personalSpaceId) : null;
+        if (personal?.kind === 'personal' && personal.ownerId === userId) families.push(personal);
+        for (const family of families) await db.set('families', family.id, { ...family, members: family.members.map(member => member.id === userId ? { ...member, name, avatar, ...defaults } : member), revision: family.revision + 1 });
+        await db.set('users', userId, { ...user, name, avatar, ...defaults, familyIds: families.filter(item => item.kind !== 'personal').map(item => item.id), createdAt: user?.createdAt || now() });
         return;
       }
       if (action === 'switchFamily') {
         const target = await db.get('families', event.familyId);
-        if (!target || target.deletedAt || !target.members.some(member => member.id === userId)) fail('你不是这个家庭的成员', 'FORBIDDEN');
-        await db.set('users', userId, { ...user, familyId: target.id, familyIds: [...new Set([...userFamilyIds(user), target.id])] });
+        if (!target || target.kind === 'personal' || target.deletedAt || !target.members.some(member => member.id === userId)) fail('你不是这个家庭的成员', 'FORBIDDEN');
+        await db.set('users', userId, { ...user, activeMode: 'family', familyId: target.id, familyIds: [...new Set([...userFamilyIds(user), target.id])] });
         return;
       }
       let { family } = await membership(db, userId);
@@ -197,6 +248,7 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
           if (!family || family.deletedAt || !family.members.some(member => member.id === userId)) fail('你已不在这个家庭中', 'FORBIDDEN');
         }
       } else if (event.familyId && family.id !== event.familyId) fail('当前家庭已变更，请重试', 'CONFLICT');
+      if (family.kind === 'personal') fail('个人空间不支持家庭管理操作', 'FORBIDDEN');
       if (action === 'setFamilyHead') {
         if (family.ownerId !== userId) fail('只有管理员可以设置一家之主', 'FORBIDDEN');
         if (typeof event.memberId !== 'string' || (event.memberId && !family.members.some(member => member.id === event.memberId))) fail('请选择家庭中的成员');
@@ -241,7 +293,7 @@ export function createFamilyService({ repository, membership, bootstrap, throttl
       await db.set('families', family.id, { ...family, headMemberId: family.headMemberId === memberId ? '' : family.headMemberId || '', friendInviteToken: '', inviteId: '', members: family.members.filter(item => item.id !== memberId), revision: family.revision + 1 });
     });
     const result = action === 'createFamily' ? await retryFamilyPublicIdAllocation(repository, transact) : await transact();
-    if (result?.deletionFamilyId) return finishDeletion(result.deletionFamilyId, userId);
-    return bootstrap(userId, { includeFeed: false });
+    if (result?.deletionFamilyId) return finishDeletion(result.deletionFamilyId, userId, event.defaultProfileVersion);
+    return bootstrap(userId, { includeFeed: false, defaultProfileVersion: event.defaultProfileVersion });
   };
 }

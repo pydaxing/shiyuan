@@ -20,21 +20,22 @@ function nodes(node) {
 function draw({ editable = true, removable = false, minutes = 25, busy = false } = {}) {
   const events = [];
   const recipe = { id: 'dish-1', title: '很长的菜品标题', category: '荤菜', minutes };
-  const displayedRows = mealVoterRows([{ recipe, groups: [], chosenBy: [{ id: 'me' }, { id: 'partner' }] }]).map(item => ({ ...item, minutesLabel: foodMinutesLabel(item.recipe.minutes) }));
+  const displayedRows = mealVoterRows([{ recipe, groups: [], chosenBy: [{ id: 'me' }, { id: 'partner' }] }]).map(item => ({ ...item, originLabel: '自建', minutesLabel: foodMinutesLabel(item.recipe.minutes) }));
   const rendered = render({ displayedRows, editable, removable, busy, $emit: (...event) => events.push(event) }, []);
   return { recipe, events, nodes: nodes(rendered) };
 }
 
-test('kitchen metadata shows category, optional clock duration and voter count without changing checkout', () => {
+test('kitchen metadata shows category, source and optional clock duration consistently in checkout', () => {
   const row = draw();
   const texts = row.nodes.filter(node => node.type === 'text').map(node => node.children);
-  assert.deepEqual(texts, ['很长的菜品标题', '荤菜', '25 分钟', '2 人想吃']);
+  assert.deepEqual(texts, ['很长的菜品标题', '荤菜', '自建', '25 分钟']);
   assert.match(row.nodes.find(node => node.type === 'text' && node.children === '荤菜').props.class, /\bhome-menu-item-category\b/);
   assert.ok(row.nodes.some(node => node.type === 'AppIcon' && node.props.name === 'clock'));
   for (const minutes of [null, 0, '', 'unknown']) assert.ok(!draw({ minutes }).nodes.some(node => node.type === 'AppIcon' && node.props.name === 'clock'));
   assert.equal(foodMinutesLabel(undefined), '');
   const checkout = draw({ removable: true });
-  assert.ok(!checkout.nodes.some(node => node.props?.class === 'meal-dish-meta'));
+  assert.ok(checkout.nodes.some(node => node.props?.class === 'meal-dish-meta'));
+  assert.deepEqual(checkout.nodes.filter(node => node.type === 'text').map(node => node.children), texts);
   assert.equal(checkout.nodes.filter(node => node.type === 'button').length, 2);
 });
 

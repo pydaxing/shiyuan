@@ -1,5 +1,7 @@
+import { createIdentityPresentation, canReadCurrentIdentityImage } from './identity-presentation.mjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { createKitchenActions, actionNames } from '../src/domain/actions.js';
+import { canonicalRecipeId } from '../src/domain/recipe-identity.js';
 import { emptySnapshot } from '../src/domain/empty.js';
 import { clone, normalizeSnapshot, validateReservation } from '../src/domain/kitchen.js';
 import { normalizeCommand, validateEnvelope } from './validation.mjs';
@@ -17,11 +19,15 @@ import { createImageManifestReader } from './image-manifests.mjs';
 import { restoreIngredientCommand, legacyIngredientAmounts } from '../src/domain/ingredient-units.js';
 import { readCommunityFeedPage } from './community-feed.mjs';
 import { FAMILY_PUBLIC_IDS } from './family-public-id.mjs';
+import { activeSpaceId, workspaceMembership, switchWorkspace } from './workspaces.mjs';
+import { MEAL_POST_COLLECTIONS, mealPostActions, createMealPostService, canReadMealImage } from './meal-posts.mjs';
+import { DEFAULT_PROFILE_VERSION } from '../src/domain/default-profile.js';
+import { createMealAutoArchive, captureOrderDiaryParticipants } from './meal-auto-archive.mjs';
 
 const familyLists = { recipes: 'recipes', mealSets: 'meal_sets', orders: 'orders', inventory: 'inventory', purchases: 'purchases' };
 const commandLists = {
   setChef: [], setFeature: [], setPreferences: [], customizeFamily: [],
-  saveRecipe: ['recipes'], saveMealSet: ['recipes', 'mealSets'],
+  saveRecipe: ['recipes', 'mealSets'], saveMealSet: ['recipes', 'mealSets'],
   addOrderDishes: ['recipes', 'mealSets', 'orders'],
   removeOrderDish: ['orders', 'purchases'],
   setDishPrepared: ['orders'], saveDishPreparation: ['orders'], updateOrder: ['orders', 'purchases'], removeOrder: ['orders', 'purchases'],
@@ -31,7 +37,7 @@ const commandLists = {
   publishToCommunity: ['recipes', 'mealSets'],
   addComment: [], toggleCommentLike: [], deleteCommunityPost: [],
 };
-export const collections = ['users', 'families', FAMILY_PUBLIC_IDS, ...Object.values(familyLists), 'posts', 'comments', 'invites', 'shares', 'requests', 'media', 'imports', 'reports', 'rate_limits'];
+export const collections = ['users', 'families', ...MEAL_POST_COLLECTIONS, FAMILY_PUBLIC_IDS, ...Object.values(familyLists), 'posts', 'comments', 'invites', 'shares', 'requests', 'media', 'imports', 'reports', 'rate_limits'];
 const hash = value => createHash('sha256').update(value).digest('hex');
 const identifier = prefix => `${prefix}-${Date.now()}-${randomBytes(12).toString('hex')}`;
 const documentId = (familyId, itemId) => hash(`${familyId}:${itemId}`);
@@ -88,18 +94,10 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
     const allowed = new Set(authorizations.filter(post => post?.status === 'published').flatMap(post => post.assetIds || []));
     return loadImageManifests(candidates, (record, image) => allowed.has(image.fileId));
   }
-  async function membership(db, userId, knownUser) {
-    const user = knownUser || await db.get('users', userId);
-    if (!user?.familyId) fail('请先创建或加入家庭', 'NO_FAMILY');
-    const family = await db.get('families', user.familyId);
-    if (family?.deletedAt || !family?.members.some(member => member.id === userId)) fail('你已不在这个家庭中', 'NO_FAMILY');
-    return { user, family };
-  }
+  const membership = workspaceMembership;
   async function optionalFamily(userId) {
-    const user = await repository.get('users', userId);
-    if (!user?.familyId) return undefined;
-    const family = await repository.get('families', user.familyId);
-    return !family?.deletedAt && family?.members.some(member => member.id === userId) ? family : undefined;
+    try { return (await membership(repository, userId)).family; }
+    catch (error) { if (['NO_FAMILY', 'FORBIDDEN'].includes(error.code)) return undefined; throw error; }
   }
   async function familyState(db, family, userId, parallel = false, fields = Object.keys(familyLists)) {
     const snapshot = { ...emptySnapshot(), family: clone(family), activeMemberId: userId };
@@ -125,18 +123,18 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
   }
   async function bootstrap(userId, known = {}) {
     const user = await repository.get('users', userId);
+    const profile = userProfile(user, userId, known.defaultProfileVersion);
+    const profileCompatibility = known.defaultProfileVersion === DEFAULT_PROFILE_VERSION ? { defaultProfileVersion: DEFAULT_PROFILE_VERSION, profileBaseline: userProfile(user) } : {};
     const deletionIds = [...new Set(user?.pendingFamilyDeletions || [])];
     const deletionRecords = deletionIds.length ? await readDocuments(repository, 'families', deletionIds) : new Map();
     const pendingDeletions = deletionIds.map(id => deletionRecords.get(id)).filter(family => family?.deletion?.requestedBy === userId && family.deletion.status === 'pending').map(familyDeletionStatus);
-    if (!user?.familyId) {
-      const profile = userProfile(user);
-      return { needsFamily: true, userId, profile, pendingDeletions, ...(known.includeImageManifests === true ? { imageManifests: await familyImageManifests(userId, undefined, profile) } : {}) };
+    if (!activeSpaceId(user)) {
+      return { mealSharingVersion: 2, needsFamily: true, userId, profile, ...profileCompatibility, pendingDeletions, ...(known.includeImageManifests === true ? { imageManifests: await familyImageManifests(userId, undefined, profile) } : {}) };
     }
     for (let attempt = 0; attempt < 3; attempt += 1) {
       const { family } = await membership(repository, userId, attempt === 0 ? user : undefined);
       if (!known.includeSharedItems && known.knownFamilyId === family.id && Number.isSafeInteger(known.knownRevision) && known.knownRevision === family.revision) {
-        const profile = userProfile(user);
-        return { unchanged: true, revision: family.revision, userId, familyId: family.id, profile, pendingDeletions, ...(known.includeImageManifests === true ? { imageManifests: await familyImageManifests(userId, family, profile) } : {}) };
+        return { mealSharingVersion: 2, unchanged: true, revision: family.revision, userId, familyId: family.id, profile, ...profileCompatibility, pendingDeletions, ...(known.includeImageManifests === true ? { imageManifests: await familyImageManifests(userId, family, profile) } : {}) };
       }
       const [snapshot, posts, sharedItems] = await Promise.all([
         familyState(repository, family, userId, true),
@@ -144,24 +142,38 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
         all(repository, 'posts', { familyId: family.id, status: 'published' }, { fields: ['id', 'familyItemId', 'familyKind', 'kind'] }),
       ]);
       const [currentUser, current] = await Promise.all([repository.get('users', userId), repository.get('families', family.id)]);
-      if (!currentUser?.familyId) fail('请先创建或加入家庭', 'NO_FAMILY');
-      if (currentUser.familyId !== family.id) continue;
+      if (!activeSpaceId(currentUser)) fail('请先创建或加入家庭', 'NO_FAMILY');
+      if (activeSpaceId(currentUser) !== family.id) continue;
       if (current?.deletedAt || !current?.members.some(member => member.id === userId)) fail('你已不在这个家庭中', 'NO_FAMILY');
       if (current.revision !== family.revision) continue;
-      snapshot.posts = posts.map(publicPost);
+      const identity = createIdentityPresentation(repository);
+      snapshot.posts = await Promise.all(posts.map(post => identity.community(publicPost(post))));
       snapshot.sharedItems = sharedItems.filter(post => post.familyItemId).map(post => ({ kind: post.familyKind || (post.kind === 'menu' ? 'set' : 'dish'), itemId: post.familyItemId, postId: post.id || post._id }));
-      const profile = userProfile(user);
-      return { snapshot, revision: family.revision, userId, familyId: family.id, profile, pendingDeletions, media: await sign(snapshot), ...(known.includeImageManifests === true ? { imageManifests: await familyImageManifests(userId, family, profile, snapshot) } : {}) };
+      return { mealSharingVersion: 2, snapshot, revision: family.revision, userId, familyId: family.id, profile, ...profileCompatibility, pendingDeletions, media: await sign(snapshot), ...(known.includeImageManifests === true ? { imageManifests: await familyImageManifests(userId, family, profile, snapshot) } : {}) };
     }
     fail('家人正在更新数据，请稍后刷新', 'SYNC_BUSY');
   }
-  function publicPost(post) { const { _id, assetIds, card, ...safe } = post; return { ...safe, author: communityPublisherName(post) }; }
+  function publicPost(post) { const { _id, assetIds, card, ...safe } = post; return { ...safe, sourceKind: 'community', author: communityPublisherName(post) }; }
   function postCard(post) {
-    return { id: post.id, title: post.title, kind: post.kind, image: post.image, author: communityPublisherName(post), categories: post.categories, familyId: post.familyId, familyItemId: post.familyItemId, familyKind: post.familyKind, publisherId: post.publisherId, publisherType: post.publisherType || 'user', ...(post.familySnapshot ? { familySnapshot: post.familySnapshot } : {}), importedFamilyCount: post.importedFamilyCount || 0, tall: Boolean(post.tall), recipes: post.recipes.map(recipe => ({ id: recipe.id, title: recipe.title, category: recipe.category, image: recipe.image, minutes: recipe.minutes })) };
+    return { id: post.id, title: post.title, kind: post.kind, sourceKind: 'community', image: post.image, author: communityPublisherName(post), categories: post.categories, familyId: post.familyId, familyItemId: post.familyItemId, familyKind: post.familyKind, publisherId: post.publisherId, publisherType: post.publisherType || 'user', ...(post.familySnapshot ? { familySnapshot: post.familySnapshot } : {}), importedFamilyCount: post.importedFamilyCount || 0, tall: Boolean(post.tall), recipes: post.recipes.map(recipe => ({ id: recipe.id, ...(recipe.identityVersion === 2 ? { identityVersion: 2, canonicalRecipeId: canonicalRecipeId(recipe), recipeOrigin: 'community' } : {}), title: recipe.title, category: recipe.category, image: recipe.image, minutes: recipe.minutes })) };
+  }
+  async function recipeIdentityPosts(db, familyId, recipe) {
+    if (!recipe || recipe.identityVersion === 2) return [];
+    const found = new Map();
+    const remember = post => { if (post && ['published', 'deleted'].includes(post.status)) found.set(post.id || post._id, publicPost(post)); };
+    if (recipe.sourcePostId && !recipe.sourcePostId.startsWith('friend-')) remember(await db.get('posts', recipe.sourcePostId));
+    const queries = [{ familyId, familyItemId: recipe.id }];
+    for (const id of new Set([recipe.id, canonicalRecipeId(recipe)].filter(Boolean))) queries.push({ familyId, 'recipes.id': id });
+    if (!recipe.sourcePostId && recipe.sourceFamilyId && recipe.sourceId) queries.push({ familyId: recipe.sourceFamilyId, 'recipes.id': recipe.sourceId });
+    for (const where of queries) for (const status of ['published', 'deleted']) {
+      for (const post of await all(db, 'posts', { ...where, status })) remember(post);
+    }
+    return [...found.values()];
   }
   async function commentPage(postId, cursor = '') {
     const rows = await repository.list('comments', { postId }, { after: cursor, limit: 21 });
-    return { comments: rows.slice(0, 20).map(({ _id, ...item }) => item), commentCursor: rows.length > 20 ? rows[19]._id : '' };
+    const identity = createIdentityPresentation(repository);
+    return { comments: await Promise.all(rows.slice(0, 20).map(({ _id, ...item }) => identity.comment(item))), commentCursor: rows.length > 20 ? rows[19]._id : '' };
   }
   async function persist(db, before, after, fields) {
     for (const field of fields) {
@@ -184,8 +196,9 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
   async function allowedImages(db, args, snapshot) {
     const existing = new Set(imageReferences({ family: snapshot.family, recipes: snapshot.recipes, mealSets: snapshot.mealSets, inventory: snapshot.inventory }));
     for (const fileId of imageReferences(args)) {
-      if (existing.has(fileId)) continue;
       const media = await db.get('media', hash(fileId));
+      if (media?.mealPhoto) fail('餐食记录照片不能用于家庭菜谱，请重新选择图片', 'FORBIDDEN');
+      if (existing.has(fileId)) continue;
       if (!media?.confirmed) fail('图片不属于当前家庭，请重新上传', 'FORBIDDEN');
       if (media.familyId !== snapshot.family.id) {
         let referenced = false;
@@ -213,7 +226,6 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
     const name = event.name === 'customizeFamilyWithSubtitle' ? 'customizeFamily' : event.name;
     if (!actionNames.includes(name) || ['switchMember', 'renameFamily'].includes(name)) fail('不支持的操作');
     if (!Array.isArray(event.args) || event.args.length > (['setDishPrepared', 'saveDishPreparation', 'saveShoppingDraft'].includes(name) ? 4 : 3) || !/^[\w-]{12,100}$/.test(requestId || '')) fail('请求格式无效');
-    const cleanArgs = normalizeCommand(name, event.args, todayInChina(now()));
     const requestKey = hash(`${userId}:${requestId}`);
     const fingerprint = hash(JSON.stringify({ name: event.name, args: event.args }));
     const committed = await repository.transaction(async db => {
@@ -225,6 +237,9 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
         const commentChanges = event.commentMode === 'patch' && receipt.commentIds ? (await Promise.all(receipt.commentIds.map(id => db.get('comments', id)))).filter(Boolean).map(({ _id, ...item }) => item) : undefined;
         return { value: receipt.value, replay: true, ...(commentChanges ? { commentChanges } : {}) };
       }
+      // A saved legacy request must still replay after validation rules become
+      // stricter (for example, mandatory covers). Validate only new writes.
+      const cleanArgs = normalizeCommand(name, event.args, todayInChina(now()));
       await throttleWithin(db, userId, 'command', 60);
       const social = ['addComment', 'toggleCommentLike', 'deleteCommunityPost'].includes(name);
       if (!social && !['submitOrder', 'addOrderDishes'].includes(name) && revision !== family.revision) fail('家人更新了数据，已刷新，请确认后重试', 'CONFLICT');
@@ -232,6 +247,9 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
       let snapshot = await familyState(db, family, userId, false, fields);
       const before = clone(snapshot);
       const args = clone(cleanArgs);
+      // Portions are no longer editable. Retain the stored legacy value so an
+      // unchanged three-person recipe is not turned into a two-person fork.
+      if (name === 'saveRecipe' && args[1]) args[0].servings = snapshot.recipes.find(recipe => recipe.id === args[1])?.servings || 2;
       let post;
       if (name === 'addCollection') {
         post = await db.get('posts', args[0]?.id);
@@ -267,11 +285,19 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
         const existing = await all(db, 'posts', { familyId: family.id, familyItemId: args[0], status: 'published' }, { fields: ['id', 'familyKind', 'kind'] });
         if (existing.some(post => (post.familyKind || (post.kind === 'menu' ? 'set' : 'dish')) === (args[1] || 'dish'))) fail('这道菜品或套餐已分享，请勿重复发布', 'ALREADY_SHARED');
       }
+      if (name === 'saveRecipe' || name === 'publishToCommunity' && args[1] !== 'set') {
+        const recipeId = name === 'saveRecipe' ? args[1] : args[0];
+        snapshot.posts = await recipeIdentityPosts(db, family.id, snapshot.recipes.find(recipe => recipe.id === recipeId));
+      }
       const previousComments = clone(snapshot.comments);
       const actions = createKitchenActions({ getState: () => snapshot, commit: next => { snapshot = next; }, newId: identifier, today: () => todayInChina(now()), now });
       let output;
       try { output = actions[name](...args) ?? null; }
       catch (error) { fail(error.message, ['CONFLICT', 'ALREADY_SHARED'].includes(error.code) ? error.code : 'INVALID'); }
+      if (name === 'submitOrder') {
+        const previousIds = new Set(before.orders.map(order => order.id));
+        snapshot.orders = snapshot.orders.map(order => previousIds.has(order.id) ? order : captureOrderDiaryParticipants(order, family, now()));
+      }
       if (name === 'publishToCommunity') {
         const shared = snapshot.posts.find(item => item.id === output);
         const previousPost = await db.get('posts', shared.id);
@@ -304,34 +330,41 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
         remove: name === 'deleteCommunityPost' ? [post.id] : [],
       } };
     });
+    // Project names only after persistence: account changes must not rewrite comment history.
+    const identity = createIdentityPresentation(repository);
+    if (committed.commentChanges) committed.commentChanges = await Promise.all(committed.commentChanges.map(identity.comment));
+    if (committed.changes?.comments) committed.changes.comments = await Promise.all(committed.changes.comments.map(identity.comment));
+    if (committed.postChanges?.upsert) committed.postChanges.upsert = await Promise.all(committed.postChanges.upsert.map(identity.community));
     const { value } = committed;
     if (event.responseMode === 'changes' && !committed.replay && committed.baseRevision === revision && name !== 'publishToCommunity') {
       return { ...committed, media: await sign({ changes: committed.changes, posts: committed.postChanges.upsert }) };
     }
-    const result = await bootstrap(userId, { includeFeed: event.includeFeed });
+    const result = await bootstrap(userId, { includeFeed: event.includeFeed, defaultProfileVersion: event.defaultProfileVersion });
     if (['addComment', 'toggleCommentLike'].includes(name)) {
       const postId = name === 'addComment' ? event.args[0] : (await repository.get('comments', event.args[0]))?.postId;
       if (event.commentMode === 'patch') result.commentChanges = committed.commentChanges || (await commentPage(postId)).comments;
-      else result.snapshot.comments = (await all(repository, 'comments', { postId })).map(({ _id, ...item }) => item);
+      else result.snapshot.comments = await Promise.all((await all(repository, 'comments', { postId })).map(({ _id, ...item }) => identity.comment(item)));
     }
     return { ...result, value };
   }
+  const mealArchive = createMealAutoArchive({ repository, now });
+  const mealPosts = createMealPostService({ repository, now, throttle, archiveForUser: mealArchive.archiveForUser });
   const families = createFamilyService({ repository, membership, bootstrap, throttle, now, cleanupMedia });
   const friendShares = createFriendShares({ repository, membership, familyState, imageReferences, persist, bootstrap, now, throttle });
-  async function createUploadTicket(openid, userId, familyId, profile = false, familyDraftRequest = '') {
+  async function createUploadTicket(openid, userId, familyId, profile = false, familyDraftRequest = '', mealPhoto = false) {
     await throttle(userId, profile ? 'profileUpload' : 'media', profile ? 10 : 40);
     const id = identifier('upload');
     const path = `private/${openid}/${id}.jpg`;
     const previewPath = `private/${openid}/${id}-preview.jpg`;
     const expiresAt = now() + 3600000;
-    const save = db => db.set('media', id, { familyId, userId, path, previewPath, profile, ...(familyDraftRequest ? { familyDraftRequest } : {}), expiresAt, ...(!profile && !familyDraftRequest ? { uploadInFlightUntil: expiresAt } : {}) });
+    const save = db => db.set('media', id, { familyId, userId, path, previewPath, profile, ...(mealPhoto ? { mealPhoto: true } : {}), ...(familyDraftRequest ? { familyDraftRequest } : {}), expiresAt, ...(!profile && !familyDraftRequest ? { uploadInFlightUntil: expiresAt } : {}) });
     if (profile || familyDraftRequest) await save(repository);
     else await mediaOperations.write(userId, familyId, save);
     return { id, path, previewPath };
   }
-  async function confirmUpload(event, userId, familyId, profile = false, familyDraftRequest = '') {
+  async function confirmUpload(event, userId, familyId, profile = false, familyDraftRequest = '', mealPhoto = false) {
     const ticket = await repository.get('media', event.ticket);
-    if (!ticket || ticket.userId !== userId || ticket.familyId !== familyId || Boolean(ticket.profile) !== profile || (ticket.familyDraftRequest || '') !== familyDraftRequest || ticket.expiresAt <= now()) fail('上传授权已过期，请重新选择图片', 'FORBIDDEN');
+    if (!ticket || ticket.userId !== userId || ticket.familyId !== familyId || Boolean(ticket.profile) !== profile || Boolean(ticket.mealPhoto) !== mealPhoto || (ticket.familyDraftRequest || '') !== familyDraftRequest || ticket.expiresAt <= now()) fail('上传授权已过期，请重新选择图片', 'FORBIDDEN');
     if (typeof event.fileId !== 'string' || !event.fileId.startsWith('cloud://') || !event.fileId.endsWith(`/${ticket.path}`)) fail('图片路径不匹配', 'FORBIDDEN');
     if (event.previewFileId !== undefined && (typeof event.previewFileId !== 'string' || !event.previewFileId.startsWith('cloud://') || !ticket.previewPath || !event.previewFileId.endsWith(`/${ticket.previewPath}`))) fail('预览图片路径不匹配', 'FORBIDDEN');
     if (ticket.result) {
@@ -342,7 +375,7 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
     const save = async (db, stored) => {
       const fileId = typeof stored === 'string' ? stored : stored.fileId;
       result = { fileId, ...(stored.encryptionKey ? { protected: true } : {}) };
-      await db.set('media', hash(fileId), { familyId, userId, fileId, confirmed: true, createdAt: now(), ...(profile ? { profile: true } : {}), ...(familyDraftRequest ? { familyDraftRequest } : {}), ...(stored.encryptionKey ? { encryptionKey: stored.encryptionKey } : {}), ...(stored.variants ? { variants: stored.variants } : {}), ...(stored.contentType ? { contentType: stored.contentType, bytes: stored.bytes } : {}) });
+      await db.set('media', hash(fileId), { familyId, userId, fileId, confirmed: true, createdAt: now(), ...(mealPhoto ? { mealPhoto: true } : {}), ...(profile ? { profile: true } : {}), ...(familyDraftRequest ? { familyDraftRequest } : {}), ...(stored.encryptionKey ? { encryptionKey: stored.encryptionKey } : {}), ...(stored.variants ? { variants: stored.variants } : {}), ...(stored.contentType ? { contentType: stored.contentType, bytes: stored.bytes } : {}) });
       await db.set('media', event.ticket, { ...ticket, sourceFileId: event.fileId, result, uploadInFlightUntil: 0 });
     };
     const produce = storageTracker => storeImage(event.fileId, { ...ticket, storageTracker }, event.previewFileId);
@@ -376,17 +409,19 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
       if (mediaResult?.error) throw mediaResult.error;
       const media = mediaResult?.value;
       if (!media?.confirmed) fail('无权查看图片', 'FORBIDDEN');
+      const mealPhotoAllowed = media.mealPhoto && (media.mealPostId ? await canReadMealImage(repository, fileId, userId, media) : media.userId === userId);
+      if (media.mealPhoto && !mealPhotoAllowed) fail('无权查看这张餐食照片', 'FORBIDDEN');
       const ownProfile = media.profile && media.userId === userId;
       const ownFamilyDraft = media.familyDraftRequest && media.userId === userId;
       const memberProfile = media.profile && family?.members.some(member => member.avatar === fileId);
       const invitedCover = invitation?.family.cover === fileId && displayVariants.includes(variant);
-      if (!ownProfile && !ownFamilyDraft && !memberProfile && !invitedCover && !share?.assetIds.includes(fileId) && (!family || media.familyId !== family.id)) {
+      if (!mealPhotoAllowed && !ownProfile && !ownFamilyDraft && !memberProfile && !invitedCover && !share?.assetIds.includes(fileId) && (!family || media.familyId !== family.id)) {
         const postResult = postRecords.get(postId);
         if (postResult?.error) throw postResult.error;
         const hintedPost = postResult?.value;
         const hasPublishedHint = hintedPost?.status === 'published' && hintedPost.assetIds?.includes(fileId);
         if (!hasPublishedHint && !publishedReads.has(fileId)) publishedReads.set(fileId, repository.list('posts', { status: 'published', assetIds: { contains: fileId } }, { limit: 1, fields: ['_id'] }));
-        if (!hasPublishedHint && !(await publishedReads.get(fileId)).length) {
+        if (!hasPublishedHint && !(await publishedReads.get(fileId)).length && !await canReadMealImage(repository, fileId, userId, media) && !await canReadCurrentIdentityImage(repository, { postId, fileId, userId, variant })) {
           if (!coverFamilies.has(media.familyId)) coverFamilies.set(media.familyId, repository.get('families', media.familyId));
           const sourceFamily = await coverFamilies.get(media.familyId);
           const joinedCover = sourceFamily && !sourceFamily.deletedAt && sourceFamily.cover === fileId && sourceFamily.members.some(member => member.id === userId);
@@ -415,8 +450,14 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
     const userId = hash(openid);
     const action = event.action;
     if (action === 'bootstrap') return bootstrap(userId, event);
+    if (action === 'switchWorkspace') {
+      await throttle(userId, 'workspace', 20);
+      await switchWorkspace({ repository, userId, event, now });
+      return bootstrap(userId, { includeFeed: false, defaultProfileVersion: event.defaultProfileVersion });
+    }
     if (action === 'mediaContent' || action === 'mediaBatch') return readMedia(userId, event);
     if (action === 'command') return command(userId, event);
+    if (mealPostActions.includes(action)) return mealPosts(action, event, userId);
     if (familyActions.includes(action)) return families(action, event, userId);
     if (['createDishShare', 'readShare', 'importShare'].includes(action)) return friendShares.handle(action, event, userId);
     if (action === 'profileMediaTicket') return createUploadTicket(openid, userId, `profile-${userId}`, true);
@@ -440,6 +481,7 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
     if (action === 'readPost') [family, requestedPost] = await Promise.all([optionalFamily(userId), repository.get('posts', event.postId)]);
     else ({ family } = await membership(repository, userId));
     if (action === 'createInvite') {
+      if (family.kind === 'personal') fail('个人空间不能邀请成员', 'FORBIDDEN');
       if (family.ownerId !== userId) fail('只有家庭管理员可以邀请家人', 'FORBIDDEN');
       if (event.familyId && event.familyId !== family.id) fail('当前家庭已变更，请重试', 'CONFLICT');
       await throttle(userId, 'invite', 5);
@@ -448,7 +490,7 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
       return repository.transaction(async db => {
         const current = (await membership(db, userId)).family;
         if (current.id !== family.id) fail('当前家庭已变更，请重试', 'CONFLICT');
-        if (current.ownerId !== userId) fail('没有邀请权限', 'FORBIDDEN');
+        if (current.kind === 'personal' || current.ownerId !== userId) fail('没有邀请权限', 'FORBIDDEN');
         if (current.inviteId) { const old = await db.get('invites', current.inviteId); if (old) await db.set('invites', current.inviteId, { ...old, revoked: true }); }
         await db.set('invites', hash(code), { familyId: current.id, createdBy: userId, remaining: 19, expiresAt, revoked: false });
         await db.set('families', current.id, { ...current, inviteId: hash(code) });
@@ -470,14 +512,16 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
       const posts = [];
       for (const row of page.slice(0, limit)) {
         if (event.compact !== true) posts.push(publicPost(row));
-        else if (row.card) posts.push({ ...row.card, ...Object.fromEntries(ownershipFields.map(field => [field, field === 'id' ? row.id || row._id : row[field] || ''])) });
+        else if (row.card) posts.push({ ...row.card, sourceKind: 'community', ...Object.fromEntries(ownershipFields.map(field => [field, field === 'id' ? row.id || row._id : row[field] || ''])) });
         else {
           const legacy = legacyPosts.get(row._id);
           if (legacy?.status === 'published') posts.push(postCard(legacy));
         }
       }
       const authorizations = event.compact === true ? page.slice(0, limit).map(row => row.card ? { status: 'published', assetIds: row.assetIds } : legacyPosts.get(row._id)) : page.slice(0, limit);
-      return { posts, cursor: result.cursor, feedVersion: 2, media: await signPosts(posts), ...(event.includeImageManifests === true ? { imageManifests: await postImageManifests(posts, authorizations) } : {}) };
+      const identity = createIdentityPresentation(repository);
+      const presented = await Promise.all(posts.map(post => identity.community(post)));
+      return { posts: presented, cursor: result.cursor, feedVersion: 2, media: await signPosts(presented), ...(event.includeImageManifests === true ? { imageManifests: await postImageManifests(posts, authorizations) } : {}) };
     }
     if (action === 'readPost') {
       const post = requestedPost;
@@ -486,7 +530,9 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
         !family || event.includeComments === false ? { comments: [], commentCursor: '' } : event.paginateComments === true ? commentPage(post.id) : all(repository, 'comments', { postId: post.id }).then(comments => ({ comments: comments.map(({ _id, ...item }) => item) })),
         event.includeImageManifests === true ? postImageManifests([post], [post], true) : undefined,
       ]);
-      const safe = publicPost(post);
+      const identity = createIdentityPresentation(repository);
+      const safe = await identity.community(publicPost(post));
+      page.comments = await Promise.all(page.comments.map(comment => identity.comment(comment)));
       if (!family) { delete safe.familyId; delete safe.familyItemId; delete safe.publisherId; }
       return { post: safe, ...page, media: await signPosts([post]), ...(imageManifests ? { imageManifests } : {}) };
     }
@@ -501,6 +547,10 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
       if (!post || post.status !== 'published') fail('内容已不存在');
       await repository.set('reports', hash(`${post.id}:${userId}`), { postId: post.id, reporterId: userId, reason: text(event.reason, 300, '举报原因'), status: 'pending', createdAt: now() });
       return {};
+    }
+    if (action === 'mealMediaTicket' || action === 'mealMediaConfirm') {
+      if (event.familyId !== family.id) fail('使用空间已变更，请重新上传', 'CONFLICT');
+      return action === 'mealMediaTicket' ? createUploadTicket(openid, userId, family.id, false, '', true) : confirmUpload(event, userId, family.id, false, '', true);
     }
     if (action === 'mediaTicket') {
       if (event.familyId && event.familyId !== family.id) fail('家庭已变更，请重新上传', 'CONFLICT');
@@ -520,8 +570,10 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
       return confirmUpload(event, userId, family.id);
     }
     if (action === 'mediaUrl') {
+      const record = typeof event.fileId === 'string' ? await repository.get('media', hash(event.fileId)) : null;
+      if (record?.mealPhoto && !(record.mealPostId ? await canReadMealImage(repository, event.fileId, userId, record) : record.userId === userId)) fail('无权查看这张餐食照片', 'FORBIDDEN');
       const media = await repository.get('media', hash(event.fileId || ''));
-      if (!media?.confirmed || media.familyId !== family.id) fail('无权查看图片', 'FORBIDDEN');
+      if (!media?.confirmed || (media.familyId !== family.id && !await canReadMealImage(repository, event.fileId, userId, media))) fail('无权查看图片', 'FORBIDDEN');
       return { media: await signFiles([media.fileId]) };
     }
     fail('不支持的请求');

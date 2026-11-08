@@ -45,16 +45,16 @@ test('home and community match categories by recipe, never stale post tags or se
     }
   }
 });
-test('cooking diary counts only completed meals and days, deduplicating old split orders', () => {
+test('meal diary counts planned and completed days while deduplicating old split orders', () => {
   const orders = [order('2026-09-08', '晚餐', 'completed'), order('2026-09-08', '早餐', 'completed'), order('2026-09-08', '晚餐', 'completed', { tomato: 1, chicken: 1 }), order('2026-09-09', '午餐', 'accepted'), order('2026-09-09', '晚餐', 'cancelled'), order('2026-09-10', '午餐', 'pending'), order('2026-09-11', '午餐', 'completed'), order('2026-08-31', '晚餐', 'completed')];
   const before = structuredClone(orders);
   const month = cookingMonth(orders, '2026-09');
-  assert.equal(month.cookedDays, 2);
-  assert.equal(month.cookedMeals, 3);
+  assert.equal(month.cookedDays, 4);
+  assert.equal(month.cookedMeals, 5);
   const day = month.days.find((entry) => entry.date === '2026-09-08');
   assert.deepEqual(day.meals.map((meal) => meal.name), ['早餐', '晚餐']);
   assert.equal(day.meals[1].recipes.length, 2);
-  assert.equal(month.days.find((entry) => entry.date === '2026-09-09').meals.length, 0);
+  assert.equal(month.days.find((entry) => entry.date === '2026-09-09').meals.length, 1);
   assert.deepEqual(orders, before);
 });
 test('calendar uses Monday first and handles leap years, blank cells and month boundaries', () => {
@@ -68,9 +68,9 @@ test('calendar uses Monday first and handles leap years, blank cells and month b
   assert.throws(() => cookingMonth([], '2026-13'), /有效月份/);
   assert.throws(() => shiftDiaryMonth('invalid', 1), /有效月份/);
 });
-test('cooking diary reflects completion, keeps recipe snapshots and uses meal date', () => {
+test('meal diary reflects planned and legacy completed orders while preserving recipe snapshots', () => {
   const state = { ...seed, family: { ...seed.family, features: { fridge: false, shopping: false } }, orders: [order('2026-09-07', '晚餐', 'accepted')] };
-  assert.equal(cookingMonth(state.orders, '2026-09').cookedDays, 0);
+  assert.equal(cookingMonth(state.orders, '2026-09').cookedDays, 1);
   const completed = completeOrder(state, state.orders[0].id, '2026-09-07');
   completed.recipes = [];
   const diary = cookingMonth(completed.orders, '2026-09');
@@ -89,15 +89,19 @@ test('UI places zone add buttons outside filter buttons and uses noninteractive 
   assert.match(shopping, /<PageHeader v-if="!embedded" title="采购" \/>/);
   assert.match(shopping, /class="shopping-meal-heading"/);
   const family = component('FamilyView');
-  assert.doesNotMatch(family, /switchMember|切换成员|当前成员/);
-  assert.match(family, /<view v-for="member in state.family.members"/);
-  assert.ok(family.indexOf('名称与封面') < family.indexOf('<CookingDiary'));
-  assert.ok(family.indexOf('<CookingDiary') < family.indexOf('家庭成员</text>'));
+  const members = component('FamilyManagement');
+  assert.doesNotMatch(family + members, /switchMember|切换成员|当前成员/);
+  assert.match(members, /<view v-for="member in displayedMembers"[^>]*class="member-card"/);
+  assert.doesNotMatch(members, /<button[^>]*v-for="member/);
+  assert.doesNotMatch(family, /<CookingDiary/);
+  assert.match(readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8'), /<MealTimeline/);
+  assert.match(family, /class="account-row diary-entry"[^>]*aria-label="打开饮食日记"/);
+  assert.ok(family.indexOf('diary-entry') < family.indexOf('family-members-entry'));
   assert.match(component('CommunityView'), /<SelectField[^>]*:options="categories"[^>]*variant="feed"/);
   assert.doesNotMatch(component('CommunityView'), /v-if="type !== '套餐'"/);
   const home = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
-  assert.match(home, /<view v-show="tab === 'menu'" class="menu-view">/);
-  assert.match(home, /<HomeMenu[^>]*:active="tab === 'menu'"/);
+  assert.match(home, /<view v-show="tab === 'menu'" class="menu-home">/);
+  assert.match(home, /<HomeMenu[^>]*:active="menuActive"/);
   assert.doesNotMatch(home, /menuType|\['全部', \.\.\.CATEGORIES\]/);
   assert.match(component('HomeMenu'), /HOME_MENU_CATEGORIES/);
   for (const name of ['CommunityView', 'RecipeEditor']) assert.match(component(name), /CATEGORIES/);

@@ -557,14 +557,23 @@ test('web visual viewport follows keyboard frames without another animation and 
   assert.equal(sheet.windowListeners.size, 0);
 });
 
-test('family cover and management open the existing editor while bottom navigation remains synchronous', () => {
+test('unified profile and direct family management open synchronously while preserving keyboard-safe editor navigation', () => {
   const source = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
   const family = readFileSync(new URL('../src/components/FamilyView.vue', import.meta.url), 'utf8');
-  assert.match(family, /<PageHeader :title="familyDisplay.name" \/>/);
-  assert.match(family, /const familyDisplay = computed\(\(\) => familyAppearance\(state.value.family\)\);/);
+  const profile = readFileSync(new URL('../src/components/ProfileEditor.vue', import.meta.url), 'utf8');
+  const appearance = readFileSync(new URL('../src/components/FamilyEditor.vue', import.meta.url), 'utf8');
+  assert.match(family, /<PageHeader :title="pageTitle" :cover="!headerSolid" :fade="headerOpacity" \/>/);
+  assert.match(family, /familyAppearance\(\(displayedFamilyMode.value \? displayedFamily.value : displayedPersonal.value\) \|\| \{\}\)/);
+  assert.match(family, /<ProfileEditor v-if="editingProfile" page/);
+  assert.match(family, /<FamilyManagement ref="familyManagement"/);
+  assert.doesNotMatch(family, /async function (?:editProfile|closeFamily)/);
+  assert.match(profile, /<FamilyAppearanceDetails :family="state.family" @edit="openAppearance"/);
+  assert.match(profile, /<FamilyEditor v-if="appearanceSection" page :initial-tab="appearanceSection"/);
+  assert.doesNotMatch(profile, /async function (?:openAppearance|openEditor)/);
+  assert.match(appearance, /function resetScroll\(\) \{ dismissFocusedKeyboard\(\); sheet.value\?\.resetScroll\(\); \}/);
   assert.match(source, /function editFamily\(initialTab = 'appearance'\) \{ dismissFocusedKeyboard\(\); tapFeedback\(\); familyEditorTab.value = initialTab; editingFamily.value = true;/);
-  assert.match(source, /<FamilyView[^>]*@customize="editFamily\(\)"/);
-  assert.doesNotMatch(source, /@manage="editFamily\('management'\)"/);
+  assert.match(source, /<FamilyView[^>]*@customize="editFamily\(\$event\)"/);
+  assert.match(source, /@manage="editFamily\('management'\)"/);
   assert.match(source, /@click="selectNavigation\(item\.id\)"/);
   assert.doesNotMatch(source, /async function selectNavigation/);
 });
@@ -651,7 +660,7 @@ test('form taps are excluded from surface keyboard dismissal and native labels c
   assert.doesNotMatch(field, /@(?:touchstart|touchend|mousedown)(?:\.|=|\s)/);
   assert.match(sheet, /enabled: \(\) => Boolean\(syncViewport\)/);
   assert.doesNotMatch(sheet, /function startSurfaceGesture\(event\) \{\s*if/);
-  assert.match(sheet, /@touchend="surfaceGesture.end"/);
+  assert.match(sheet, /@touchend="endSurfaceGesture"/);
   assert.doesNotMatch(sheet, /@click.stop="dismissFocusedKeyboard"/);
   for (const name of ['RecipeEditor', 'SetEditor', 'FamilyEditor', 'FamilyManagement', 'ProfileFields', 'StockEditor', 'CloudConnection']) {
     const source = readFileSync(new URL(`../src/components/${name}.vue`, import.meta.url), 'utf8');
@@ -788,7 +797,7 @@ test('image cropper can opt out of content sizing to keep its drag coordinates s
 test('share confirmation has one full-width publish action and retains its error and duplicate-submit guards', () => {
   const share = readFileSync(new URL('../src/components/ShareSheet.vue', import.meta.url), 'utf8');
   assert.doesNotMatch(share, /重新选择|先不分享|secondary-button|detail-actions/);
-  assert.match(share, /<button v-if="confirming" role="button" class="primary-button full"[^>]*@click="publish"/);
+  assert.match(share, /<button v-else-if="confirming" role="button" class="primary-button full"[^>]*@click="publish"/);
   assert.match(share, /:disabled="busy \|\| !canPublish"/);
   assert.match(share, /if \(busy.value \|\| !canPublish.value\) return/);
   assert.match(share, /catch \(failure\) \{ if \(!disposed\) error.value = failure.message; \}/);

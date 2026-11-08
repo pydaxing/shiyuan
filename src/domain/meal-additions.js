@@ -13,7 +13,8 @@ export function mealAdditionOptions(entries, order, memberId) {
   const orderedIds = new Set((order?.items || []).map((item) => item.recipe.id));
   return entries.map((entry) => {
     const availableIds = entry.recipes.map((recipe) => recipe.id).filter((id) => !ownIds.has(id));
-    return { ...entry, availableIds, alreadySelected: !availableIds.length, inMeal: entry.recipes.some((recipe) => orderedIds.has(recipe.id)) };
+    const orderedCount = new Set(entry.recipes.filter((recipe) => orderedIds.has(recipe.id)).map((recipe) => recipe.id)).size;
+    return { ...entry, availableIds, alreadySelected: !availableIds.length, inMeal: orderedCount > 0, orderedCount };
   });
 }
 

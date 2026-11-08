@@ -570,11 +570,12 @@ test('two members order concurrently into one meal; idempotent retry cannot dupl
   const invite = await success(server.call('createInvite'));
   await success(server.call('joinFamily', { code: invite.code, name: 'Bob' }, 'bob'));
   const orders = await Promise.all(['alice', 'bob'].map(openid => server.command('submitOrder', [{ [id]: 1 }, { date: '2026-09-09', meal: '晚餐' }, '少盐'], 1, openid)));
-  orders.forEach(result => assert.equal(result.ok, true, JSON.stringify(result)));
+  assert.equal(orders.filter(result => result.ok).length, 1);
+  assert.equal(orders.find(result => !result.ok).code, 'CONFLICT');
   const state = (await success(server.call('bootstrap'))).snapshot;
   assert.equal(state.orders.length, 1);
   assert.equal(state.orders[0].items.length, 1);
-  assert.equal(state.orders[0].items[0].chosenBy.length, 2);
+  assert.equal(state.orders[0].items[0].chosenBy.length, 1);
   const revision = (await success(server.call('bootstrap'))).revision;
   const batch = { name: '番茄', quantity: 500, unit: 'g', location: '冷藏', expiresOn: '', image: '' };
   const first = await success(server.command('recordPurchase', [batch], revision, 'alice', 'purchase-retry-001'));
@@ -767,7 +768,7 @@ test('cloud withdrawing the final selection records cancellation once using serv
   const selection = { date: '2026-09-09', meal: '午餐' };
   current = await success(server.command('submitOrder', [cart, selection], current.revision));
   instant += 60000;
-  const request = { name: 'submitOrder', args: [{}, selection], revision: current.revision, requestId: 'withdraw-timestamp-01' };
+  const request = { name: 'updateOrder', args: [current.snapshot.orders[0].id, 'cancelled'], revision: current.revision, requestId: 'withdraw-timestamp-01' };
   current = await success(server.call('command', request));
   const cancelledAt = new Date(instant).toISOString();
   assert.equal(current.snapshot.orders[0].status, 'cancelled');
@@ -863,7 +864,9 @@ test('official posts deny deletion to the import owner and other users, preservi
     assert.equal(value.publisherType, 'official');
     assert.equal(canDeleteCommunityPost(value, original.publisherId), false);
   }
-  bob = await success(server.command('publishToCommunity', [copied[0].id], bob.revision, 'bob'));
+  assert.equal((await server.command('publishToCommunity', [copied[0].id], bob.revision, 'bob')).code, 'ALREADY_SHARED');
+  bob = await success(server.command('saveRecipe', [{ ...copied[0], title: '我家的改良版' }, copied[0].id], bob.revision, 'bob'));
+  bob = await success(server.command('publishToCommunity', [bob.value], bob.revision, 'bob'));
   const personal = await server.repository.get('posts', bob.value);
   assert.equal(personal.publisherId, digest('bob'));
   assert.equal(personal.publisherType, 'user');
@@ -1363,4 +1366,24 @@ test('failed cloud restoration rolls back the status and can be retried safely',
   server.repository.transaction = transaction;
   const retried = await success(server.command('updateOrder', [orderId, 'accepted'], current.revision));
   assert.equal(retried.snapshot.orders[0].status, 'accepted');
+});
+
+test('arranged meal rejects stale, changed and empty submissions without replacing the existing meal', async () => {
+  const server = fixture();
+  let current = await family(server);
+  current = await success(server.command('saveRecipe', [recipe], current.revision));
+  const cart = { [current.snapshot.recipes[0].id]: 1 };
+  const slot = { date: '2026-09-09', meal: '晚餐' };
+  const initialRevision = current.revision;
+  const requestId = 'arrange-idempotent-001';
+  current = await success(server.command('submitOrder', [cart, slot, '保留备注'], initialRevision, 'alice', requestId));
+  const original = structuredClone(current.snapshot.orders);
+  for (const nextCart of [cart, {}]) {
+    const rejected = await server.command('submitOrder', [nextCart, slot, '覆盖备注'], initialRevision);
+    assert.equal(rejected.code, 'CONFLICT');
+    assert.deepEqual((await success(server.call('bootstrap'))).snapshot.orders, original);
+  }
+  const replay = await success(server.command('submitOrder', [cart, slot, '保留备注'], initialRevision, 'alice', requestId));
+  assert.deepEqual(replay.snapshot.orders, original);
+  assert.equal(replay.revision, current.revision);
 });

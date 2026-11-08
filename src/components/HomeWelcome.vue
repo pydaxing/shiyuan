@@ -22,6 +22,7 @@ defineEmits(['primary', 'secondary']);
           <button v-if="primaryLabel" role="button" class="primary-button home-welcome-button" :disabled="busy" @click.stop="$emit('primary')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon v-if="primaryIcon" :name="primaryIcon" :size="kitchen ? 16 : 18" :active="kitchen" /><text>{{ primaryLabel }}</text></button>
           <button v-if="secondaryLabel" role="button" class="secondary-button home-welcome-button" @click.stop="$emit('secondary')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon v-if="secondaryIcon" :name="secondaryIcon" :size="18" active /><text>{{ secondaryLabel }}</text></button>
         </view>
+        <view v-if="$slots.utility" class="home-welcome-utility"><slot name="utility" /></view>
       </view>
       <view v-if="compact" class="home-welcome-cover" aria-hidden="true"><view class="home-welcome-frame" :style="coverFrameStyle('family')"><FamilyCoverImage :src="cover" variant="card" /></view></view>
     </view>
@@ -48,6 +49,8 @@ defineEmits(['primary', 'secondary']);
 .is-compact .home-welcome-description { margin-top: 6px; font-size: var(--type-meta); line-height: 20px; }
 .home-welcome-cover { flex: 0 0 94px; width: 94px; }
 .home-welcome-cover .home-welcome-frame { border-radius: var(--radius-small); }
+.home-welcome-utility { margin-top: 8px; }
+.is-compact .home-welcome-utility { margin-top: 4px; }
 .is-compact .home-welcome-actions { width: 161px; margin: 18px 0 0; }
 .is-compact .home-welcome-button { min-height: 44px; padding-top: 10px; padding-bottom: 10px; font-size: var(--type-control); }
 .home-welcome.is-kitchen { flex-direction: row; align-items: center; gap: 14px; }

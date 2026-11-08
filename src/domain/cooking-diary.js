@@ -2,10 +2,10 @@ import { MEALS, localDate, validDate, dateOffset } from './kitchen.js';
 
 export function cookingDays(orders, start, count) {
   if (!validDate(start) || !Number.isInteger(count) || count < 1) throw new Error('请选择有效日期范围');
-  const completed = new Map();
-  orders.filter((order) => order.status === 'completed').forEach((order) => {
-    if (!completed.has(order.date)) completed.set(order.date, new Map());
-    const meals = completed.get(order.date);
+  const planned = new Map();
+  orders.filter((order) => ['pending', 'accepted', 'completed'].includes(order.status)).forEach((order) => {
+    if (!planned.has(order.date)) planned.set(order.date, new Map());
+    const meals = planned.get(order.date);
     if (!meals.has(order.meal)) meals.set(order.meal, new Map());
     order.items.forEach((item) => {
       const recipes = meals.get(order.meal);
@@ -14,7 +14,7 @@ export function cookingDays(orders, start, count) {
   });
   return Array.from({ length: count }, (_, index) => {
     const date = dateOffset(index, new Date(`${start}T12:00:00`));
-    const meals = MEALS.map((name) => ({ name, recipes: [...(completed.get(date)?.get(name)?.values() || [])] })).filter((meal) => meal.recipes.length);
+    const meals = MEALS.map((name) => ({ name, recipes: [...(planned.get(date)?.get(name)?.values() || [])] })).filter((meal) => meal.recipes.length);
     return { date, day: Number(date.slice(8)), meals };
   });
 }

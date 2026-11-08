@@ -7,7 +7,7 @@ import NativeShareButton from './NativeShareButton.vue';
 import OrderActionMenu from './OrderActionMenu.vue';
 import { foodDetailToolbarOpacity } from '../domain/food-detail.js';
 
-const props = defineProps({ title: String, image: String, kind: String, category: String, minutes: Number, dishCount: Number, scrollAnchor: String, shareCard: Object, community: Boolean, publisher: String, familyCount: { type: Number, default: null }, canShare: Boolean, sharing: Boolean, canEdit: Boolean, canRemove: Boolean, busy: Boolean });
+const props = defineProps({ compact: Boolean, title: String, image: String, kind: String, category: String, minutes: Number, dishCount: Number, scrollAnchor: String, shareCard: Object, community: Boolean, publisher: String, familyCount: { type: Number, default: null }, canShare: Boolean, sharing: Boolean, canEdit: Boolean, canRemove: Boolean, busy: Boolean });
 defineEmits(['close', 'share', 'edit', 'remove']);
 const menuOpen = ref(false);
 const toolbarOpacity = ref(0);
@@ -21,7 +21,7 @@ function onDetailScroll(event) {
 </script>
 
 <template>
-  <Sheet :title="title" :scroll-anchor="scrollAnchor" immersive :fit-content="false" @scroll="onDetailScroll" @close="$emit('close')">
+  <Sheet :title="title" :scroll-anchor="scrollAnchor" immersive :fit-content="false" :preferred-height="compact ? 420 : 0" @scroll="onDetailScroll" @close="$emit('close')">
     <template #header>
       <view class="food-detail-toolbar">
         <view class="food-detail-toolbar-backdrop" :style="{ opacity: toolbarOpacity }" aria-hidden="true" />

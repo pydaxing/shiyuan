@@ -243,7 +243,7 @@ test('all app upload entry points share source selection, including profile and 
     .filter(path => /(?:uni|wx)\.choose(?:Image|Media)\s*\(/.test(readFileSync(new URL(path, root), 'utf8')));
   assert.deepEqual(directChoosers, ['services/images.js']);
   for (const name of ['RecipeEditor', 'SetEditor', 'FamilyEditor', 'StockEditor', 'InventoryView']) {
-    assert.match(readFileSync(new URL(`components/${name}.vue`, root), 'utf8'), /<ImagePicker/);
+    assert.match(readFileSync(new URL(`components/${name}.vue`, root), 'utf8'), /<(?:ImagePicker|InlinePhotoEditor)/);
   }
   assert.match(readFileSync(new URL('components/ImagePicker.vue', root), 'utf8'), /chooseLocalImage\(\['album', 'camera'\]/);
   assert.match(readFileSync(new URL('components/StepImagePicker.vue', root), 'utf8'), /chooseLocalImages\(9 - props.modelValue.length, \['album', 'camera'\]/);

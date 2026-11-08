@@ -4,9 +4,9 @@ import { UNITS, SELECTABLE_UNITS, validateIngredient, normalizedIngredient, purc
 import { createSeed } from '../src/data/seed.js';
 import { normalizeCommand } from '../server/validation.mjs';
 
-test('unit choices omit only the three retired spoon labels while keeping stored values supported', () => {
-  assert.deepEqual(UNITS.filter(unit => !SELECTABLE_UNITS.includes(unit)), ['小勺', '大勺', '铲勺']);
-  assert.deepEqual(SELECTABLE_UNITS, UNITS.filter(unit => !['小勺', '大勺', '铲勺'].includes(unit)));
+test('unit choices omit retired spoon labels while keeping stored values supported', () => {
+  assert.deepEqual(UNITS.filter(unit => !SELECTABLE_UNITS.includes(unit)), ['匙', '小勺', '大勺', '铲勺']);
+  assert.deepEqual(SELECTABLE_UNITS, UNITS.filter(unit => !['匙', '小勺', '大勺', '铲勺'].includes(unit)));
   for (const unit of ['勺', '茶匙', '汤匙']) assert.ok(SELECTABLE_UNITS.includes(unit));
   assert.equal(new Set(SELECTABLE_UNITS).size, SELECTABLE_UNITS.length);
 });
@@ -67,4 +67,13 @@ test('new units stay separate and completion does not change stock', () => {
   const missing = getShoppingRequirements(state, today);
   assert.equal(missing.find(item => item.name === '啤酒').toBuy, 1);
   assert.equal(missing.find(item => item.name === '米').toBuy, 250);
+});
+
+ test('generic spoon saves through the legacy text amount protocol without rewriting old spoon measures', async () => {
+  const { compatibleSpoonCommand, restoreMeasuredIngredient } = await import('../src/domain/ingredient-units.js');
+  const old = { name: '盐', quantity: 1, unit: '茶匙' };
+  const result = compatibleSpoonCommand('command', { name: 'saveRecipe', args: [{ ingredients: [{ name: '糖', quantity: 2, unit: '匙' }, old] }] });
+  assert.deepEqual(result.args[0].ingredients[0], { name: '糖', quantity: null, unit: '', amountText: '2 匙' });
+  assert.deepEqual(restoreMeasuredIngredient(result.args[0].ingredients[0]), { name: '糖', quantity: 2, unit: '匙' });
+  assert.deepEqual(result.args[0].ingredients[1], old);
 });

@@ -133,7 +133,8 @@ test('invitation layout contains artwork, status, profile consent and touch-frie
   assert.match(source, /class="invitation-cover" :style="coverFrameStyle\('family'\)"/);
   assert.match(source, /v-if="invite.joined" class="invitation-member-state"/);
   assert.match(source, /v-else class="invitation-profile"/);
-  assert.match(source, /role="checkbox" :aria-checked="consent"/);
+  assert.match(source, /<PrivacyConsent v-model="consent"/);
+  assert.match(readFileSync(new URL('../src/components/PrivacyConsent.vue', import.meta.url), 'utf8'), /role="checkbox" :aria-checked="modelValue"/);
   assert.match(source, /invite.joined \? '正在进入…' : '正在加入…'/);
   assert.match(source, /class="invitation-error" role="alert"/);
   assert.doesNotMatch(source, /一张餐桌|entry-emblem|invite-emblem|position:\s*fixed/);
@@ -142,4 +143,22 @@ test('invitation layout contains artwork, status, profile consent and touch-frie
   assert.match(styles, /\.invitation-submit\[disabled\] \{[^}]*opacity: 1;/);
   assert.match(styles, /\.invitation-title \{[^}]*overflow-wrap: anywhere;/);
   assert.ok(readFileSync(new URL('../src/static/family-home-default.jpg', import.meta.url)).length > 100);
+});
+
+test('intentional invitation profile edits carry the original baseline while unchanged joins stay legacy-compatible', async context => {
+  const { api, calls } = mount(context);
+  await api.read();
+  api.consent.value = true;
+  api.name.value = '主动编辑';
+  await api.join();
+  assert.deepEqual(calls[0][1].expectedProfile, { name: '小林', avatar: '/static/family-garden.png' });
+  assert.equal(calls[0][1].name, '主动编辑');
+});
+
+test('completion of a join after leaving the invitation does not navigate the new page', async context => {
+  let unload; let finish;
+  const { api, routes } = mount(context, { onUnload: callback => { unload = callback; }, manageFamily: () => new Promise(resolve => { finish = resolve; }) });
+  await api.read(); api.consent.value = true;
+  const pending = api.join(); unload(); finish(); await pending;
+  assert.deepEqual(routes, []);
 });

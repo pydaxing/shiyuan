@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { cloudErrorMessage } from '../services/cloud-errors.js';
 import { mutationStatus, retryMutation, dismissMutation } from '../services/cloud.js';
 import { sheetOpen } from '../composables/sheetStack.js';
 import { NATIVE_UI_COLORS } from '../domain/ui-theme.js';
@@ -29,7 +30,7 @@ function dismiss() {
 
 <template>
   <view v-if="failure && !sheetOpen" class="cloud-sync-warning mutation-failure" role="alert">
-    <view class="mutation-failure-copy"><text class="mutation-copy-line mutation-failure-title">{{ failure.label || '修改' }}未同步{{ mutationStatus.failures.length > 1 ? `（${mutationStatus.failures.length}项）` : '' }}</text><text class="mutation-copy-line">{{ localError || failure.message }}</text></view>
+    <view class="mutation-failure-copy"><text class="mutation-copy-line mutation-failure-title">{{ failure.label || '修改' }}未同步{{ mutationStatus.failures.length > 1 ? `（${mutationStatus.failures.length}项）` : '' }}</text><text class="mutation-copy-line">{{ cloudErrorMessage(localError || failure.message) }}</text></view>
     <button v-if="failure.canRetry !== false" role="button" class="text-button mutation-action" :disabled="Boolean(retrying)" @click="retry" hover-class="touch-feedback">{{ retrying ? '重试中' : '重试' }}</button>
     <button v-if="failure.status !== 'uncertain' && failure.canDismiss !== false" role="button" class="text-button mutation-action mutation-dismiss" :disabled="Boolean(retrying)" @click="dismiss" hover-class="touch-feedback">放弃</button>
   </view>

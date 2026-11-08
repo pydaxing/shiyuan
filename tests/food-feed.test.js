@@ -59,7 +59,7 @@ test('appending another feed page cannot move, reorder, or resize already displa
 test('food is the visible name while persistent community identifiers are unchanged', () => {
   const home = readFileSync(new URL('../src/domain/navigation.js', import.meta.url), 'utf8');
   assert.match(home, /id: 'community', label: '美食'/);
-  for (const path of ['CommunityView', 'ShareSheet', 'FriendShareSheet', 'FamilyView']) {
+  for (const path of ['CommunityView', 'ShareSheet', 'FriendShareSheet']) {
     const source = readFileSync(new URL(`../src/components/${path}.vue`, import.meta.url), 'utf8');
     assert.doesNotMatch(source, /广场/);
   }

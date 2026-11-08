@@ -146,7 +146,7 @@ test('WeChat fields stay in the scroll layer and declare fixed textarea coordina
   const compiled = compile(parse(source).descriptor.template.content, { filename: 'FormField.vue', mode: 'function', isNativeTag: () => true, miniProgram: { directive: 'wx:', class: { array: true }, event: { key: true }, emitFile: (file) => { markup = file.source; } } });
   const render = new Function('Vue', compiled.code)({ o: (handler) => handler, e: Object.assign, n: (value) => value });
   for (const sheet of [null, {}]) for (const multiline of [true, false]) {
-const bindings = render({ sheet, multiline, fieldClass: 'input', variant: '', focused: false, error: '', modelValue: '内容', placeholder: '', ariaLabel: '输入', maxlength: 30, disabled: false, focus: true, type: 'text', onInput() {}, onCompositionStart() {}, onCompositionEnd() {}, onFocus() {}, onBlur() {}, touchField() {}, keyboardChange() {}, $emit() {} }, []);
+const bindings = render({ sheet, multiline, fieldClass: 'input', variant: '', focused: false, error: '', modelValue: '内容', placeholder: '', placeholderStyle: '', ariaLabel: '输入', maxlength: 30, disabled: false, focus: true, type: 'text', onInput() {}, onCompositionStart() {}, onCompositionEnd() {}, onFocus() {}, onBlur() {}, touchField() {}, keyboardChange() {}, $emit() {} }, []);
     const fields = [];
     function walk(node) { if (node.type !== 1) return; if (node.tag === (multiline ? 'textarea' : 'input')) fields.push(node); node.children.forEach(walk); }
     baseParse(markup).children.forEach(walk);

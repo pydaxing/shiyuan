@@ -68,17 +68,14 @@ test('disabled duplicate names keep later material source keys stable', () => {
   assert.equal(selected[0].sourceKey, original[1].sourceKey);
 });
 
-test('hiding old kitchen cards never clears or hides explicitly added ingredient packs', () => {
+test('past kitchen cards archive their packages without deleting saved drafts', () => {
   const context = fixture();
   context.save();
   const before = JSON.stringify(context.snapshot);
   const later = dateOffset(1, today);
   assert.deepEqual(kitchenOrders(context.snapshot.orders, later), []);
-  const cart = shoppingCartMeals(context.snapshot, later);
-  assert.equal(cart.length, 1);
-  assert.equal(cart[0].id, context.orderId);
-  assert.equal(cart[0].dishes[0].recipe.id, 'tomato');
-  assert.deepEqual(cart[0].dishes[0].purchaseIngredients.map(ingredient => ingredient.name), ['番茄', '盐']);
+  assert.deepEqual(shoppingCartMeals(context.snapshot, later), []);
+  assert.equal(context.order().shoppingDrafts.length, 1);
   assert.equal(JSON.stringify(context.snapshot), before);
 });
 
@@ -199,19 +196,19 @@ for (const action of ['completed', 'cancelled', 'deleted']) {
 
 test('withdrawal of the last selection or removal of one dish clears only affected packages', () => {
   const context = fixture(); context.save(); context.save('broccoli');
-  context.actions.submitOrder({ broccoli: 1 }, { date: today, meal: '晚餐' });
+  context.actions.removeOrderDish(context.orderId, 'tomato');
   assert.deepEqual(context.order().shoppingDrafts.map(draft => draft.recipeId), ['broccoli']);
-  context.actions.submitOrder({}, { date: today, meal: '晚餐' });
+  context.actions.removeOrderDish(context.orderId, 'broccoli');
   assert.equal(context.order().status, 'cancelled');
   assert.deepEqual(context.order().shoppingDrafts, []);
 });
 
-test('unfinished packages remain accessible at date rollover, but old legacy purchase records never become new packages', () => {
+test('date rollover archives unfinished packages without turning legacy purchase records into new ones', () => {
   const context = fixture(); context.save();
   context.snapshot.purchases.push({ id: 'old-purchase', name: '番茄', quantity: 900, unit: 'g', orderIds: [context.orderId] });
   const later = dateOffset(8, today);
-  assert.equal(shoppingCartMeals(context.snapshot, later).length, 1);
-  assert.equal(shoppingCartMeals(context.snapshot, later)[0].dishes.length, 1);
+  assert.deepEqual(shoppingCartMeals(context.snapshot, later), []);
+  assert.equal(context.order().shoppingDrafts.length, 1);
   context.actions.removeShoppingDraft(context.orderId, 'tomato', shoppingEditSignature(context.order(), 'tomato'));
   assert.deepEqual(shoppingCartMeals(context.snapshot, later), []);
   assert.equal(context.snapshot.purchases.length, 1);

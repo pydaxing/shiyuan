@@ -70,7 +70,7 @@ test('UI uses stable hero, icon selection, arrow-free fields and dish preparatio
   for (const name of ['DateField', 'SelectField']) assert.doesNotMatch(component(name), /choice-arrow|⌄/);
   assert.doesNotMatch(component('MealDishList'), /chevron/);
   assert.match(component('InventoryView'), /name: '全部'/);
-  assert.match(component('MealPreparationSheet'), /class="prep-card" :class="\{ 'is-prepared': dish.prepared, 'is-expanded': expanded.includes\(dish.recipe.id\) \}"/);
+  assert.match(component('MealPreparationSheet'), /class="prep-card"/);
   assert.match(component('ShoppingView'), /shoppingCartMeals\(state.value, props.today\)/);
   assert.doesNotMatch(component('ShoppingView'), /买到了 ＋/);
 });

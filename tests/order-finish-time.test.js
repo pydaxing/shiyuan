@@ -39,22 +39,17 @@ for (const status of ['completed', 'cancelled']) {
 test('withdrawing the final meal selection records the cancellation time', () => {
   const kitchen = fixture();
   kitchen.setTime('2026-10-23T04:10:00Z');
-  kitchen.actions.submitOrder({}, selection);
+  kitchen.actions.updateOrder(kitchen.orderId, 'cancelled');
   assert.equal(kitchen.state().orders[0].status, 'cancelled');
   assert.equal(kitchen.state().orders[0].cancelledAt, '2026-10-23T04:10:00.000Z');
 });
 
-test('withdrawing one member does not mark a still-active shared meal as finished', () => {
-  const kitchen = fixture();
-  const firstMember = kitchen.state().activeMemberId;
-  const secondMember = kitchen.state().family.members.find(member => member.id !== firstMember);
-  kitchen.state().activeMemberId = secondMember.id;
-  kitchen.actions.submitOrder(kitchen.cart, selection);
-  kitchen.state().activeMemberId = firstMember;
-  kitchen.actions.submitOrder({}, selection);
-  assert.equal(kitchen.state().orders[0].status, 'accepted');
-  assert.equal(kitchen.state().orders[0].cancelledAt, undefined);
-  assert.equal(kitchen.state().orders[0].selections.length, 1);
+test('rejected member resubmission never cancels an arranged meal', () => {
+ const kitchen = fixture();
+ kitchen.state().activeMemberId = kitchen.state().family.members.find(member => member.id !== kitchen.state().activeMemberId).id;
+ const before = structuredClone(kitchen.state());
+ assert.throws(() => kitchen.actions.submitOrder({}, selection), /已安排/);
+ assert.deepEqual(kitchen.state(), before);
 });
 
 test('restoration re-enters chronological preparation and the next ending uses its latest operation time', () => {

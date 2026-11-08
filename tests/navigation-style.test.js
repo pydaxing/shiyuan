@@ -122,7 +122,7 @@ test('food keeps shared search dimensions with a compact variant and no publishi
   assert.equal(search.get('border'), '0');
   assert.equal(search.get('border-radius'), 'var(--search-radius)');
   assert.equal(search.get('height'), '44px');
-  assert.equal(declarationsFor('page').get('--search-radius'), '999px');
+  assert.equal(declarationsFor('page').get('--search-radius'), 'var(--radius-sheet)');
   assert.equal(declarationsFor('page').get('--search-surface-inset'), '4px');
   assert.deepEqual(declarationsFor('.home-menu .home-menu-search::before'), declarationsFor('.community-toolbar .community-search::before'));
   const searchSurface = declarationsFor('.home-menu .home-menu-search::before');
@@ -175,7 +175,7 @@ test('shared form controls use the step-card outline with a pale surface and pre
   assert.equal(declarationsFor('.form-field.field-invalid .input').get('border-color'), 'var(--danger)');
   assert.equal(declarationsFor('.form-field.field-invalid .textarea').get('background'), 'var(--danger-light)');
   const selector = readFileSync(new URL('../src/components/SelectField.vue', import.meta.url), 'utf8');
-  assert.match(selector, /<Sheet v-if="open && variant !== 'feed'"/);
+  assert.match(selector, /<Sheet v-if="open && !inline && variant !== 'feed'"/);
   assert.match(selector, /<AppIcon v-if="modelValue === option" name="check" active/);
   assert.match(selector, /<AppIcon v-if="active && modelValue === option" name="check" :size="11" active/);
   assert.equal(declarationsFor('.step-entry-fields .textarea').get('height'), '120px');
@@ -235,7 +235,7 @@ test('home and compact photo controls keep small white icons and full touch targ
   }
   assert.equal(declarationsFor('.app-shell.menu-page .hero-edit').get('background'), undefined);
   const picker = readFileSync(new URL('../src/components/ImagePicker.vue', import.meta.url), 'utf8');
-  assert.match(picker, /<view v-if="!busy" class="upload-caption" aria-hidden="true">\s*<AppIcon name="camera-inverse" :size="compact \? 14 : 16"\s*\/>\s*<text v-if="!compact" class="upload-caption-label">拍照\/相册<\/text>\s*<\/view>/);
+  assert.match(picker, /<view v-if="!busy" class="upload-caption" aria-hidden="true">\s*<AppIcon name="camera-inverse" :size="compact \? 14 : 16"\s*\/>\s*<text v-if="!compact" class="upload-caption-label"[^>]*>\{\{ caption \}\}<\/text>\s*<\/view>/);
   assert.match(picker, /<ImageUploadProgress v-if="busy" :value="progress" :compact="compact"\s*\/>/);
   assert.doesNotMatch(picker, /photo-count|image-picker-actions|调整展示位置|移除图片/);
 });
@@ -368,7 +368,7 @@ test('all procurement surfaces share cart icons with a handle and two wheels in 
     const actual = readFileSync(new URL(`../src/static/icon-shopping${active ? '-active' : ''}.png`, import.meta.url));
     assert.deepEqual(actual, expected, 'packaged procurement icon must match the shared cart drawing');
   }
-  for (const path of ['components/MealPreparationSheet.vue', 'components/IngredientsView.vue', 'components/ShoppingView.vue']) {
+  for (const path of ['components/IngredientsView.vue', 'components/ShoppingView.vue']) {
     const source = readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8');
     assert.match(source, /<AppIcon (?:name="shopping"|:name="inCart\(dish\) \? 'shopping' : 'shopping-inverse'")/);
   }

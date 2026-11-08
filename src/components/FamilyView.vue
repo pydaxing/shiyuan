@@ -1,66 +1,161 @@
 <script setup>
-import { computed, ref } from 'vue';
-import { state, activeMember, familyFeatures, preferencePending, cloudMode, setFridgeEnabled, runAction, notify } from '../store.js';
-import FamilyInviteCard from './FamilyInviteCard.vue';
+import { computed, ref, watch } from 'vue';
+import { state, activeMember, cloudMode, cloudStatus, notify } from '../store.js';
 import ProfileEditor from './ProfileEditor.vue';
 import LazyImage from './LazyImage.vue';
-import FamilyCoverImage from './FamilyCoverImage.vue';
+import FamilyManagement from './FamilyManagement.vue';
+import StretchCover from './StretchCover.vue';
 import AppIcon from './AppIcon.vue';
 import PageHeader from './PageHeader.vue';
 import Sheet from './Sheet.vue';
-import CookingDiary from './CookingDiary.vue';
-import { coverFrameStyle } from '../domain/image-crop.js';
-import { familyAppearance, familyPublicId } from '../domain/family.js';
+import { familyModePreview, personalModePreview, manageFamily } from '../services/cloud.js';
+import { familyAppearance } from '../domain/family.js';
 import { localDate } from '../domain/kitchen.js';
-defineProps({ today: { type: String, default: localDate } });
-defineEmits(['customize']);
-const familyDisplay = computed(() => familyAppearance(state.value.family));
-const visibleFamilyId = computed(() => familyPublicId(state.value.family));
+import { useNavigationAppearance } from '../composables/useNavigationAppearance.js';
+import { sheetOpen } from '../composables/sheetStack.js';
+defineProps({ today: { type: String, default: localDate }, refreshAction: Function });
+const emit = defineEmits(['customize', 'manage', 'diary']);
+const personal = computed(() => state.value.family.kind === 'personal');
+const modeBusy = ref(false);
+const requestedFamilyMode = ref(null);
+const pageTitle = computed(() => '');
+const displayedFamilyMode = computed(() => requestedFamilyMode.value ?? !personal.value);
+const modeError = ref('');
+async function toggleMode() {
+  if (modeBusy.value || cloudStatus.value.busy) return;
+  if (!cloudMode) { modeError.value = '请连接微信云端后切换使用方式'; return; }
+  const enableFamilyMode = personal.value;
+  requestedFamilyMode.value = enableFamilyMode;
+  modeBusy.value = true; modeError.value = '';
+  notify(enableFamilyMode ? '开启家庭模式' : '关闭家庭模式');
+  try {
+    await manageFamily('switchWorkspace', { mode: enableFamilyMode ? 'family' : 'personal', expectedSpaceId: state.value.family.id });
+  }
+  catch (error) { if (error.code === 'FAMILY_REQUIRED') { notify('请先创建或加入家庭'); emit('manage'); } else { modeError.value = error.message || '切换失败，请重试'; notify(modeError.value); } }
+  finally { modeBusy.value = false; requestedFamilyMode.value = null; if (personal.value) familyOpen.value = false; }
+}
+// A remembered cover is presentation only. Membership and all writes continue
+// to use the confirmed workspace until switchWorkspace acknowledges the change.
+const displayedFamily = computed(() => !personal.value ? state.value.family
+  : familyModePreview.value?.userId === cloudStatus.value.userId ? familyModePreview.value : null);
+const displayedPersonal = computed(() => personal.value ? state.value.family
+  : personalModePreview.value?.userId === cloudStatus.value.userId ? personalModePreview.value : null);
+const familyDisplay = computed(() => familyAppearance((displayedFamilyMode.value ? displayedFamily.value : displayedPersonal.value) || {}));
+const displayedMemberCount = computed(() => displayedFamily.value?.members?.length ?? displayedFamily.value?.memberCount);
+const headerOpacity = ref(0);
+const headerSolid = computed(() => headerOpacity.value >= 0.4);
+const atTop = ref(true);
+function onScroll(event) {
+  const top = Math.max(0, Number(event?.scrollTop) || 0);
+  headerOpacity.value = Math.round(Math.min(top / 64, 1) * 100) / 100;
+  atTop.value = top <= 1;
+}
+defineExpose({ onScroll });
+useNavigationAppearance(computed(() => !headerSolid.value ? 'dark' : 'light'));
 const about = ref(false);
+const familyOpen = ref(false);
+const familySheet = ref(null);
+const familyManagement = ref(null);
+const familyManaging = ref(false);
+const familyCreating = computed(() => Boolean(familyManagement.value?.creating));
 const editingProfile = ref(false);
+watch(() => state.value.family.id, () => {
+  if (personal.value || (!familyManaging.value && requestedFamilyMode.value !== true)) familyOpen.value = false;
+  editingProfile.value = false;
+  headerOpacity.value = 0; atTop.value = true;
+});
+watch(() => cloudStatus.value.userId, () => { familyOpen.value = false; editingProfile.value = false; });
 function editProfile() {
+  if (modeBusy.value || cloudStatus.value.busy) return;
   if (!cloudMode) { notify('请在微信小程序中编辑头像与昵称'); return; }
   editingProfile.value = true;
+}
+function closeFamily() {
+  if (familyManaging.value) return;
+  if (familyCreating.value) { familyManagement.value?.back(); familySheet.value?.resetScroll(); return; }
+  familyOpen.value = false;
+}
+function familyChanged() {
+  if (personal.value) { familyOpen.value = false; return; }
+  familyManagement.value?.load();
+  familySheet.value?.resetScroll();
 }
 </script>
 
 <template>
-  <view class="family-view"><PageHeader :title="familyDisplay.name" />
-    <view class="family-banner">
-      <button role="button" class="family-banner-main family-management-entry" aria-label="家庭设置" @click.stop="$emit('customize')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">
-        <view class="family-banner-thumbnail"><view class="family-banner-frame" :style="coverFrameStyle('family')"><FamilyCoverImage class="family-cover" :src="state.family.cover" variant="card" /></view></view>
-        <view class="family-banner-copy"><text class="subheading family-banner-name">{{ familyDisplay.name }}</text><text v-if="visibleFamilyId" class="family-banner-caption family-id">ID: {{ visibleFamilyId }}</text></view>
-      </button>
-      <button role="button" class="family-banner-edit" aria-label="编辑家庭名称与封面" @click.stop="$emit('customize')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="action-icon-circle"><AppIcon name="edit" :size="18" /></view></button>
-    </view>
-    <CookingDiary :orders="state.orders" :today="today" />
-    <view class="feature-panel family-members-panel">
-      <view class="section-line family-members-heading"><text class="subheading">家庭成员</text><text class="muted">{{ state.family.members.length }} 人</text></view>
-      <view class="member-grid family-member-grid">
-        <view v-for="member in state.family.members" :key="member.id" class="member-card" :class="{ 'is-self': activeMember.id === member.id }">
-          <view class="member-portrait"><view class="member-photo"><LazyImage class="member-avatar-image" :src="member.avatar" variant="avatar" avatar round /></view><view v-if="state.family.headMemberId === member.id" class="head-crown" aria-label="一家之主"><AppIcon name="crown" active /></view></view>
-          <text class="member-name">{{ member.name || '家人' }}</text><text class="member-status">{{ activeMember.id === member.id ? '我' : '家人' }}</text><text v-if="state.family.headMemberId === member.id" class="member-status member-head-label">一家之主</text>
-          <button v-if="activeMember.id === member.id" class="member-profile-button" aria-label="编辑我的头像与昵称" @click.stop="$feedback(); editProfile()" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="member-profile-mark"><AppIcon name="edit" active /></view></button>
+  <view class="family-view">
+    <StretchCover class="account-hero has-family-cover" :src="familyDisplay.cover" :personal="!displayedFamilyMode" :enabled="true" :active="!sheetOpen" :at-top="atTop" :refresh-action="refreshAction">
+      <template #navigation><PageHeader :title="pageTitle" :cover="!headerSolid" :fade="headerOpacity" /></template>
+      <button role="button" class="account-profile" :class="{ 'is-pending': modeBusy }" :disabled="modeBusy" aria-label="编辑我的资料与封面" @click.stop="editProfile" hover-class="touch-feedback">
+        <view class="account-avatar"><LazyImage :src="activeMember.avatar" variant="avatar" avatar round /></view>
+        <view class="account-copy">
+          <text class="account-name">{{ activeMember.name || '我' }}</text>
+          <view class="account-identity" :aria-busy="modeBusy">
+            <view class="account-identity-badge"><view class="account-identity-symbol" :class="{ 'is-family': displayedFamilyMode }" aria-hidden="true"><AppIcon :name="displayedFamilyMode ? 'identity-home-inverse' : 'identity-person-inverse'" :size="14" /></view><text class="account-identity-label">{{ displayedFamilyMode ? '家庭' : '个人' }}</text></view>
+            <text v-if="displayedFamilyMode && displayedFamily" class="account-family-name">{{ familyDisplay.name }}</text>
+          </view>
         </view>
-        <FamilyInviteCard />
-      </view>
-    </view>
-    <view class="feature-panel family-preferences">
-      <view class="feature-row" :aria-busy="preferencePending"><view class="feature-icon"><AppIcon name="inventory" /></view><view class="feature-copy"><text class="stock-name">冰箱</text></view><button role="switch" class="feature-switch" :class="{ on: familyFeatures.fridge }" :aria-checked="familyFeatures.fridge" aria-label="冰箱" @click="$feedback(); runAction(() => setFridgeEnabled(!familyFeatures.fridge))" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view /></button></view>
-      <button role="button" class="family-info-row family-help-entry" @click="$feedback(); about = true" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="menu" /><text>使用说明</text><AppIcon name="chevron" /></button>
-    </view>
-    <Sheet v-if="about" title="使用说明" :preferred-height="600" @close="about = false">
-      <view class="help-section"><text class="subheading">家庭与个人资料</text><text class="hint">在「我家」点击自己的成员卡片修改头像和昵称。顶部家庭卡片和右侧编辑按钮都打开「名称与封面」；需要切换、新建或管理家庭时，在设置内选择「切换与管理」。</text></view>
-      <view class="help-section"><text class="subheading">点菜与开饭</text><text class="hint">在「菜单」选好菜再选餐次，重复菜品只做一道。「厨房」按日期和餐次展示已安排的餐食，开饭前可以加菜、查看本餐备菜。无需标记已备也能直接开饭，开饭后记入开火日记。</text></view>
-      <view class="help-section"><text class="subheading">本餐备菜</text><text class="hint">点击菜品查看做法，展开「按需调整」即可修改用量、添加或删除材料，调整会自动保存，仅影响本餐。「恢复默认」可取回本餐原材料。点击「备齐」或「加购」即可标记，再点「已备齐」或「已加购」可取消。备齐会移除本菜待买包，取消备齐不会自动加购；需要购买时先取消备齐，再加购并从底部进入采购。</text></view>
-      <view class="help-section"><text class="subheading">采购与冰箱</text><text class="hint">采购只显示主动加购的菜品食材包，用量以本餐调整为准，可选择本次要买的餐或菜；购买功能接入中。备菜中标记「备齐」会移除该菜待买包，开饭、取消或删除餐单会移除本餐待买包。冰箱独立记录库存，不自动扣减；关闭冰箱不会清除记录，底部「食材」变为「采购」，备菜和采购始终可用。</text></view>
-      <view class="help-section"><text class="subheading">分享与隐私</text><text class="hint">{{ cloudMode ? '家庭记录仅家人可访问。通过微信发给好友的菜品或套餐，对方无需加入家庭即可查看；主动发布到美食的内容会公开。邀请卡片需由对方确认后才会加入家庭。' : '当前为本地预览，分享与评论只保存在当前设备。' }}删除分享不影响已加入的菜单。营养说明由作者填写，不作为医疗建议。</text></view>
+        <view class="account-profile-chevron"><AppIcon name="chevron" :size="18" /></view>
+      </button>
+      <template #content>
+        <view class="account-sections">
+          <view class="account-group">
+            <button role="button" class="account-row diary-entry" aria-label="打开饮食日记" @click.stop="$emit('diary')" hover-class="touch-feedback"><AppIcon name="calendar" :size="22" /><text class="account-row-title">饮食日记</text><AppIcon name="chevron" :size="16" /></button>
+          </view>
+          <view class="account-group account-workspace-group">
+            <view class="account-row account-mode-row" :aria-busy="modeBusy"><AppIcon name="family" :size="22" /><text class="account-row-title">家庭模式</text><button role="switch" class="feature-switch" :class="{ on: displayedFamilyMode, pending: modeBusy }" :aria-checked="displayedFamilyMode" :aria-busy="modeBusy" :disabled="modeBusy || cloudStatus.busy" aria-label="家庭模式" @click.stop="toggleMode" hover-class="none"><view /></button></view>
+            <text v-if="modeError" class="form-error account-error" role="alert">{{ modeError }}</text>
+            <button v-if="displayedFamilyMode" role="button" class="account-row family-members-entry" aria-label="查看我的家庭" @click.stop="familyOpen = true" hover-class="touch-feedback"><AppIcon name="family" :size="22" /><text class="account-row-title">我的家庭</text><text v-if="displayedMemberCount" class="account-row-value">{{ displayedMemberCount }} 人</text><AppIcon name="chevron" :size="16" /></button>
+          </view>
+          <view class="account-group">
+            <button role="button" class="account-row family-help-entry" aria-label="打开使用说明" @click.stop="about = true" hover-class="touch-feedback"><AppIcon name="menu" :size="22" /><text class="account-row-title">使用说明</text><AppIcon name="chevron" :size="16" /></button>
+          </view>
+        </view>
+      </template>
+    </StretchCover>
+    <Sheet v-if="familyOpen" ref="familySheet" page :title="familyCreating ? '新建家庭' : '我的家庭'" variant="settings" :footer-visible="false" @close="closeFamily">
+      <FamilyManagement ref="familyManagement" :active="!modeBusy" @busy="familyManaging = $event" @section-change="familySheet?.resetScroll()" @changed="familyChanged" />
     </Sheet>
-    <ProfileEditor v-if="editingProfile" @close="editingProfile = false" />
+    <Sheet v-if="about" page title="使用说明" variant="help" :footer-visible="false" @close="about = false">
+      <view class="help-section"><text class="help-heading">从菜单安排一餐</text><text class="help-paragraph">在「小灶 → 菜单」选好菜，再选择日期和餐次。已有安排时去「安排」加菜或查看备菜清单。菜谱原本的用量会保留。</text></view>
+      <view class="help-section"><text class="help-heading">留下吃饭的记录</text><text class="help-paragraph">在「安排」可以添上实拍与标签。未手动记录的当天餐食跨日后自动存入饮食日记，并默认公开到「发现」；家庭餐同步到家人的个人日记。已手动设置的可见范围保持不变。</text></view>
+      <view class="help-section"><text class="help-heading">看看大家吃什么</text><text class="help-paragraph">在「发现」浏览公开餐食的照片与标签，下拉可以刷新。自己的记录可以在饮食日记中改为仅饮食日记，也可以删除。</text></view>
+      <view class="help-section"><text class="help-heading">个人与家庭</text><text class="help-paragraph">在「我的」关闭家庭模式只是切换为个人使用，不会退出或删除家庭。开启后可回到原家庭，没有家庭时可创建或加入。退出和删除仍在家庭管理中单独处理。</text></view>
+    </Sheet>
+    <ProfileEditor v-if="editingProfile" page @close="editingProfile = false" />
   </view>
 </template>
 
 <style scoped>
-.family-banner-caption.family-id { white-space: nowrap; }
-.section-line.family-members-heading { justify-content: flex-start; gap: 8px; }
+.feature-switch.pending { opacity: 1; }
+.account-workspace-group .account-row.is-pending { opacity: 1; }
+.family-view { min-height: calc(100vh - var(--account-bottom-inset, 0px)); margin: 0 calc(-1 * var(--page-gutter)); background: var(--paper); }
+.account-profile { display: flex; align-items: center; gap: 18px; width: 100%; box-sizing: border-box; height: var(--home-cover-content-height); padding: calc(var(--home-cover-content-height) - 104px) 24px 40px; background: var(--white); color: var(--ink); text-align: left; }
+.account-profile.is-pending { opacity: 1; }
+.has-family-cover .account-profile { position: relative; background: transparent; color: var(--white); border-radius: 0; }
+.has-family-cover .account-avatar { box-shadow: 0 0 0 1px var(--profile-cover-border); }
+.has-family-cover .account-family-name { color: var(--white); }
+.has-family-cover .account-name, .has-family-cover .account-family-name { text-shadow: 0 1px 3px rgba(22, 28, 32, .45); }
+.has-family-cover .account-identity-badge { background: var(--photo-label-surface); color: var(--white); }
+.account-profile-chevron { display: flex; align-items: center; flex-shrink: 0; }
+.has-family-cover .account-profile-chevron { filter: brightness(0) invert(1); }
+.account-avatar { width: 64px; height: 64px; flex: 0 0 64px; overflow: hidden; border-radius: 50%; }
+.account-avatar .lazy-photo { width: 100%; height: 100%; }
+.account-copy { flex: 1; min-width: 0; }
+.account-name { display: block; font-size: var(--type-title); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
+.account-identity { display: flex; align-items: center; gap: 8px; min-height: 22px; margin-top: 7px; }
+.account-identity-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex-shrink: 0; box-sizing: border-box; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--control-accent); color: var(--green); }
+.account-identity-symbol { display: flex; align-items: center; justify-content: center; flex: 0 0 14px; width: 14px; height: 14px; }
+.account-identity-label { display: block; font-size: var(--type-caption); font-weight: 500; line-height: 1; text-align: center; white-space: nowrap; }
+.account-family-name { display: block; min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--type-meta); line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+.account-sections { position: relative; margin-top: calc(-1 * var(--radius-sheet)); padding: 0 0 24px; }
+.account-group:first-child { overflow: hidden; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; }
+.account-group { margin-bottom: 12px; background: var(--white); }
+.account-row { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; min-height: 58px; padding: 13px 20px; text-align: left; color: var(--ink); background: var(--white); }
+.account-row + .account-row { border-top: 1px solid var(--paper); }
+.account-row-title { flex: 1; min-width: 0; font-size: var(--type-body); line-height: 24px; }
+.account-row-value { color: var(--muted); font-size: var(--type-meta); }
+.account-mode-row { padding-top: 5px; padding-bottom: 5px; }
+.account-mode-row .feature-switch { flex-shrink: 0; }
+.account-error { display: block; margin: 0 20px 16px; }
 </style>

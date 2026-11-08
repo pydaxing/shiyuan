@@ -116,8 +116,8 @@ test('fresh defaults disable fridge, shopping and chef without overriding existi
 test('dish and family portraits omit the removed chef feature while preserving family ownership', () => {
   const component = (name) => readFileSync(new URL(`../src/components/${name}.vue`, import.meta.url), 'utf8');
   assert.doesNotMatch(component('MealDishList'), /isChef|chef-mark|chef-hat/);
-  assert.doesNotMatch(component('FamilyView'), /isChef|chef-hat|我是大厨/);
-  assert.match(component('FamilyView'), /v-if="state.family.headMemberId === member.id" class="head-crown"/);
+  for (const name of ['FamilyView', 'FamilyManagement']) assert.doesNotMatch(component(name), /isChef|chef-hat|我是大厨/);
+  assert.match(component('FamilyManagement'), /v-if="state.family.headMemberId === member.id" class="head-crown"/);
 });
 
 test('component event handlers are not shadowed by repeated item aliases', () => {

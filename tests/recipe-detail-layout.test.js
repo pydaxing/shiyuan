@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse } from '@vue/compiler-sfc';
 import { baseParse } from '@vue/compiler-dom';
-import { recipeStepTitle } from '../src/domain/presentation.js';
+import { recipeStepTitle, recipeDisplaySteps } from '../src/domain/presentation.js';
 
 const source = readFileSync(new URL('../src/components/RecipeContent.vue', import.meta.url), 'utf8');
 const nodes = [];
@@ -18,12 +18,12 @@ test('recipe details read continuously from cover to ingredients to method witho
   const ingredients = content.findIndex(node => hasClass(node, 'recipe-ingredients-section'));
   const method = content.findIndex(node => hasClass(node, 'recipe-method'));
   assert.ok(cover >= 0 && ingredients > cover && method > ingredients);
-  assert.ok(!content[ingredients].props.some(prop => prop.name === 'if'));
+  assert.equal(content[ingredients].props.find(prop => prop.name === 'if').exp.content, 'recipe.ingredients?.length');
   const methodBody = nodes.find(node => hasClass(node, 'recipe-method-body'));
   assert.ok(!methodBody.props.some(prop => prop.name === 'if'));
   assert.doesNotMatch(source, /methodOpen|recipe-method-toggle|标准用量/);
   assert.match(methodBody.loc.source, /variant="detail"/);
-  assert.match(content[ingredients].loc.source, /formatAmount\(ingredient.quantity, ingredient.unit, ingredient.amountText\)/);
+  assert.match(content[ingredients].loc.source, /<IngredientTable :ingredients="recipe.ingredients" :reset-key="recipe.id"/);
 });
 
 test('every step photo preserves the whole image, including multi-photo steps', () => {
@@ -50,7 +50,7 @@ test('ingredient and method counts share heading typography and a middle dot sep
   }
   assert.match(headings[0].loc.source, /食材 · {{ recipe.ingredients.length }} 种/);
   const methodCount = headings[1].children[0].children.find(node => node.type === 5);
-  assert.equal(methodCount.content.content, "recipe.steps.length ? ' · ' + recipe.steps.length + ' 步' : ''");
+  assert.equal(methodCount.content.content, "displaySteps.length ? ' · ' + displaySteps.length + ' 步' : ''");
   assert.ok(nodes.some(node => hasClass(node, 'recipe-method-empty')));
 });
 
@@ -68,7 +68,7 @@ test('reader hides generic imported step headings without removing meaningful ti
   assert.match(stepLead.loc.source, /step-number/);
   assert.doesNotMatch(stepLead.loc.source, /step-body/);
   assert.ok(nodes.find(node => hasClass(node, 'recipe-step')).children.some(node => node.type === 1 && hasClass(node, 'step-body')));
-  assert.ok(nodes.some(node => hasClass(node, 'recipe-method-empty') && node.props.some(prop => prop.name === 'if' && prop.exp.content === '!recipe.steps.length')));
+  assert.ok(nodes.some(node => hasClass(node, 'recipe-method-empty') && node.props.some(prop => prop.name === 'if' && prop.exp.content === '!displaySteps.length')));
 });
 
 test('food, home and friend-shared details reuse cover tags and the continuous ingredient and method layout', () => {
@@ -76,7 +76,7 @@ test('food, home and friend-shared details reuse cover tags and the continuous i
   assert.match(community, /<RecipeContent v-if="current.kind === 'dish'" :recipe="current.recipes\[0\]" :cover="false" :show-meta="false"/);
   assert.match(community, /<FoodDetailSheet/);
   assert.match(readFileSync(new URL('../src/components/FoodDetailSheet.vue', import.meta.url), 'utf8'), /<RecipeCover[^>]*immersive/);
-  assert.match(community, /<FoodDetailSheet[^>]*:publisher="communityPublisherName\(current\)"/);
+  assert.match(community, /<FoodDetailSheet[^>]*:publisher="currentPublisher"/);
   const byline = readFileSync(new URL('../src/components/CommunityByline.vue', import.meta.url), 'utf8');
   assert.match(byline, /communityPublisherName\(props.post\)/);
   const cover = readFileSync(new URL('../src/components/RecipeCover.vue', import.meta.url), 'utf8');
@@ -90,4 +90,18 @@ test('food, home and friend-shared details reuse cover tags and the continuous i
   assert.match(forward, /name="share"/);
   assert.match(forward, /<text>分享<\/text>/);
   assert.doesNotMatch(forward, /发给好友/);
+});
+
+
+test('all detail entries omit numeric-only legacy drafts but retain real text and image-only steps', () => {
+  const steps = [null, { title: '1', text: '', images: [] }, { title: '步骤 2', text: '  ', images: [] },
+    { title: '小火慢炖', text: '', images: [] }, { title: '3', text: '煮熟', images: [] },
+    { title: '4', images: ['cloud://env/step'] }, { title: '5', image: '/static/tofu.png' }];
+  const before = structuredClone(steps);
+  assert.deepEqual(recipeDisplaySteps(steps), steps.slice(3));
+  assert.deepEqual(steps, before);
+  assert.deepEqual(recipeDisplaySteps([{ title: '1', image: '/static/old.png', images: [] }]), []);
+  assert.deepEqual(recipeDisplaySteps(undefined), []);
+  assert.match(source, /recipeDisplaySteps\(props.recipe.steps\)/);
+  assert.match(source, /in displaySteps/);
 });

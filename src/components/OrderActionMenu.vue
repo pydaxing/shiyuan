@@ -4,8 +4,8 @@ import AppIcon from './AppIcon.vue';
 import { afterNativeRender } from '../composables/nativeRender.js';
 import { orderMenuActions, orderMenuGeometry, orderMenuIcon } from '../domain/order-action-menu.js';
 
-const props = defineProps({ label: String, status: String, opened: Boolean, busy: Boolean, actions: Array, floating: Boolean, hasDishes: { type: Boolean, default: true } });
-const emit = defineEmits(['activate', 'close', 'cancel', 'restore', 'remove', 'edit']);
+const props = defineProps({ label: String, status: String, opened: Boolean, busy: Boolean, actions: Array, floating: Boolean, elevated: Boolean, hasDishes: { type: Boolean, default: true } });
+const emit = defineEmits(['activate', 'close', 'cancel', 'restore', 'remove', 'edit', 'visibility']);
 const instance = getCurrentInstance();
 const triggerRef = ref(null);
 const menuRef = ref(null);
@@ -27,10 +27,10 @@ async function focusOption() {
   const target = menuRef.value?.$el || menuRef.value;
   focusElement(target?.querySelectorAll?.('[role="menuitem"]')[highlighted.value]);
 }
-function close(restoreFocus = true) {
+function close(restoreFocus = true, selectedAction = null) {
   layoutRequest += 1;
   layout.value = null;
-  emit('close');
+  emit('close', selectedAction);
   if (restoreFocus) focusElement(triggerRef.value);
 }
 async function positionMenu() {
@@ -44,7 +44,7 @@ async function positionMenu() {
       query.select('.order-more-button').boundingClientRect(resolve).exec();
     });
     if (disposed || !props.opened || props.busy || request !== layoutRequest) return;
-    layout.value = orderMenuGeometry(anchor, uni.getWindowInfo?.() || uni.getSystemInfoSync(), options.value.length);
+    layout.value = orderMenuGeometry(anchor, uni.getWindowInfo?.() || uni.getSystemInfoSync(), options.value.length, options.value.some(option => option.action === 'visibility') ? 160 : 128);
     if (!layout.value) close(false);
     else focusOption();
   } catch {
@@ -63,7 +63,7 @@ function toggle() {
 }
 function choose(action) {
   if (props.busy || !props.opened || !layout.value || !options.value.some(option => option.action === action)) return;
-  close();
+  close(true, action);
   emit(action);
 }
 function onTriggerKey(event) {
@@ -115,12 +115,12 @@ onUnmounted(() => {
     <!-- #ifdef MP-WEIXIN -->
     <root-portal>
     <!-- #endif -->
-    <view v-if="opened && layout" class="app-shell order-menu-root" :class="{ 'is-floating-menu': floating }">
+    <view v-if="opened && layout" class="app-shell order-menu-root" :class="{ 'is-floating-menu': floating, 'is-elevated-menu': elevated }">
       <view class="order-menu-backdrop" aria-hidden="true" @click.stop="close()" @touchmove.stop="close(false)" />
       <view ref="menuRef" class="order-menu-popover" :class="{ 'is-above': layout.placement === 'above' }" :style="menuStyle" @click.stop @keydown.stop="onMenuKey">
         <view class="order-menu-pointer" :style="{ left: `${layout.pointer}px` }" aria-hidden="true" />
         <scroll-view :id="menuId" class="order-menu-list" scroll-y enhanced :bounces="false" role="menu" :aria-label="`${label}的操作`">
-          <button v-for="(option, index) in options" :key="option.action" role="menuitem" class="order-menu-item" :class="{ 'is-danger': option.action === 'remove' }" :aria-label="`${option.label}${label}`" :tabindex="highlighted === index ? 0 : -1" :disabled="busy || !opened" @focus="highlighted = index" @click.stop="choose(option.action)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon v-if="orderMenuIcon(option.action)" class="order-menu-icon" :name="orderMenuIcon(option.action)" :size="18" /><text>{{ option.label }}</text></button>
+          <button v-for="(option, index) in options" :key="option.action" role="menuitem" class="order-menu-item" :class="{ 'is-danger': option.action === 'remove' }" :aria-label="`${option.label}${label}`" :tabindex="highlighted === index ? 0 : -1" :disabled="busy || !opened" @focus="highlighted = index" @click.stop="choose(option.action)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon v-if="orderMenuIcon(option.action)" class="order-menu-icon" :name="orderMenuIcon(option.action)" :size="18" /><text class="order-menu-label">{{ option.label }}</text></button>
         </scroll-view>
       </view>
     </view>
@@ -143,7 +143,7 @@ onUnmounted(() => {
 .is-floating .order-more-button::before { content: ''; position: absolute; inset: calc((44px - var(--detail-tool-size)) / 2); border-radius: 50%; background: rgba(255, 255, 255, .9); }
 .is-floating .order-more-dots { position: relative; }
 .app-shell.order-menu-root { position: fixed; inset: 0; z-index: 90; width: auto; min-height: 0; margin: 0; padding: 0; background: transparent; }
-.app-shell.order-menu-root.is-floating-menu { z-index: 110; pointer-events: auto; }
+.app-shell.order-menu-root.is-floating-menu, .app-shell.order-menu-root.is-elevated-menu { z-index: 110; pointer-events: auto; }
 .order-menu-backdrop { position: absolute; inset: 0; background: transparent; }
 .order-menu-popover { position: absolute; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--white); box-shadow: 0 6px 22px rgba(36, 54, 63, .12); animation: order-menu-enter 140ms ease-out; transform-origin: top right; }
 .order-menu-popover.is-above { transform-origin: bottom right; }
@@ -151,6 +151,7 @@ onUnmounted(() => {
 .order-menu-popover.is-above .order-menu-pointer { top: auto; bottom: -5px; transform: translateX(-50%) rotate(225deg); }
 .order-menu-list { position: relative; height: 100%; padding: 4px 0; border-radius: inherit; }
 .order-menu-item { display: flex; align-items: center; justify-content: flex-start; gap: 10px; width: 100%; min-height: 44px; padding: 0 16px; border-radius: 0; color: var(--ink); font-size: var(--type-control); font-weight: 400; line-height: 22px; text-align: left; }
+.order-menu-label { flex-shrink: 0; white-space: nowrap; }
 .order-menu-icon { flex: 0 0 18px; width: 18px; height: 18px; pointer-events: none; }
 .order-menu-item + .order-menu-item { border-top: 1px solid var(--line); }
 .order-menu-item.is-danger { color: var(--danger); }

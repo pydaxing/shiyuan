@@ -120,7 +120,9 @@ export function createMediaCache({ urls, fetchImage, writeImage, removeImage, pr
             entries.delete(fileId);
             entries.set(fileId, cached);
             persist();
-            urls.value[fileId] = cached.path;
+            // Authorization can expire between page mounts. Renewing it must
+            // invalidate a blank render even when the cached file is unchanged.
+            urls.value = { ...urls.value, [fileId]: cached.path };
             retryAfter.delete(fileId);
             onSuccess(fileId);
             return cached.path;
@@ -170,28 +172,33 @@ export function createMediaCache({ urls, fetchImage, writeImage, removeImage, pr
     if ((retryAfter.get(fileId) || 0) <= now()) void load(fileId, undefined, false, false, isNeeded).catch(() => {});
     return '';
   }
-  function clear() {
+  function clear({ retain = [] } = {}) {
     epoch += 1;
-    const paths = [...entries.values()].map(entry => entry.path);
-    entries.clear();
-    totalBytes = 0;
+    const allowed = new Set(retain);
+    const paths = [];
+    for (const [key, entry] of entries) {
+      if (allowed.has(key) && entry.expiresAt > now()) continue;
+      paths.push(entry.path); entries.delete(key);
+    }
+    totalBytes = [...entries.values()].reduce((sum, entry) => sum + entry.bytes, 0);
     for (const path of paths) void remove(path).catch(() => {});
     pending.clear();
     retryAfter.clear();
-    urls.value = {};
-    saveEntries(scope, []); flushCache();
+    urls.value = Object.fromEntries([...entries].filter(([key]) => urls.value[key]).map(([key]) => [key, urls.value[key]]));
+    saveEntries(scope, [...entries].map(([fileId, entry]) => ({ fileId, ...entry }))); flushCache();
   }
-  function activate(nextScope) {
+  function activate(nextScope, { retain = [] } = {}) {
     if (nextScope === scope) return;
     const restored = readEntries(nextScope);
-    clear(); scope = nextScope;
+    clear({ retain }); scope = nextScope;
+    const retainedUrls = urls.value;
     for (const item of restored) {
       if (!item || typeof item.fileId !== 'string' || typeof item.path !== 'string' || !Number.isSafeInteger(item.bytes) || item.bytes <= 0 || !Number.isFinite(item.expiresAt)) continue;
       if (entries.has(item.fileId) || entries.size >= maxEntries || totalBytes + item.bytes > maxBytes) continue;
       entries.set(item.fileId, { path: item.path, bytes: item.bytes, expiresAt: Math.min(item.expiresAt, now() + 300000) });
       totalBytes += item.bytes;
     }
-    urls.value = checkImage ? {} : Object.fromEntries([...entries].map(([fileId, entry]) => [fileId, entry.path]));
+    urls.value = checkImage ? retainedUrls : Object.fromEntries([...entries].map(([fileId, entry]) => [fileId, entry.path]));
     persist();
   }
   return { load: (fileId, { force = false, isNeeded } = {}) => load(fileId, undefined, force, false, isNeeded), prime: (fileId, localPath) => load(fileId, { localPath }), peek: fileId => entries.get(fileId)?.expiresAt > now() ? urls.value[fileId] || '' : '', resolve, clear, activate, flush: () => { persist(); flushCache(); } };

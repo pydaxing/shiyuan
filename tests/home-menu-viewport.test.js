@@ -36,7 +36,7 @@ function fixture(context, options = {}) {
       if (!layout.delayScroll) { layout.scrollTop = scrollTop; controller.onScroll({ scrollTop }); }
     },
   };
-  controller = scope.run(() => useHomeMenuViewport(visible, locked));
+  controller = scope.run(() => useHomeMenuViewport(visible, locked, options.headerExtension || 0));
   context.after(() => { scope.stop(); globalThis.uni = originalUni; });
   return {
     ...controller, visible, locked, layout, moves, pending,
@@ -247,4 +247,19 @@ test('unmounting cancels pending docking and rejects subsequent gestures', async
   await flush();
   current.scrollPage({ distance: -10, start: true });
   assert.deepEqual(current.moves, []);
+});
+
+
+test('fixed ordering tabs reserve native header space and the cover-free list docks without scrolling', async context => {
+  const current = fixture(context, { headerExtension: 44, panelTop: 132, menuBottom: 844, windowInfo: { windowWidth: 390, windowHeight: 844, uniPlatform: 'mp-weixin', statusBarHeight: 44 }, capsule: { bottom: 76 } });
+  await flush();
+  assert.equal(current.style.value['--home-menu-search-top'], '132px');
+  assert.equal(current.listInset.value, 186);
+  assert.equal(current.docked.value, true);
+  current.visible.value = false; await flush();
+  current.scrollPage({ distance: 100, start: true });
+  assert.deepEqual(current.moves, []);
+  current.visible.value = true; await flush();
+  assert.equal(current.docked.value, true);
+  assert.equal(current.listInset.value, 186);
 });

@@ -79,7 +79,7 @@ onUnmounted(() => { disposed = true; uni.offWindowResize?.(measure); });
     </view>
     <text class="crop-note">{{ frame === 'family' ? '取景比例与首页一致，原图会保留。' : '取景比例与封面展示一致，点开图片仍可查看原图。' }}</text>
     <text v-if="error" class="error-message" role="alert">{{ error }}</text>
-    <template #footer><view class="crop-footer"><button role="button" class="secondary-button" :disabled="busy" @click="$emit('cancel')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">取消</button><button role="button" class="primary-button" :disabled="busy || !placement" :aria-busy="busy" @click="confirm" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">{{ busy ? '正在处理…' : '使用此取景' }}</button></view></template>
+    <template #footer><view class="crop-footer"><button role="button" class="secondary-button" :disabled="busy" @click="$emit('cancel')" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">取消</button><button role="button" class="primary-button" :disabled="busy || !placement" :aria-busy="busy" @click="confirm" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">{{ busy ? '正在处理…' : '确认' }}</button></view></template>
   </Sheet>
 </template>
 

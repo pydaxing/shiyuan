@@ -65,6 +65,18 @@ test('unknown minutes stay null while fixed technical servings never claim sourc
   assert.deepEqual(normalizeImportedRecipe(report.recipe), report.recipe);
 });
 
+test('archived normalization preserves existing reviewed portions instead of replacing them with the new-recipe default', async () => {
+  const report = await normalize();
+  const archived = { ...report.recipe, servings: 3 };
+  const before = structuredClone(archived);
+  assert.deepEqual(normalizeImportedRecipe(archived), archived);
+  assert.deepEqual(archived, before);
+  assert.equal(normalizeImportedRecipe({ ...archived, servings: undefined }).servings, 2);
+  for (const servings of [0, -1, 1.5, 21, 'invalid']) {
+    assert.throws(() => normalizeImportedRecipe({ ...archived, servings }), /基础份量/);
+  }
+});
+
 test('source-bound review can preserve missing amounts, group labels and a shortened display title', async () => {
   const raw = rawRecipe({ title: '这是一个非常非常长的番茄炒蛋菜谱名称以及一些多余的描述文字', ingredients: [{ name: '配料', amountText: '' }, { name: '番茄', amountText: '' }, { name: '鸡蛋', amountText: '2' }] });
   const review = { ...reviewFor(raw), importOverrides: { displayTitle: '番茄炒蛋', allowMissingAmounts: true, ingredientGroupIndices: [0], textAmountIndices: [2] } };

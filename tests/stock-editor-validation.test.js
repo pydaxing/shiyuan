@@ -4,6 +4,8 @@ import { readFileSync } from 'node:fs';
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc';
 import * as Vue from 'vue';
 import * as kitchen from '../src/domain/kitchen.js';
+import { ingredientSuggestions } from '../src/domain/ingredient-catalog.js';
+import { stockReminder } from '../src/domain/stock-reminders.js';
 import { presentMutation } from '../src/services/mutation-feedback.js';
 
 const source = readFileSync(new URL('../src/components/StockEditor.vue', import.meta.url), 'utf8');
@@ -23,6 +25,7 @@ function mount(context, overrides = {}, initialProps = {}) {
   const modules = {
     ...Vue,
     ...kitchen,
+    ingredientSuggestions, stockReminder,
     presentMutation,
     state: Vue.ref({ family: { features: { fridge: true } } }),
     ingredientImage: name => `ingredient:${name}`,
@@ -265,6 +268,27 @@ for (const fridge of [false, true]) {
     assert.equal(render().body.find(node => node.type === api.SelectField).props.disabled, true);
   });
 }
+
+test('adjustment keeps the selected default image and quantity until explicitly changed', async context => {
+  const initial = { name: '鸡蛋', quantity: 6, unit: '个', location: '冷藏', image: '/static/ingredients/eggs.png' };
+  const { api, calls } = mount(context, {}, { initial });
+  assert.equal(api.draft.value.quantity, 6);
+  assert.equal(api.draft.value.image, initial.image);
+  api.draft.value.quantity = 3;
+  await api.save();
+  assert.equal(calls[0][1].quantity, 3);
+  assert.equal(calls[0][1].image, initial.image);
+});
+
+test('an unlisted ingredient remains valid through the original custom form', async context => {
+  const { api, calls } = mount(context);
+  api.draft.value.name = '冷门手工食材';
+  await Vue.nextTick();
+  api.draft.value.quantity = '2';
+  api.draft.value.unit = '盒';
+  await api.save();
+  assert.deepEqual(calls[0], ['addStock', { name: '冷门手工食材', quantity: '2', unit: '盒', location: '冷藏', expiresOn: '', image: '' }]);
+});
 
 test('native form inputs associate the inline error text and retain keyboard coordination', () => {
   const field = readFileSync(new URL('../src/components/FormField.vue', import.meta.url), 'utf8');

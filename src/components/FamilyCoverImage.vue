@@ -1,15 +1,15 @@
 <script setup>
 import LazyImage from './LazyImage.vue';
-import { DEFAULT_FAMILY_COVER } from '../domain/family.js';
+import { DEFAULT_FAMILY_COVER, DEFAULT_PERSONAL_COVER } from '../domain/family.js';
 
-defineProps({ src: String, variant: { type: String, default: 'detail' } });
+defineProps({ src: String, personal: Boolean, variant: { type: String, default: 'cover' } });
 </script>
 
 <template>
   <view class="family-cover-image">
     <LazyImage v-if="src" :src="src" :variant="variant" mode="aspectFill" />
     <view v-else class="family-cover-default" aria-hidden="true">
-      <image class="family-cover-photo" :src="DEFAULT_FAMILY_COVER" mode="aspectFill" />
+      <image class="family-cover-photo" :src="personal ? DEFAULT_PERSONAL_COVER : DEFAULT_FAMILY_COVER" mode="aspectFill" />
     </view>
   </view>
 </template>

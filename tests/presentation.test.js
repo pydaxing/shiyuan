@@ -64,6 +64,6 @@ test('individual dishes and sets share the same import deduplication', () => {
 });
 test('every community recipe validates and all ingredient names get a default picture', () => {
   communityPosts.forEach((post) => post.recipes.forEach(validateRecipe));
-  for (const name of ['番茄', '西红柿', '鸡蛋', '鸡腿肉', '食用油', '盐', '未知食材']) assert.match(ingredientImage(name), /^\/static\/ingredient-\w+\.png$/);
+  for (const name of ['番茄', '西红柿', '鸡蛋', '鸡腿肉', '食用油', '盐', '未知食材']) assert.match(ingredientImage(name), /^\/static\/(?:ingredient-\w+|ingredients\/[\w-]+)\.png$/);
   assert.equal(ingredientImage('西红柿'), ingredientImage('番茄'));
 });

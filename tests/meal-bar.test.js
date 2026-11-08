@@ -25,21 +25,27 @@ for (const [today, expected] of [
 ]) test(`meal date buttons pair relative labels with actual dates on ${today}`, () => {
   const days = reservationDays(today);
   const emissions = [];
-  const rendered = nodes(render({ MEALS, reservationDays, calendarDateLabel, today, date: days[1].date, meal: '晚餐', $feedback() {}, $emit: (...args) => emissions.push(args) }, []));
-  const dates = rendered.find(node => node.props?.class === 'reservation-days');
-  const buttons = nodes(dates).filter(node => node.type === 'button');
+  const context = { MEALS, days, calendarDateLabel, dateLabel: '', expanded: 'date', date: days[1].date, meal: '晚餐', mealIcons: {}, mealLabel: value => value === '宵夜' ? '加餐' : value, $feedback() {}, select: (field, value) => emissions.push([`update:${field}`, value]) };
+  const rendered = nodes(render(context, []));
+  const buttons = rendered.filter(node => node.type === 'button' && node.props?.class === 'arrangement-option');
   assert.equal(buttons.length, 3);
   buttons.forEach((button, index) => {
-    assert.equal(nodes(button).find(node => node.props?.class === 'reservation-day-label').children, days[index].label);
-    assert.equal(nodes(button).find(node => node.props?.class === 'reservation-day-date').children, expected[index]);
-    assert.equal(button.props['aria-label'], `选择${days[index].label}，${expected[index]}`);
-    assert.equal(button.props['aria-pressed'], index === 1);
+    assert.equal(nodes(button).find(node => node.props?.class === 'arrangement-date').children, expected[index]);
+    assert.equal(button.props['aria-label'], `选择${days[index].label}，${expected[index]}${index === 1 ? '，已选择' : ''}`);
     assert.equal(button.props['hover-class'], 'touch-feedback');
     button.props.onClick();
   });
   assert.deepEqual(emissions, days.map(day => ['update:date', day.date]));
-  const mealButtons = nodes(rendered.find(node => node.props?.class === 'meal-tabs')).filter(node => node.type === 'button');
-  assert.deepEqual(mealButtons.map(button => button.children), MEALS);
+  context.expanded = 'meal';
+  const mealButtons = nodes(render(context, [])).filter(node => node.type === 'button' && node.props?.class === 'arrangement-option');
+  assert.equal(mealButtons.length, MEALS.length);
+  mealButtons.forEach((button, index) => {
+    assert.ok(button.props['aria-label'].startsWith(`选择${context.mealLabel(MEALS[index])}`));
+    button.props.onClick();
+  });
+  assert.deepEqual(emissions.slice(3), MEALS.map(meal => ['update:meal', meal]));
+  context.expanded = '';
+  assert.equal(nodes(render(context, [])).filter(node => node.props?.class === 'arrangement-option').length, 0);
 });
 
 test('meal dates reserve enough height for two lines without enlarging the shared type scale', () => {

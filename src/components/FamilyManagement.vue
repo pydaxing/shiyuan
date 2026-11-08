@@ -2,39 +2,50 @@
 import { NATIVE_UI_COLORS } from '../domain/ui-theme.js';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useSheetContentResize } from '../composables/useSheetSizing.js';
-import { state, cloudStatus, preferencePending, notify } from '../store.js';
+import { state, activeMember, cloudStatus, preferencePending, notify } from '../store.js';
 import { manageFamily, invokeCloud, recoverFamilyState } from '../services/cloud.js';
-import FormField from './FormField.vue';
+import FamilyCreationFields from './FamilyCreationFields.vue';
 import AppIcon from './AppIcon.vue';
 import FamilyCoverImage from './FamilyCoverImage.vue';
-import ImagePicker from './ImagePicker.vue';
-import { coverFrameStyle } from '../domain/image-crop.js';
+import LazyImage from './LazyImage.vue';
+import FamilyInviteCard from './FamilyInviteCard.vue';
 import { FAMILY_APPEARANCE_DEFAULTS, familyAppearance, familyAppearanceFieldErrors } from '../domain/family.js';
 const props = defineProps({ beforeChange: Function, unsavedChanges: Boolean, active: { type: Boolean, default: true } });
 const emit = defineEmits(['busy', 'changed', 'section-change']);
 useSheetContentResize();
 const owner = computed(() => state.value.family.ownerId === cloudStatus.value.userId);
+const personal = computed(() => state.value.family.kind === 'personal');
+const displayedMembers = computed(() => state.value.family.members.map(member => member.id === activeMember.value?.id
+  ? { ...member, name: activeMember.value.name || member.name, avatar: activeMember.value.avatar || '' }
+  : member));
 const families = ref([]);
-const familyChoices = computed(() => families.value.map(family => ({ ...familyDetails(family.id), current: family.id === cloudStatus.value.familyId })));
+const familyChoices = computed(() => {
+  const choices = families.value.map(family => ({ ...familyDetails(family.id), current: family.id === cloudStatus.value.familyId }));
+  // The current household and members are already confirmed in the snapshot.
+  // Show them immediately while the other household choices are loading.
+  if (!personal.value && cloudStatus.value.familyId && !choices.some(family => family.current)) choices.unshift({ ...familyDetails(), current: true });
+  return choices;
+});
 const loading = ref(false);
 const busy = ref(false);
 const uploading = ref(false);
 const locked = computed(() => busy.value || uploading.value);
 const creating = ref(false);
+const editingFamilies = ref(false);
 const cover = ref('');
 const coverTitle = ref(FAMILY_APPEARANCE_DEFAULTS.coverTitle);
-const subheading = computed(() => creating.value ? '新建一个家' : '');
-watch(subheading, () => emit('section-change'), { flush: 'sync' });
+watch(creating, () => emit('section-change'), { flush: 'sync' });
 const familyName = ref('');
 const canCreate = computed(() => creating.value && !locked.value && !cloudStatus.value.familyRecoveryRequired);
 const error = ref('');
 const recoveryRequired = computed(() => Boolean(cloudStatus.value.familyRecoveryRequired));
 const displayedError = computed(() => error.value || (recoveryRequired.value ? cloudStatus.value.error : ''));
 const submitted = ref(false);
-const fieldRefs = {};
+const creationFields = ref(null);
 const fieldErrors = computed(() => submitted.value ? familyAppearanceFieldErrors({ name: familyName.value, coverTitle: coverTitle.value }) : {});
 let createRequest = '';
 let alive = true;
+let loadGeneration = 0;
 function familyDetails(familyId = cloudStatus.value.familyId) {
   if (familyId !== cloudStatus.value.familyId) return families.value.find(family => family.id === familyId);
   const family = state.value.family;
@@ -47,12 +58,15 @@ function requireFamily(familyId, expectedCurrentFamilyId) {
 }
 async function load() {
   if (loading.value) return;
+  const generation = ++loadGeneration;
+  const userId = cloudStatus.value.userId;
+  const isCurrent = () => alive && generation === loadGeneration && cloudStatus.value.userId === userId;
   loading.value = true; error.value = '';
   try {
     const result = recoveryRequired.value ? await recoverFamilyState() : await invokeCloud('listFamilies');
-    if (alive) families.value = result.families;
-  } catch (failure) { if (alive) error.value = failure.message; }
-  finally { if (alive) loading.value = false; }
+    if (isCurrent()) families.value = result.families;
+  } catch (failure) { if (isCurrent()) error.value = failure.message; }
+  finally { if (isCurrent()) loading.value = false; }
 }
 async function perform(action, payload = {}, changesFamily = true, confirmAction) {
   if (!alive || props.active === false) return;
@@ -69,8 +83,14 @@ async function perform(action, payload = {}, changesFamily = true, confirmAction
       if (action === 'deleteFamily' && !family.owner) throw new Error('管理员信息已变化，请重新打开管理页面。');
       if (action === 'deleteFamily' && family.name !== payload.confirmName) throw new Error('家庭名称不一致，未删除。请重新输入完整名称。');
     }
+    // Ignore a background list requested before this mutation.
+    loadGeneration++; loading.value = false;
     await manageFamily(action, payload);
-    if (changesFamily) emit('changed');
+    if (changesFamily) {
+      if (action === 'leaveFamily' || action === 'deleteFamily') families.value = families.value.filter(family => family.id !== payload.familyId);
+      creating.value = false;
+      emit('changed');
+    }
     else {
       if (action === 'leaveFamily' || action === 'deleteFamily') families.value = families.value.filter(family => family.id !== payload.familyId);
       await load();
@@ -79,8 +99,12 @@ async function perform(action, payload = {}, changesFamily = true, confirmAction
   finally { busy.value = false; emit('busy', false); }
 }
 function selectFamily(family) {
-  if (family.id === cloudStatus.value.familyId) return;
+  if (editingFamilies.value || family.id === cloudStatus.value.familyId) return;
   return perform('switchFamily', { familyId: family.id });
+}
+function exitFamily(family) {
+  if (!editingFamilies.value) return;
+  return leave(family);
 }
 function deleteFamily(family = familyDetails()) {
   const target = familyDetails(family.id);
@@ -123,59 +147,86 @@ async function submitCreation() {
   if (!canCreate.value) return;
   submitted.value = true; error.value = '';
   const invalid = Object.keys(fieldErrors.value)[0];
-  if (invalid) { await nextTick(); fieldRefs[invalid]?.reveal(); return; }
+  if (invalid) { await nextTick(); creationFields.value?.editName(); return; }
   const appearance = familyAppearance({ cover: cover.value, coverTitle: coverTitle.value });
   return perform('createFamily', { familyName: familyName.value.trim(), cover: appearance.cover, coverTitle: appearance.coverTitle, requestId: createRequest });
 }
 function back() { if (locked.value) return; creating.value = false; error.value = ''; }
 onMounted(load);
 onUnmounted(() => { alive = false; });
-defineExpose({ creating, busy, canCreate, submitCreation });
+defineExpose({ creating, busy, canCreate, submitCreation, back, load });
 </script>
 
 <template>
-  <view v-if="props.active" class="family-management-panel" :aria-busy="locked || loading">
-    <view v-if="subheading" class="family-management-heading"><text class="subheading">{{ subheading }}</text><button class="text-button" :disabled="locked" @click="$feedback(); back()" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">返回列表</button></view>
-    <view v-if="creating" class="family-appearance-panel">
-      <view class="field-label"><text class="subheading">家庭封面</text></view>
-      <ImagePicker v-model="cover" frame="family" :family-draft-request="createRequest" :disabled="busy" label="拍照/相册" @busy="imageBusy" />
-      <view class="field-label" @click.stop><text class="subheading">家庭名称</text><FormField :ref="field => fieldRefs.name = field" v-model="familyName" :error="fieldErrors.name" aria-label="新家庭名称" :disabled="locked" field-class="input" maxlength="20" placeholder="例如：爸妈的小家" /></view>
-      <view class="field-label" @click.stop><text class="subheading">菜单主标题</text><FormField :ref="field => fieldRefs.coverTitle = field" v-model="coverTitle" :error="fieldErrors.coverTitle" aria-label="新家庭菜单主标题" :disabled="locked" field-class="input" maxlength="30" :placeholder="FAMILY_APPEARANCE_DEFAULTS.coverTitle" /></view>
+  <view v-if="props.active" class="family-management-panel" :aria-busy="locked || recoveryRequired">
+    <view v-if="creating" class="family-creation-panel">
+      <FamilyCreationFields ref="creationFields" v-model:name="familyName" v-model:cover="cover" :request-id="createRequest" :disabled="busy" :name-error="fieldErrors.name" @busy="imageBusy" />
+      <view class="family-creation-controls"><button class="primary-button family-create-submit" :disabled="!canCreate" :aria-busy="busy" @click="$feedback(); submitCreation()" hover-class="touch-feedback">{{ busy ? '正在创建…' : '创建并切换' }}</button></view>
     </view>
     <view v-else>
-      <text v-if="loading" class="hint">正在读取家庭…</text>
+      <view class="family-selection-section">
+      <view class="section-line family-section-heading"><text class="subheading">家庭</text><text v-if="loading && recoveryRequired" class="family-loading-label" role="status">同步中</text><button class="family-manage-toggle" :disabled="locked" :aria-pressed="editingFamilies" @click="editingFamilies = !editingFamilies" hover-class="touch-feedback">{{ editingFamilies ? '完成' : '管理' }}</button></view>
+      <view class="family-choice-list">
       <view v-for="family in familyChoices" :key="family.id" class="family-choice-card" :class="{ active: family.current }">
-        <button class="family-choice-select" :disabled="busy || loading || preferencePending || recoveryRequired" :aria-pressed="family.current" :aria-label="`${family.name}，${family.current ? '正在使用' : '点击切换'}`" @click="$feedback(); selectFamily(family)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">
-          <view class="family-choice-cover"><view class="family-choice-cover-frame" :style="coverFrameStyle('family')"><FamilyCoverImage :src="family.cover" variant="card" /></view></view>
-          <view class="family-choice-copy"><text class="family-choice-name">{{ family.name }}</text><view class="family-choice-meta"><text>{{ family.memberCount }} 人</text><text v-if="family.current" class="family-current-label">使用中</text></view></view>
+        <button class="family-choice-select" :class="{ 'is-disabled': locked || preferencePending || recoveryRequired || editingFamilies }" :disabled="locked || preferencePending || recoveryRequired || editingFamilies" :aria-pressed="family.current" :aria-label="`${family.name}，${editingFamilies ? '可退出' : family.current ? '正在使用' : '点击切换'}`" @click="$feedback(); selectFamily(family)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">
+          <view class="family-choice-cover"><view class="family-choice-cover-frame" ><FamilyCoverImage :src="family.cover" :variant="family.current ? 'cover' : 'card'" /></view></view>
+          <view class="family-choice-copy"><text class="family-choice-name">{{ family.name }}</text><view class="family-choice-meta"><text>{{ family.memberCount }} 人</text></view></view>
         </button>
-        <view class="family-choice-actions">
-          <button class="family-choice-action" :disabled="busy || loading || preferencePending || recoveryRequired" :aria-label="`退出「${family.name}」`" @click.stop="$feedback(); leave(family)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="action-icon-circle family-choice-action-surface"><AppIcon name="exit" :size="18" /></view></button>
-          <button v-if="family.owner" class="family-choice-action danger" :disabled="busy || loading || preferencePending || recoveryRequired" :aria-label="`删除「${family.name}」`" @click.stop="$feedback(); deleteFamily(family)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="action-icon-circle family-choice-action-surface"><AppIcon name="trash-danger" :size="18" /></view></button>
+        <view v-if="family.current && !editingFamilies" class="family-choice-check" aria-label="正在使用"><view class="family-current-tick" /></view>
+        <view v-if="editingFamilies" class="family-choice-actions">
+          <button class="family-choice-action danger" :disabled="locked || preferencePending || recoveryRequired" :aria-label="`退出「${family.name}」`" @click.stop="$feedback(); exitFamily(family)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="family-choice-action-label">退出</text></button>
         </view>
       </view>
-      <button class="secondary-button full family-create-button" :disabled="busy || loading || recoveryRequired || families.length >= 10" @click="$feedback(); create()" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="plus" /><text>新建家庭</text></button>
+      <button v-if="!editingFamilies" class="family-add-row" :disabled="locked || recoveryRequired || families.length >= 10" @click="$feedback(); create()" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="family-add-icon"><AppIcon name="plus" /></view><text>添加家庭</text></button>
+      </view>
+      <text v-if="!loading && !familyChoices.length && !displayedError" class="hint">还没有家庭，可以创建一个家。</text>
+      </view>
+      <view v-if="!personal" class="family-members-section">
+        <view class="section-line family-members-heading"><text class="subheading">家庭成员</text><text class="family-section-count">{{ state.family.members.length }} 人</text></view>
+        <view class="member-grid family-member-grid">
+          <view v-for="member in displayedMembers" :key="member.id" class="member-card">
+            <view class="member-portrait"><view class="member-photo"><LazyImage class="member-avatar-image" :src="member.avatar" variant="avatar" avatar round /></view><view v-if="state.family.headMemberId === member.id" class="head-crown" aria-label="一家之主"><AppIcon name="crown" active /></view></view>
+            <text class="member-name">{{ member.name || '家人' }}</text><text class="member-status">{{ activeMember.id === member.id ? '我' : '家人' }}</text><text v-if="state.family.headMemberId === member.id" class="member-status member-head-label">一家之主</text>
+          </view>
+          <FamilyInviteCard :disabled="locked || recoveryRequired" />
+        </view>
+      </view>
     </view>
-    <text v-if="displayedError" class="error-message" role="alert">{{ displayedError }}</text><button v-if="!subheading && displayedError" class="text-button" :disabled="loading || busy" @click="$feedback(); load()">{{ recoveryRequired ? '重新同步家庭状态' : '重新加载' }}</button>
+    <text v-if="displayedError" class="error-message" role="alert">{{ displayedError }}</text><button v-if="!creating && displayedError" class="text-button" :disabled="loading || busy" @click="$feedback(); load()">{{ recoveryRequired ? '重新同步家庭状态' : '重新加载' }}</button>
   </view>
 </template>
 
 <style scoped>
-.family-choice-card { display: flex; align-items: center; gap: 4px; overflow: hidden; margin-bottom: 10px; border: 1px solid var(--line); border-radius: var(--radius-card); background: var(--white); }
-.family-choice-card.active { border-color: var(--border-strong); background: var(--control-accent); }
-.family-choice-select { display: flex; flex: 1; align-self: stretch; align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 12px 0 12px 12px; border: 0; background: transparent; color: var(--ink); text-align: left; }
-.family-choice-cover { flex: 0 0 92px; width: 92px; overflow: hidden; border-radius: var(--radius-small); }
-.family-choice-cover-frame { position: relative; width: 100%; }
-.family-choice-name { font-size: var(--type-section); font-weight: 600; overflow-wrap: anywhere; }
-.family-choice-card.active .family-choice-name { color: var(--green); }
-.family-choice-actions { display: flex; flex-shrink: 0; align-items: center; padding-right: 6px; }
-.family-choice-action { display: flex; flex: 0 0 44px; align-items: center; justify-content: center; width: 44px; height: 44px; min-height: 44px; margin: 0; padding: 0; border: 0; border-radius: 50%; background: transparent; line-height: 1; }
-.family-choice-action-surface { flex: 0 0 32px; width: 32px; height: 32px; background: var(--control-surface); }
-.family-choice-action.danger .family-choice-action-surface { background: var(--danger-light); }
-@media (max-width: 360px) {
-  .family-choice-card { gap: 0; }
-  .family-choice-select { gap: 8px; padding-left: 10px; }
-  .family-choice-cover { flex-basis: 80px; width: 80px; }
-  .family-choice-actions { padding-right: 2px; }
-}
+.family-management-panel { background: var(--paper); }
+.family-selection-section, .family-members-section { padding: 18px 20px; background: var(--white); }
+.family-selection-section { padding-top: 2px; }
+.family-members-section { margin-top: 12px; }
+.family-section-heading, .section-line.family-members-heading { justify-content: flex-start; gap: 8px; margin: 0 0 12px; }
+.family-section-count, .family-loading-label { color: var(--muted); font-size: var(--type-caption); }
+.family-loading-label { margin-left: auto; }
+.family-choice-card:last-child { margin-bottom: 0; }
+.family-creation-controls { margin: 24px 20px; }
+.family-create-submit { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 46px; border-radius: var(--radius-control); font-size: var(--type-body); font-weight: 500; }
+.family-management-panel > .error-message, .family-management-panel > .text-button { display: block; margin: 12px 20px; }
+.family-manage-toggle { display: flex; align-items: center; justify-content: center; line-height: 1.4; margin: 0 0 0 auto; padding: 0 0 0 16px; min-height: 44px; background: transparent; color: var(--green); font-size: var(--type-body); }
+.family-choice-list { overflow: hidden; border-radius: var(--radius-sheet); background: var(--control-surface); }
+.family-choice-card { display: flex; align-items: center; gap: 8px; margin: 0 16px; border-bottom: .5px solid var(--line); background: transparent; }
+.family-choice-card:last-child { border-bottom: 0; }
+.family-choice-select { display: flex; flex: 1; align-self: stretch; align-items: center; gap: 12px; min-width: 0; margin: 0; padding: 16px 0; border: 0; background: transparent; color: var(--ink); text-align: left; }
+.family-choice-select.is-disabled { background: transparent; color: var(--ink); opacity: 1; }
+.family-choice-cover { flex: 0 0 48px; width: 48px; height: 48px; overflow: hidden; border-radius: 50%; }
+.family-choice-cover-frame { position: relative; width: 100%; height: 100%; }
+.family-choice-copy { flex: 1; min-width: 0; }
+.family-choice-name { display: block; font-size: var(--type-body); font-weight: 500; overflow-wrap: anywhere; }
+.family-choice-meta { margin-top: 5px; color: var(--muted); font-size: var(--type-caption); }
+.family-choice-check { display: flex; flex: 0 0 24px; align-items: center; justify-content: center; width: 24px; height: 28px; border: 0; border-radius: 0; background: transparent; color: var(--green); }
+.family-current-tick { width: 10px; height: 19px; margin-top: -5px; border-right: 2px solid currentColor; border-bottom: 2px solid currentColor; transform: rotate(40deg); }
+.family-add-row { display: flex; align-items: center; gap: 12px; margin: 0 16px; padding: 16px 0; border: 0; border-radius: 0; background: transparent; color: var(--ink); font-size: var(--type-body); text-align: left; }
+.family-add-icon { display: flex; flex: 0 0 48px; align-items: center; justify-content: center; width: 48px; height: 48px; box-sizing: border-box; border: .5px solid var(--line); border-radius: 50%; }
+.family-add-icon .app-icon { width: 22px; height: 22px; }
+.family-choice-actions { display: flex; flex-shrink: 0; align-items: center; gap: 6px; }
+.family-choice-action { display: flex; align-items: center; justify-content: center; min-width: 44px; height: 44px; margin: 0; padding: 0 6px; border: 0; background: transparent; color: var(--muted); font-size: var(--type-caption); }
+.family-choice-action-label { padding: 5px 9px; border: .5px solid var(--line); border-radius: 999px; line-height: 1.3; }
+.family-choice-action.danger { color: var(--danger); }
+.family-choice-action.danger .family-choice-action-label { border-color: var(--danger); }
 </style>

@@ -4,6 +4,7 @@ import { build } from 'esbuild';
 import { emptySnapshot } from '../src/domain/empty.js';
 import { createSeed } from '../src/data/seed.js';
 import { matchesImportedSource } from '../src/domain/kitchen.js';
+import { defaultAvatarForUser, defaultAvatarIdForPath, defaultNicknameForUser, profileWithDefaults } from '../src/domain/default-profile.js';
 
 const bundled = await build({ entryPoints: ['src/services/cloud.js'], bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only' }) } });
 let sequence = 0;
@@ -213,7 +214,7 @@ test('subtitle-aware saves update family copy immediately and retain it in the d
   assert.equal(app.state.value.family.coverSubtitle, appearance.coverSubtitle);
   assert.equal(app.state.value.recipes, recipes);
   app.flushCloudCache();
-  const saved = JSON.parse(storage.get('shiyuan-snapshot-v1-units2-test-only-kitchen')).entries[0][1].value;
+  const saved = JSON.parse(storage.get('shiyuan-snapshot-v1-units3-test-only-kitchen')).entries[0][1].value;
   assert.equal(saved.snapshot.family.coverSubtitle, appearance.coverSubtitle);
   assert.equal(saved.revision, 2);
 });
@@ -321,7 +322,7 @@ test('cloud client retains uncertain IDs and holds subsequent commands until exp
   });
   const first = app.remoteAction('addStock', [stockBatch]);
   assert.equal(first.accepted, true);
-  await assert.rejects(first, /network/);
+  await assert.rejects(first, /网络连接暂时不稳定/);
   const later = app.remoteAction('setChef', [true]);
   assert.equal(later.accepted, true);
   assert.equal(app.calls.length, 1);
@@ -541,6 +542,97 @@ function nativeImageDisk() {
   return disk;
 }
 
+test('mode round-trips preserve the account avatar and known cover while discarding other household media', async () => {
+  const household = privateSnapshot();
+  household.profile = { name: '我', avatar: 'cloud://self' };
+  household.snapshot.family.kind = 'family';
+  household.snapshot.family.name = '温暖的小家';
+  household.snapshot.family.cover = 'cloud://cover';
+  const personal = structuredClone(household);
+  personal.familyId = personal.snapshot.family.id = 'personal';
+  personal.snapshot.family.kind = 'personal';
+  personal.snapshot.family.name = '我的个人空间';
+  personal.snapshot.family.cover = 'cloud://personal-cover';
+  const manifests = [['cloud://self', 'avatar'], ['cloud://cover', 'detail'], ['cloud://personal-cover', 'detail'], ['cloud://private-dish', 'card']].map(([id, variant]) => ({ ...inlineImage(id), variant, version: `${id}#display-${variant}-v1` }));
+  let current = household;
+  const app = await client(async request => {
+    if (request.action === 'switchWorkspace') current = request.mode === 'personal' ? personal : household;
+    return { ok: true, data: { ...current, ...(request.action === 'bootstrap' ? { imageManifests: manifests } : {}) } };
+  }, { cold: true });
+  const disk = nativeImageDisk();
+  await app.cloudCall('bootstrap');
+  const avatar = await app.loadImage('cloud://self', 'avatar');
+  const cover = await app.loadImage('cloud://cover', 'detail');
+  const dish = await app.loadImage('cloud://private-dish', 'card');
+  await app.manageFamily('switchWorkspace', { mode: 'personal', expectedSpaceId: household.familyId });
+  assert.equal(app.peekImage('cloud://self', 'avatar'), avatar);
+  assert.equal(app.peekImage('cloud://cover', 'detail'), cover);
+  assert.equal(app.peekImage('cloud://private-dish', 'card'), '');
+  assert.equal(disk.has(dish), false);
+  assert.equal(app.familyModePreview.value.name, household.snapshot.family.name);
+  assert.equal(app.personalModePreview.value.cover, personal.snapshot.family.cover);
+  await app.cloudCall('bootstrap');
+  const personalCover = await app.loadImage('cloud://personal-cover', 'detail');
+  await app.manageFamily('switchWorkspace', { mode: 'family', expectedSpaceId: personal.familyId });
+  assert.equal(app.peekImage('cloud://self', 'avatar'), avatar);
+  assert.equal(app.peekImage('cloud://cover', 'detail'), cover);
+  assert.equal(app.peekImage('cloud://personal-cover', 'detail'), personalCover);
+  assert.deepEqual(app.calls.map(call => call.action), ['bootstrap', 'switchWorkspace', 'bootstrap', 'switchWorkspace'], 'neither mode switch downloads the unchanged avatar or either cover');
+  current = privateSnapshot('bob'); current.snapshot.family.kind = 'personal';
+  await app.cloudCall('bootstrap');
+  assert.equal(app.peekImage('cloud://self', 'avatar'), '');
+  assert.equal(app.familyModePreview.value, null);
+  assert.notEqual(app.personalModePreview.value?.userId, household.userId);
+  assert.equal(app.accountProfile.value.avatar, defaultAvatarForUser('bob'));
+});
+
+test('profile saves project immediately, then settle or roll back without leaking drafts to another account', async () => {
+  const confirmed = privateSnapshot();
+  confirmed.profile = { name: '原昵称', avatar: 'cloud://original' };
+  let finish;
+  const app = await client(request => request.action === 'updateProfile'
+    ? new Promise(resolve => { finish = resolve; }) : { ok: true, data: confirmed });
+  await app.cloudCall('bootstrap');
+  const profile = { name: '新的昵称', avatar: 'cloud://new' };
+  const pending = app.saveAccountProfile(profile);
+  assert.equal(pending.accepted, true);
+  assert.deepEqual(app.accountProfilePreview.value, profile);
+  assert.deepEqual(app.accountProfile.value, confirmed.profile, 'confirmed identity is separate from the pending preview');
+  await assert.rejects(app.saveAccountProfile(profile), /正在同步/);
+  finish({ ok: false, code: 'INVALID', message: '头像不可用' });
+  await assert.rejects(pending, /头像不可用/);
+  assert.equal(app.accountProfilePreview.value, null);
+  assert.deepEqual(app.accountProfile.value, confirmed.profile);
+  const retry = app.saveAccountProfile(profile);
+  finish({ ok: true, data: { ...confirmed, revision: 8, profile } });
+  await retry;
+  assert.equal(app.accountProfilePreview.value, null);
+  assert.deepEqual(app.accountProfile.value, profile);
+  const failed = app.saveAccountProfile({ ...profile, name: '另一个草稿' });
+  finish({ ok: false, code: 'UNAUTHENTICATED', message: '登录过期' });
+  await assert.rejects(failed, /登录过期/);
+  assert.equal(app.accountProfilePreview.value, null);
+  assert.equal(app.familyModePreview.value, null);
+  assert.equal(app.personalModePreview.value, null);
+  assert.equal(app.cloudStatus.value.userId, '');
+  assert.equal(app.accountProfile.value.name, '');
+});
+
+test('a remembered family is restored for the same verified user and cleared when membership is missing', async () => {
+  const storage = new Map();
+  const household = privateSnapshot(); household.snapshot.family.kind = 'family'; household.snapshot.family.cover = 'cloud://cover';
+  const first = await client(() => ({ ok: true, data: household }), { storage, cold: true });
+  await first.cloudCall('bootstrap'); first.flushCloudCache();
+  const personal = privateSnapshot(); personal.familyId = personal.snapshot.family.id = 'personal'; personal.snapshot.family.kind = 'personal';
+  const next = await client(request => request.action === 'switchWorkspace'
+    ? { ok: false, code: 'FAMILY_REQUIRED', message: '请先创建或加入家庭' } : { ok: true, data: personal }, { storage, cold: true });
+  assert.equal(next.familyModePreview.value, null, 'no appearance is shown before identity verification');
+  await next.cloudCall('bootstrap');
+  assert.equal(next.familyModePreview.value?.cover, 'cloud://cover');
+  await assert.rejects(next.manageFamily('switchWorkspace', { mode: 'family' }), { code: 'FAMILY_REQUIRED' });
+  assert.equal(next.familyModePreview.value, null);
+});
+
 test('feed and detail consume inline image manifests without another cloud authorization or persisting signed URLs', async () => {
   const app = await client(async data => {
     assert.ok(['feed', 'readPost'].includes(data.action));
@@ -615,7 +707,7 @@ test('cold restart reuses durable family data only after verifying user, family 
   const initial = await client(async () => ({ ok: true, data: privateSnapshot() }), { storage, cold: true });
   await initial.refreshCloud({ background: true });
   initial.flushCloudCache();
-  assert.equal(storage.has('shiyuan-snapshot-v1-units2-test-only-kitchen'), true);
+  assert.equal(storage.has('shiyuan-snapshot-v1-units3-test-only-kitchen'), true);
   let finish;
   const restarted = await client(() => new Promise(resolve => { finish = resolve; }), { storage, cold: true });
   assert.deepEqual(restarted.state.value.recipes, []);
@@ -649,11 +741,11 @@ test('new unit clients do not reuse legacy amount projections from a previous ca
   const initial = await client(async () => ({ ok: true, data: privateSnapshot() }), { storage, cold: true });
   await initial.refreshCloud({ background: true });
   initial.flushCloudCache();
-  storage.set('shiyuan-snapshot-v1-test-only-kitchen', storage.get('shiyuan-snapshot-v1-units2-test-only-kitchen'));
-  storage.delete('shiyuan-snapshot-v1-units2-test-only-kitchen');
+  storage.set('shiyuan-snapshot-v1-test-only-kitchen', storage.get('shiyuan-snapshot-v1-units3-test-only-kitchen'));
+  storage.delete('shiyuan-snapshot-v1-units3-test-only-kitchen');
   const restarted = await client(async () => ({ ok: true, data: privateSnapshot() }), { storage, cold: true });
   await restarted.refreshCloud({ background: true });
-  assert.equal(restarted.calls[0].ingredientUnitsVersion, 2);
+  assert.equal(restarted.calls[0].ingredientUnitsVersion, 3);
   assert.equal(restarted.calls[0].knownRevision, undefined);
   restarted.flushCloudCache();
 });
@@ -666,13 +758,13 @@ test('revoked or unauthenticated users cannot restore cached family data and dur
     const restarted = await client(async () => ({ ok: false, code, message: '权限已失效' }), { storage, cold: true });
     await assert.rejects(restarted.refreshCloud({ background: true }), /权限/);
     assert.deepEqual(restarted.state.value.recipes, []);
-    assert.equal(storage.has('shiyuan-snapshot-v1-units2-test-only-kitchen'), false);
+    assert.equal(storage.has('shiyuan-snapshot-v1-units3-test-only-kitchen'), false);
     assert.equal(restarted.cloudStatus.value.familyId, '');
   }
 });
 
 test('a corrupt snapshot starts with a full refresh and rapid foregrounding skips duplicate background refreshes', async () => {
-  const storage = new Map([['shiyuan-snapshot-v1-units2-test-only-kitchen', 'invalid']]);
+  const storage = new Map([['shiyuan-snapshot-v1-units3-test-only-kitchen', 'invalid']]);
   const app = await client(async () => ({ ok: true, data: privateSnapshot() }), { storage, cold: true });
   await app.refreshCloud({ background: true });
   assert.equal(app.calls[0].knownRevision, undefined);
@@ -696,7 +788,7 @@ test('confirmed family edits persist the new revision and detail mutations inval
   await app.readCommunityPost('post');
   assert.equal(app.calls.filter(call => call.action === 'readPost').length, 2);
   app.flushCloudCache();
-  const saved = JSON.parse(storage.get('shiyuan-snapshot-v1-units2-test-only-kitchen')).entries[0][1].value;
+  const saved = JSON.parse(storage.get('shiyuan-snapshot-v1-units3-test-only-kitchen')).entries[0][1].value;
   assert.equal(saved.revision, 8);
   assert.equal(saved.snapshot.family.name, '新名称');
   assert.deepEqual(saved.snapshot.posts, []);
@@ -951,7 +1043,7 @@ test('an import reconciled through fallback bootstrap cannot claim unrelated new
 });
 
 
-test('editing an imported dish on the legacy provider keeps its confirmed source when shareId changes', async () => {
+test('editing on a legacy provider keeps source attribution but no longer matches the unchanged public dish', async () => {
   const { recipe, post, imported } = legacyImportFixture();
   const edited = { ...imported, title: '调整后的家庭菜品', shareId: 'shared-dish-after-edit' };
   const app = await client(async data => ({ ok: true, data: data.action === 'bootstrap'
@@ -963,7 +1055,86 @@ test('editing an imported dish on the legacy provider keeps its confirmed source
   await app.remoteAction('saveRecipe', [{ ...draft, title: edited.title }, imported.id]);
   assert.equal(app.state.value.recipes[0].shareId, edited.shareId);
   assert.equal(app.state.value.recipes[0].sourcePostId, post.id);
-  assert.equal(matchesImportedSource(app.state.value.recipes[0], recipe.id, post), true);
+  assert.equal(matchesImportedSource(app.state.value.recipes[0], recipe.id, post), false);
   await app.cloudCall('bootstrap');
-  assert.equal(matchesImportedSource(app.state.value.recipes[0], recipe.id, post), true);
+  assert.equal(app.state.value.recipes[0].sourcePostId, post.id);
+  assert.equal(matchesImportedSource(app.state.value.recipes[0], recipe.id, post), false);
+});
+
+test('explicit join profile edits require the atomic service and never silently fall back on an old backend', async () => {
+  const app = await client(async () => ({ ok: false, code: 'INVALID', message: '不支持的操作' }));
+  await assert.rejects(app.manageFamily('joinFamily', { token: 'invite', name: '新名', expectedProfile: { name: '旧名', avatar: '' } }), /请先更新家庭服务/);
+  assert.deepEqual(app.calls.map(call => call.action), ['joinFamilyWithProfile']);
+  assert.equal(app.cloudStatus.value.busy, false);
+  const legacy = await client(async () => ({ ok: true, data: snapshot() }));
+  await legacy.manageFamily('joinFamily', { token: 'invite', name: '原名' });
+  assert.equal(legacy.calls[0].action, 'joinFamily');
+});
+
+test('new clients display initial defaults against old backends and save edited names with the raw baseline', async () => {
+  let saved = { name: '', avatar: '' };
+  const app = await client(async request => {
+    assert.equal(request.defaultProfileVersion, 1);
+    if (request.action === 'updateProfile') {
+      assert.equal(request.avatar, '', 'old backends must never receive unknown package paths');
+      assert.deepEqual({ name: request.expectedProfile.name, avatar: request.expectedProfile.avatar }, saved);
+      assert.equal(request.defaultAvatarId, defaultAvatarIdForPath(defaultAvatarForUser('alice')));
+      saved = { name: request.name, avatar: request.avatar };
+    }
+    return { ok: true, data: { ...privateSnapshot(), profile: saved } };
+  }, { cold: true });
+  await app.cloudCall('bootstrap');
+  assert.deepEqual(app.accountProfile.value, profileWithDefaults({}, 'alice'));
+  const before = { ...app.accountProfile.value };
+  await app.saveAccountProfile({ ...before, name: '自己改的名字' }, before);
+  assert.equal(app.accountProfile.value.name, '自己改的名字');
+  assert.equal(app.accountProfile.value.avatar, before.avatar);
+  assert.equal(saved.avatar, '');
+});
+
+test('the compatible backend raw baseline makes a default profile save conflict-safe', async () => {
+  const defaults = profileWithDefaults({}, 'alice');
+  const confirmed = privateSnapshot();
+  let changed = false;
+  const app = await client(async request => {
+    if (request.action === 'updateProfile') {
+      assert.equal(request.expectedProfile.name, defaults.name, 'a stale displayed name must not become the latest saved name');
+      assert.notEqual(request.expectedProfile.name, '另一设备改过');
+      return { ok: false, code: 'CONFLICT', message: '个人资料已更新' };
+    }
+    return { ok: true, data: { ...confirmed, defaultProfileVersion: 1, profile: changed ? { ...defaults, name: '另一设备改过' } : defaults, profileBaseline: { name: changed ? '另一设备改过' : '', avatar: '' } } };
+  }, { cold: true });
+  await app.cloudCall('bootstrap');
+  const old = { ...app.accountProfile.value };
+  changed = true;
+  await app.cloudCall('bootstrap');
+  await assert.rejects(app.saveAccountProfile({ ...old, name: '旧草稿' }, old), /资料已更新/);
+  assert.equal(app.accountProfile.value.name, '另一设备改过');
+});
+
+test('rendered member defaults never enter confirmed cache snapshots or command dependencies', async () => {
+  const storage = new Map();
+  const confirmed = privateSnapshot();
+  confirmed.snapshot.family.members = [{ id: 'alice', name: '我', avatar: '' }, { id: 'bob', name: '', avatar: '' }];
+  const app = await client(async request => ({ ok: true, data: request.action === 'command'
+    ? { familyId: confirmed.familyId, userId: 'alice', revision: 8, baseRevision: 7, changes: { family: { ...confirmed.snapshot.family, features: { fridge: true, shopping: false } } } }
+    : confirmed }), { storage, cold: true });
+  await app.cloudCall('bootstrap');
+  assert.equal(app.state.value.family.members[0].avatar, defaultAvatarForUser('alice'));
+  assert.deepEqual(app.state.value.family.members[1], { id: 'bob', ...profileWithDefaults({}, 'bob') });
+  app.flushCloudCache();
+  assert.ok(!JSON.stringify([...storage.entries()]).includes('/static/default-avatars/'));
+  await app.remoteAction('setFeature', ['fridge', true]);
+  assert.ok(!JSON.stringify(app.calls.find(call => call.action === 'command')).includes('/static/default-avatars/'));
+  app.flushCloudCache();
+  assert.ok(!JSON.stringify([...storage.entries()]).includes('/static/default-avatars/'));
+});
+
+test('all meal response paths request default avatars and live identity without leaking those into profile writes', async () => {
+  const app = await client(async () => ({ ok: true, data: {} }));
+  for (const action of ['mealFeed', 'myMealPosts', 'publishMeal', 'finishMeal', 'setMealLike', 'setMealReaction', 'setMealVisibility']) {
+    await app.invokeCloud(action);
+    assert.equal(app.calls.at(-1).identityPresentationVersion, 1);
+    assert.equal(app.calls.at(-1).defaultProfileVersion, 1);
+  }
 });

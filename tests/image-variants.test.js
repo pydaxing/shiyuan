@@ -8,7 +8,7 @@ import { createMediaBatch } from '../src/services/media-batch.js';
 import { COVER_RATIOS } from '../src/domain/image-crop.js';
 
 test('image variants have separate immutable cache versions and originals retain the legacy key', () => {
-  for (const variant of ['original', 'card', 'detail', 'avatar']) {
+  for (const variant of ['original', 'card', 'detail', 'avatar', 'cover']) {
     const key = imageVersion('cloud://env/photo.bin', variant);
     assert.deepEqual(imageRequest(key), { fileId: 'cloud://env/photo.bin', variant });
   }
@@ -17,7 +17,7 @@ test('image variants have separate immutable cache versions and originals retain
 
 test('display images respect dimensions, strip EXIF and never enlarge small recipe step images', async () => {
   const source = await sharp({ create: { width: 2400, height: 1600, channels: 3, background: '#587040' } }).jpeg().withMetadata().toBuffer();
-  for (const [variant, edge] of [['card', 480], ['detail', 960]]) {
+  for (const [variant, edge] of [['card', 480], ['detail', 960], ['cover', 1440]]) {
     const image = await createDisplayImage(source, variant);
     const meta = await sharp(image.bytes).metadata();
     assert.equal(meta.width, edge);

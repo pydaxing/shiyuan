@@ -1,3 +1,4 @@
+import { workspaceDisplayName } from '../domain/workspace-identity.js';
 export function familyShareContext(snapshot, session, selection) {
   if (session.phase !== 'ready' || !session.userId || !session.familyId || !selection) return null;
   const item = (selection.kind === 'set' ? snapshot.mealSets : snapshot.recipes).find(entry => entry.id === selection.itemId);
@@ -9,7 +10,7 @@ export function familyShareContext(snapshot, session, selection) {
     familyId: session.familyId,
     itemId: item.id,
     kind: selection.kind,
-    fingerprint: JSON.stringify({ item, recipes, author: snapshot.family.name }),
+    fingerprint: JSON.stringify({ item, recipes, author: workspaceDisplayName(snapshot.family) }),
   };
 }
 

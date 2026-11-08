@@ -139,7 +139,7 @@ test('menu, food and friend-shared set details all anchor the selected recipe ro
 test('food details show the real publisher below their cover and set headings do not repeat the count', () => {
   const community = templateNodes('components/CommunityView');
   const cover = community.nodes.find(node => node.tag === 'FoodDetailSheet');
-  assert.equal(binding(cover, 'publisher'), 'communityPublisherName(current)');
+  assert.equal(binding(cover, 'publisher'), 'currentPublisher');
   const detail = templateNodes('components/FoodDetailSheet');
   const detailCover = detail.nodes.find(node => node.tag === 'RecipeCover');
   const detailBody = detail.nodes.find(node => hasClass(node, 'food-detail-body'));

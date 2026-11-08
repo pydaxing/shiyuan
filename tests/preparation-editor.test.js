@@ -234,8 +234,6 @@ test('material inputs use a quiet underline and zero color, with centered five-c
   assert.match(source, /<view class="preparation-unit-chevron"><AppIcon/);
   assert.equal(declarations('.preparation-unit-trigger.is-expanded .preparation-unit-chevron').transform, 'rotate(180deg)');
   const sheet = readFileSync(new URL('../src/components/MealPreparationSheet.vue', import.meta.url), 'utf8');
-  assert.match(sheet, /<view class="prep-disclosure-chevron"><AppIcon/);
-  assert.match(sheet, /\.prep-disclosure\.expanded \.prep-disclosure-chevron \{ transform: rotate\(180deg\)/);
   const styles = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   assert.match(styles, /\.form-field-material \.input\.preparation-material-input \{[^}]*border: 0;[^}]*border-radius: 0;[^}]*box-shadow: none/);
   assert.match(styles, /\.form-field-material\.is-focused \.input\.preparation-material-input \{[^}]*box-shadow: inset 0 -1px 0 var\(--green\)/);

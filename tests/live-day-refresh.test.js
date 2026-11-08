@@ -58,7 +58,7 @@ test('diary today label advances across midnight without moving the selected his
 test('the page clock reaches fridge labels and cooking diary through their parents', () => {
   const page = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
   assert.match(page, /<FamilyView\b[^>]*:today="today"/);
-  assert.match(componentSource('FamilyView'), /<CookingDiary\b[^>]*:today="today"/);
+  assert.match(page, /<MealTimeline\b[^>]*:today="today"/);
   assert.match(componentSource('IngredientsView'), /<InventoryView\b[^>]*:today="today"/);
   const inventory = componentSource('InventoryView');
   assert.match(inventory, /expiryLabel\(batch, today\)/);

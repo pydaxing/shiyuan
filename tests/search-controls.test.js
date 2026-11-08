@@ -45,12 +45,18 @@ for (const [filename, searchClass, label] of [
   test(`${filename} keeps the search icon, input and clear slot stable in native layout`, () => {
     const template = baseParse(parse(source(`src/components/${filename}`)).descriptor.template.content);
     const search = elements(template, node => hasClass(node, searchClass))[0];
-    const slots = search.children.filter(node => node.type === 1);
+    const slots = search.children.filter(node => node.type === 1 && !hasClass(node, 'community-search-open'));
+    if (filename === 'CommunityView.vue') {
+      const opener = elements(search, node => hasClass(node, 'community-search-open'))[0];
+      assert.equal(attribute(opener, 'aria-label'), '展开美食搜索');
+      assert.equal(directive(opener, 'if').exp.content, '!searchExpanded');
+    }
     assert.deepEqual(slots.map(node => attribute(node, 'class')), ['search-leading-icon', 'search-input-slot', 'search-clear-slot']);
     for (const slot of slots) {
       assert.equal(slot.tag, 'view');
-      assert.equal(directive(slot, 'if'), undefined);
-      assert.equal(directive(slot, 'show'), undefined);
+      if (filename !== 'CommunityView.vue' || attribute(slot, 'class') !== 'search-leading-icon') assert.equal(directive(slot, 'if'), undefined);
+      if (filename === 'CommunityView.vue') assert.equal(directive(slot, attribute(slot, 'class') === 'search-leading-icon' ? 'if' : 'show').exp.content, 'searchExpanded');
+      else assert.equal(directive(slot, 'show'), undefined);
     }
     const icon = elements(slots[0], node => node.tag === 'AppIcon')[0];
     assert.equal(attribute(icon, 'name'), 'search');
@@ -86,7 +92,7 @@ test('search geometry does not depend on native custom components being direct f
     assert.equal(declarations(selector).get('padding'), '0 0 0 10px');
     assert.equal(declarations(selector).get('gap'), '5px');
   }
-  assert.equal(declarations('.community-single-toolbar .community-search').get('margin-left'), '8px');
+  assert.equal(declarations('.community-single-toolbar .community-search').get('margin-left'), 'auto');
 });
 
 test('menu, food and add-dishes search fields share the same 14px font without page-specific overrides', () => {
@@ -122,21 +128,29 @@ test('add-dishes reuses the home capsule height, outline and clear control inste
   assert.equal(layout.get('text-align'), 'center');
 });
 
-test('a 320px food toolbar keeps both search hint characters and the full clear touch height', () => {
-  const viewport = 320;
-  const pixels = (selector, property) => {
-    const value = declarations(selector, styles, viewport).get(property);
+test('narrow food search stays in the right half and keeps both hint characters and the full clear touch height', () => {
+  for (const viewport of [320, 390, 430]) {
+  const pixels = (selector, property, fallbackSelector) => {
+    const value = declarations(selector, styles, viewport).get(property) ?? (fallbackSelector ? declarations(fallbackSelector, styles, viewport).get(property) : undefined);
     const token = value?.match(/^var\((--[a-z-]+)\)$/)?.[1];
     return Number.parseFloat(token ? declarations('page', styles, viewport).get(token) : value);
   };
   const available = viewport - 2 * pixels('page', '--page-gutter');
-  const controls = 2 * pixels('.community-single-toolbar .community-order-button', 'min-width') + pixels('.community-single-toolbar .community-filter-trigger', 'min-width');
-  const searchWidth = available - controls - 3 * pixels('.community-single-toolbar', 'gap') - pixels('.community-single-toolbar .community-search', 'margin-left');
-  const inputWidth = searchWidth - pixels('.community-single-toolbar .community-search', 'padding-left') - pixels('.search-leading-icon', 'width') - 2 * pixels('.community-toolbar .community-search', 'gap') - pixels('.search-clear-slot', 'width');
+  const controls = 2 * pixels('.community-single-toolbar .community-order-button', 'min-width', '.community-order-button') + pixels('.community-single-toolbar .community-filter-trigger', 'min-width', '.community-category-select .community-filter-trigger');
+  const search = declarations('.community-single-toolbar .community-search', styles, viewport);
+  assert.match(search.get('width'), /^\d+(?:\.\d+)?%$/);
+  assert.equal(search.get('flex'), `0 1 ${search.get('width')}`);
+  assert.equal(search.get('margin-left'), 'auto');
+  const searchWidth = Math.min(available * Number.parseFloat(search.get('width')) / 100, pixels('.community-single-toolbar .community-search', 'max-width'), available - controls - 3 * pixels('.community-single-toolbar', 'gap'));
+  const searchLeft = viewport - pixels('page', '--page-gutter') - searchWidth;
+  assert.ok(searchLeft >= viewport / 2, `${viewport}px: search must not cross the screen midpoint`);
+  const leftPadding = Number.parseFloat(search.get('padding-left') ?? declarations('.community-toolbar .community-search', styles, viewport).get('padding').split(/\s+/).at(-1));
+  const inputWidth = searchWidth - leftPadding - pixels('.search-leading-icon', 'width') - 2 * pixels('.community-toolbar .community-search', 'gap') - pixels('.search-clear-slot', 'width');
   assert.ok(inputWidth >= 2 * pixels('.community-search .form-field input', 'font-size'));
   assert.equal(pixels('.search-clear-slot', 'height'), 44);
   assert.equal(pixels('.community-order-button', 'height'), 44);
   assert.equal(pixels('.community-filter-trigger', 'height'), 44);
+  }
 });
 
 test('menu empty search is horizontally centered near the top without counts or a second clear action', () => {

@@ -12,12 +12,12 @@ test('one golden-ratio frame is shared by family, recipe and set uploads, crops 
   assert.deepEqual(coverFrameStyle(), coverFrameStyle('family'));
   assert.deepEqual(coverFrameStyle('recipe'), coverFrameStyle('family'));
   assert.equal(coverFrameStyle('square').paddingTop, '100%');
-  for (const path of ['components/ImagePicker.vue', 'components/ImageCropper.vue', 'components/RecipeCover.vue', 'components/FamilyView.vue']) assert.match(readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8'), /coverFrameStyle/);
+  for (const path of ['components/ImagePicker.vue', 'components/ImageCropper.vue', 'components/RecipeCover.vue', 'components/FamilyAppearanceDetails.vue']) assert.match(readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8'), /coverFrameStyle/);
   const setDetail = readFileSync(new URL('../src/components/SetSheet.vue', import.meta.url), 'utf8');
   assert.match(setDetail, /<FoodDetailSheet[^>]*:image="mealSet.image"[^>]*kind="set"/);
   assert.match(readFileSync(new URL('../src/components/FoodDetailSheet.vue', import.meta.url), 'utf8'), /<RecipeCover :image="image" :kind="kind"/);
   assert.doesNotMatch(setDetail, /set-cover-grid|set-detail-cover/);
-  assert.match(readFileSync(new URL('../src/components/FamilyEditor.vue', import.meta.url), 'utf8'), /v-model="cover" frame="family"/);
+  assert.match(readFileSync(new URL('../src/components/FamilyEditor.vue', import.meta.url), 'utf8'), /<InlinePhotoEditor[^>]+:value="cover"/);
 });
 
 test('portrait, landscape and square photos fill every crop frame without blank edges', () => {
@@ -93,6 +93,40 @@ test('crop preparation measures the orientation-normalized preview rather than r
   assert.deepEqual(await prepareCropSource('portrait.jpg'), { original: 'portrait.jpg', preview: 'oriented.jpg', width: 1000, height: 1400 });
 });
 
+test('editor preparation retains a saved high-resolution crop without another lossy resize', async context => {
+  const previous = globalThis.uni;
+  context.after(() => { globalThis.uni = previous; });
+  globalThis.uni = {
+    getFileInfo: async () => ({ size: 280000 }),
+    getImageInfo: async () => ({ width: 1440, height: 890, type: 'jpeg', orientation: 'up' }),
+    compressImage() { assert.fail('saved editor crop must not be compressed again'); },
+  };
+  assert.deepEqual(await prepareCropSource('saved-cover.jpg', 'cover', { highResolution: true }), {
+    original: 'saved-cover.jpg', preview: 'saved-cover.jpg', width: 1440, height: 890, variant: 'cover',
+  });
+});
+
+test('new editor photos keep high-resolution oriented pixels while retaining the upload variant', async context => {
+  const previous = { uni: globalThis.uni, wx: globalThis.wx };
+  context.after(() => Object.assign(globalThis, previous));
+  globalThis.wx = undefined;
+  globalThis.uni = {
+    getFileInfo: async () => ({ size: 2400000 }),
+    getImageInfo: async ({ src }) => src === 'camera.jpg'
+      ? { width: 4032, height: 3024, type: 'jpeg', orientation: 'right' }
+      : { width: 2304, height: 3072, type: 'jpeg', orientation: 'up' },
+    compressImage: async options => {
+      assert.equal(options.quality, 95);
+      assert.equal(options.compressedWidth, 3072);
+      assert.equal(options.compressedHeight, 2304);
+      return { tempFilePath: 'editor-oriented.jpg' };
+    },
+  };
+  assert.deepEqual(await prepareCropSource('camera.jpg', 'detail', { highResolution: true }), {
+    original: 'camera.jpg', preview: 'editor-oriented.jpg', width: 2304, height: 3072, variant: 'detail',
+  });
+});
+
 test('the cropper uses native drag and pinch without sliders or redundant adjustment controls', () => {
   const source = readFileSync(new URL('../src/components/ImageCropper.vue', import.meta.url), 'utf8');
   assert.match(source, /<movable-area/);
@@ -126,20 +160,21 @@ test('unmeasured or uncovered crops fail rather than silently exporting a differ
   assert.throws(() => cropFromBounds(frame, { ...frame, height: 100 }), /铺满/);
 });
 
-test('the compact family thumbnail shares the upload ratio and cached display image', () => {
-  const family = readFileSync(new URL('../src/components/FamilyView.vue', import.meta.url), 'utf8');
+test('the full-width family cover shares the upload ratio and cached display image', () => {
+  const family = readFileSync(new URL('../src/components/FamilyAppearanceDetails.vue', import.meta.url), 'utf8');
   const home = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
   const picker = readFileSync(new URL('../src/components/ImagePicker.vue', import.meta.url), 'utf8');
   const artwork = readFileSync(new URL('../src/components/FamilyCoverImage.vue', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
-  assert.match(family, /class="family-banner-frame" :style="coverFrameStyle\('family'\)"/);
-  assert.match(family, /<FamilyCoverImage class="family-cover" :src="state\.family\.cover" variant="card"/);
-  assert.doesNotMatch(home, /class="hero photo-hero"|FamilyCoverImage/);
+  assert.match(family, /class="family-full-cover-frame" :style="coverFrameStyle\('family'\)"/);
+  assert.match(family, /<FamilyCoverImage :src="appearance\.cover" variant="detail"/);
+  assert.doesNotMatch(home, /class="hero photo-hero"/);
+  assert.match(home, /<StretchCover class="meals-stretch" compact :src="state\.family\.cover"/);
   assert.doesNotMatch(family, /photo-hero|hero-edit|hero-cover-edit/);
-  assert.match(picker, /<FamilyCoverImage v-else-if="familyCover" :src="modelValue \|\| fallback" variant="detail"/);
+  assert.match(picker, /<FamilyCoverImage v-else-if="familyCover" :src="modelValue \|\| fallback" variant="cover"/);
   assert.match(artwork, /<LazyImage v-if="src" :src="src" :variant="variant" mode="aspectFill"/);
   assert.match(artwork, /class="family-cover-default"/);
-  assert.match(artwork, /class="family-cover-photo" :src="DEFAULT_FAMILY_COVER" mode="aspectFill"/);
+  assert.match(artwork, /class="family-cover-photo" :src="personal \? DEFAULT_PERSONAL_COVER : DEFAULT_FAMILY_COVER" mode="aspectFill"/);
   assert.match(artwork, /\.family-cover-photo\s*\{[^}]*inset: 0; width: 100%; height: 100%;/);
   assert.doesNotMatch(artwork, /tomato\.png|family-cover-illustration/);
   const invite = readFileSync(new URL('../src/pages/invite/index.vue', import.meta.url), 'utf8');
@@ -167,4 +202,24 @@ test('natural image frames accept portrait, landscape and panorama ratios withou
     assert.deepEqual(imageFrameStyle(ratio), { height: '0px', minHeight: '0px', paddingTop: `${100 / ratio}%` });
   }
   for (const ratio of [0, -1, NaN, Infinity, undefined, '4:3']) assert.deepEqual(imageFrameStyle(ratio), {});
+});
+
+
+test('packaged default covers remain root-relative editable sources without upload-file APIs', async context => {
+  const previous = globalThis.uni;
+  context.after(() => { globalThis.uni = previous; });
+  globalThis.uni = {
+    getFileInfo() { assert.fail('package assets are not uploaded temporary files'); },
+    compressImage() { assert.fail('default cover must retain its original pixels'); },
+    getImageInfo: async ({ src }) => {
+      assert.equal(src, '/static/family-home-default.jpg');
+      return { width: 1440, height: 960, path: 'static/family-home-default.jpg' };
+    },
+  };
+  for (const path of ['/static/family-home-default.jpg', 'static/family-home-default.jpg']) {
+    assert.deepEqual(await prepareCropSource(path, 'cover', { highResolution: true }), {
+      original: '/static/family-home-default.jpg', preview: '/static/family-home-default.jpg',
+      width: 1440, height: 960, variant: 'cover',
+    });
+  }
 });

@@ -1,3 +1,4 @@
+import { cloudErrorMessage } from '../src/services/cloud-errors.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc';
@@ -13,7 +14,7 @@ function setup(context, entries = [], overrides = {}) {
   const dismissed = [];
   const scope = Vue.effectScope();
   context.after(() => scope.stop());
-  const modules = { ...Vue, mutationStatus, sheetOpen: Vue.ref(false), NATIVE_UI_COLORS, retryMutation: async id => retried.push(id), dismissMutation: id => dismissed.push(id), ...overrides };
+  const modules = { cloudErrorMessage, ...Vue, mutationStatus, sheetOpen: Vue.ref(false), NATIVE_UI_COLORS, retryMutation: async id => retried.push(id), dismissMutation: id => dismissed.push(id), ...overrides };
   const descriptor = parse(componentSource('MutationSyncStatus')).descriptor;
   const code = compileScript(descriptor, { id: 'mutation-status' }).content.replace(/import (\{[^}]+\}|\w+) from '[^']+';/g, (_, binding) => `const ${binding} = ${binding.startsWith('{') ? 'modules' : '{}'};`).replace('export default', 'return');
   const component = new Function('modules', 'uni', code)(modules, { showModal: options => modals.push(options) });

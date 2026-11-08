@@ -35,7 +35,7 @@ test('food cards keep category on the photo and place author and household count
   assert.ok(!cover.children.includes(byline));
   assert.ok(findClass('feed-meta').children.includes(byline));
   assert.equal(byline.tag, 'CommunityByline');
-  assert.equal(directive(byline, 'bind', 'post'), 'entry.post');
+  assert.equal(directive(byline, 'bind', 'post'), 'presentFamilyPublisher(entry.post)');
   assert.equal(findClass('feed-cover-byline'), undefined);
   assert.equal(findClass('feed-cover-author'), undefined);
   assert.doesNotMatch(findClass('feed-summary').loc.source, /post\.recipes|feed-cover-category/);
@@ -53,7 +53,7 @@ test('cover labels distinguish dishes and sets and preserve their item counts', 
 test('food details explicitly opt into publisher attribution and a cover count', () => {
   const sheet = nodes.find(node => node.tag === 'FoodDetailSheet');
   assert.equal(directive(sheet, 'bind', 'image'), 'current.image');
-  assert.equal(directive(sheet, 'bind', 'publisher'), 'communityPublisherName(current)');
+  assert.equal(directive(sheet, 'bind', 'publisher'), 'currentPublisher');
   assert.equal(directive(sheet, 'bind', 'family-count'), 'current.importedFamilyCount');
   assert.ok(sheet.props.some(prop => prop.name === 'community'));
   assert.equal(findClass('community-detail-meta'), undefined);
@@ -97,7 +97,7 @@ test('cards only open details and the confirmed join action moves beside the det
   assert.doesNotMatch(summary.loc.source, /add\(|imported\(/);
   assert.equal(directive(findClass('feed-cover'), 'on', 'click'), 'open(entry.post)');
   assert.equal(directive(body, 'on', 'click'), 'open(entry.post)');
-  assert.equal(directive(join, 'bind', 'disabled'), 'imported(current) || removingPost || addingPosts.includes(current.id)');
+  assert.equal(directive(join, 'bind', 'disabled'), '!detailReady || imported(current) || removingPost || addingPosts.includes(current.id)');
   assert.ok(nodes.some(node => node.props.some(prop => prop.name === 'slot' && prop.arg?.content === 'action') && node.children.includes(join)));
   assert.match(join.loc.source, /imported\(current\) \? '已加入' : addingPosts.includes\(current.id\) \? '加入中' : '加入菜单'/);
   assert.match(join.loc.source, /imported\(current\) \? 'check' : 'plus-inverse'/);

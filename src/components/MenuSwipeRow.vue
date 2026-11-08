@@ -20,7 +20,7 @@ export default {
     settled(result) { this.$emit(result.open && !this.busy ? 'activate' : 'close'); },
     dispatchAction({ action }) {
       if (this.busy || !['open', 'toggle', 'edit', 'share', 'remove'].includes(action)) return;
-      if (action !== 'share') this.$emit('close');
+      this.$emit('close');
       this.$emit(action, action === 'toggle' ? this.entry.key : this.entry);
     },
     handleKey(event) {
@@ -155,8 +155,8 @@ module.exports = { sync: sync, start: start, move: move, end: end, cancel: cance
     <view class="home-menu-row menu-swipe-surface" :class="{ 'is-picked': selected, 'is-set': entry.kind === 'set' }" @touchstart="swipe.start" @touchmove="swipe.move" @touchend="swipe.end" @touchcancel="swipe.cancel" @longpress="swipe.reveal">
       <view class="home-menu-photo-slot" data-action="open" @click="swipe.tap"><button role="button" class="home-menu-photo" :aria-label="`查看${entry.title}做法，左滑可编辑、分享或删除`" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><FoodThumbnail :src="entry.image" :kind="entry.kind" /></button></view>
       <view class="home-menu-row-body">
-        <view class="home-menu-info-slot" data-action="open" @click="swipe.tap"><button role="button" class="home-menu-info" :aria-label="`查看${entry.title}详情，左滑可编辑、分享或删除`" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="home-menu-title food-list-title">{{ entry.title }}</text><view class="home-menu-meta"><text class="home-menu-item-category">{{ categoryLabel }}</text><view v-if="secondaryMeta" class="home-menu-secondary-meta"><AppIcon :name="entry.kind === 'set' ? 'menu' : 'clock'" :size="12" /><text>{{ secondaryMeta }}</text></view></view></button></view>
-        <view class="home-menu-pick-slot" data-action="toggle" @click="swipe.tap"><button role="button" class="home-menu-pick" :class="{ selected }" :aria-pressed="selected" :aria-label="`${selected ? '取消选择' : '选择'}${entry.title}`" :disabled="busy" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="home-menu-pick-mark"><AppIcon :name="selected ? 'check-inverse' : 'plus'" :size="selected ? 16 : 18" /></view></button></view>
+        <view class="home-menu-info-slot" data-action="open" @click="swipe.tap"><button role="button" class="home-menu-info" :aria-label="`查看${entry.title}详情，左滑可编辑、分享或删除`" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="home-menu-title food-list-title">{{ entry.title }}</text><view class="home-menu-meta"><text class="home-menu-item-category">{{ categoryLabel }}</text><text v-if="entry.kind === 'dish' && entry.originLabel" class="home-menu-origin source-badge" :class="entry.originLabel === '美食' ? 'source-badge-community' : 'source-badge-custom'">{{ entry.originLabel }}</text><view v-if="secondaryMeta" class="home-menu-secondary-meta"><AppIcon :name="entry.kind === 'set' ? 'menu' : 'clock'" :size="12" /><text>{{ secondaryMeta }}</text></view></view></button></view>
+        <view class="home-menu-pick-slot" data-action="toggle" @click="swipe.tap"><button role="button" class="home-menu-pick" :class="{ selected }" :aria-pressed="selected" :aria-label="`${selected ? '取消选择' : '选择'}${entry.title}`" :disabled="busy" hover-class="none"><view class="home-menu-pick-mark"><view class="home-menu-pick-glyph" :class="{ 'is-hidden': selected }"><AppIcon name="plus-inverse" :size="14" /></view><view class="home-menu-pick-glyph" :class="{ 'is-hidden': !selected }"><AppIcon name="check-inverse" :size="14" /></view></view></button></view>
       </view>
     </view>
     <view class="menu-swipe-actions" :aria-hidden="!opened">
@@ -179,11 +179,14 @@ module.exports = { sync: sync, start: start, move: move, end: end, cancel: cance
 .home-menu-row-body { display: flex; align-items: center; flex: 1; min-width: 0; }
 .home-menu-info { display: flex; flex-direction: column; align-items: flex-start; justify-content: flex-start; align-self: stretch; flex: 1; min-width: 0; min-height: var(--food-row-content-height); padding: 0; text-align: left; }
 .home-menu-title { width: 100%; font-family: var(--font-display); font-size: var(--type-list); font-weight: 600; line-height: 1.5; }
-.home-menu-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; max-width: 100%; margin-top: 6px; color: var(--muted); font-family: var(--font-body); font-size: var(--type-caption); line-height: 18px; }
-.home-menu-item-category { border-radius: 0; }
+.home-menu-meta { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; width: calc(100% + 44px); max-width: none; margin-top: 6px; white-space: nowrap; color: var(--muted); font-family: var(--font-body); font-size: var(--type-caption); line-height: 18px; }
+.home-menu-item-category { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; padding: 0 5px; border: 1px solid #dfdbe7; border-radius: 0; background: #f6f4f8; color: #7b6c8a; font-size: var(--type-caption); font-weight: 400; line-height: 18px; white-space: nowrap; }
+.home-menu-meta .home-menu-item-category, .home-menu-meta .home-menu-origin { padding: 0 2px; font-size: var(--type-caption); line-height: 16px; }
 .home-menu-secondary-meta { display: flex; align-items: center; flex-shrink: 0; gap: 3px; white-space: nowrap; }
-.home-menu-pick { display: flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; margin-left: 2px; border-radius: 50%; }
-.home-menu-pick-mark { display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 1px solid var(--border-strong); border-radius: 50%; }
+.home-menu-pick { position: relative; top: -8px; align-self: flex-start; display: flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; margin-left: 2px; border-radius: 50%; }
+.home-menu-pick-mark { position: relative; display: flex; align-items: center; justify-content: center; width: var(--dish-choice-size); height: var(--dish-choice-size); box-sizing: border-box; border: 0; border-radius: 50%; background: var(--green); }
+.home-menu-pick-glyph { position: absolute; display: flex; align-items: center; justify-content: center; width: 14px; height: 14px; }
+.home-menu-pick-glyph.is-hidden { visibility: hidden; }
 .home-menu-pick.selected .home-menu-pick-mark { border-color: var(--green); background: var(--green); }
 .menu-swipe-actions { position: absolute; top: var(--food-row-padding); right: 0; bottom: var(--food-row-padding); display: flex; align-items: stretch; width: 180px; padding: 0; overflow: hidden; border-radius: 0; pointer-events: none; }
 .menu-swipe.is-open .menu-swipe-actions { pointer-events: auto; }

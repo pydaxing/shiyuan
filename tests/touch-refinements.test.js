@@ -48,16 +48,16 @@ test('native sheets use root portals and stable flex heights without changing ma
   assert.doesNotMatch(sheet, /onUpdated|measureContent/);
   assert.match(sheet, /useSheetSizing/);
   assert.match(sheet, /canMeasure: \(\) => !keyboard.value && !focusedToken && layer.isTop\(\)/);
-  assert.match(sheet, /height: `\$\{keyboard.value \? maxHeight.value : Math.min\(props.preferredHeight/);
+  assert.match(sheet, /height: `\$\{props.page \|\| keyboard.value \? maxHeight.value : Math.min\(props.preferredHeight/);
   assert.doesNotMatch(sheet, /@click\.self/);
-  assert.match(component('DateField'), /function show\(\) \{ dismissFocusedKeyboard\(\)/);
+  assert.match(component('DateField'), /function show\(\) \{ if \(props.disabled\) return; dismissFocusedKeyboard\(\)/);
 });
 
 test('recipe errors highlight fields and reveal the first invalid field while save failures stay by the action', () => {
   const editor = component('RecipeEditor');
   assert.match(editor, /fieldRefs\[invalidField\]\?\.reveal\(\)/);
-  assert.match(editor, /recipeFieldErrors\(\{ \.\.\.draft.value, steps: steps.value \}, \{ requireStepTitles: true \}\)/);
-  assert.ok(editor.indexOf('<template #footer>') < editor.indexOf('class="error-message"'));
+  assert.match(editor, /recipeFieldErrors\(\{ \.\.\.draft.value, steps: steps.value \}, \{ requireStepTitles: true, requireCover: true \}\)/);
+  assert.ok(editor.indexOf('<view class="menu-editor-actions">') < editor.indexOf('class="error-message"'));
   assert.match(component('FormField'), /field-invalid/);
   assert.match(component('FormField'), /:aria-invalid="Boolean\(error\)"/);
   assert.match(editor, /<SelectField class="ingredient-unit-field"[^\n]+:error="[^\n]+:model-value="ingredientInput\(ingredient\).unit" centered/);
@@ -70,8 +70,7 @@ test('preparation keeps every dish visible while procurement includes only expli
   assert.match(shopping, /v-for="\(dish, dishIndex\) in order.dishes"/);
   assert.match(shopping, /shoppingCartMeals\(state.value, props.today\)/);
   const preparation = component('MealPreparationSheet');
-  assert.match(preparation, /:aria-expanded="expanded.includes\(dish.recipe.id\)"/);
-  assert.match(preparation, /'is-prepared': dish.prepared/);
+  assert.doesNotMatch(preparation, /'is-prepared': dish.prepared/);
   assert.match(component('CommentItem'), /<AppIcon name="thumb"/);
   assert.doesNotMatch(component('CommentItem'), /♥|♡/);
 });

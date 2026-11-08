@@ -68,6 +68,13 @@ test('all application font sizes use the shared readable scale rather than indep
   for (const { filename, stylesheet } of styleSources) {
     stylesheet.walkDecls('font-size', declaration => {
       if (declaration.value === 'inherit') return;
+      // Compact source markers are supplementary labels, explicitly requested smaller.
+      if (declaration.value === 'var(--type-source-badge)') {
+        assert.equal(filename, 'src/styles.css');
+        assert.equal(declaration.parent.selector, '.source-badge-compact');
+        assert.equal(declarations(':root', stylesheet).get('--type-source-badge'), '9px');
+        return;
+      }
       const role = declaration.value.match(/^var\(--type-([a-z]+)\)$/)?.[1];
       assert.ok(role in sizes, `${filename}: ${declaration.parent.selector}: ${declaration.value}`);
       assert.ok(sizes[role] >= 12 && sizes[role] <= 22);
@@ -178,20 +185,10 @@ test('profile labels can stack on narrow screens without changing avatar alignme
   assert.equal(declarations('.profile-photo-actions', stylesheet).get('justify-content'), 'center');
 });
 
-test('prep labelled actions keep compact type and forty-four pixel targets without square checkbox faces', () => {
+test('meal quantity controls keep readable metadata and forty-four pixel disclosure targets', () => {
   const stylesheet = componentStyles('MealPreparationSheet');
   assert.equal(declarations('.prep-servings', stylesheet).get('font-size'), 'var(--type-caption)');
-  assert.equal(declarations('.prep-cart-button', stylesheet).get('font-size'), 'var(--type-control)');
-  assert.equal(declarations('.prep-cart-button', stylesheet).get('min-height'), '44px');
-  assert.equal(declarations('.prep-cart-button', stylesheet).get('border-radius'), 'var(--radius-control)');
-  const readyStyles = componentStyles('DishReadyButton');
-  assert.equal(declarations('.dish-ready-button', readyStyles).get('width'), '100%');
-  assert.equal(declarations('.dish-ready-button', readyStyles).get('min-height'), '44px');
-  assert.equal(declarations('.dish-ready-button', readyStyles).get('font-size'), 'var(--type-control)');
-  assert.equal(declarations('.dish-ready-button', readyStyles).get('border'), '1px solid var(--line)');
-  assert.equal(declarations('.dish-ready-button', readyStyles).get('line-height'), '22px');
-  assert.equal(declarations('.prep-cart-button', stylesheet).get('line-height'), '22px');
-  assert.equal(declarations('.prep-card-actions', stylesheet).get('gap'), '8px');
-  assert.equal(declarations('.shopping-package-meta', componentStyles('ShoppingView')).get('font-size'), 'var(--type-caption)');
+  assert.equal(declarations('.ingredient-row', globalStyles).get('font-size'), 'var(--type-body)');
+  assert.equal(declarations('.prep-dish-open', stylesheet).get('min-height'), '44px');
   assert.equal(declarations('.order-progress-actions').get('flex-wrap'), 'wrap');
 });

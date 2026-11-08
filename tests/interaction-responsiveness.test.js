@@ -330,7 +330,7 @@ test('tabs and editor entries retain their shared feedback hook and synchronous 
   assert.match(menu, /owner\.callMethod\('selectCategory', event\.currentTarget\.dataset\.category\)/);
   assert.match(menu, /emit\('update:category', category\);[\s\S]*?moveTo\(category\)/);
   assert.match(home, /@create="openCreate"/);
-  assert.match(home, /function createDish\(recipe = null\) \{ tapFeedback\(\)/);
+  assert.match(home, /function createDish\(recipe = null, expandDetails = false\) \{ tapFeedback\(\)/);
   assert.match(home, /function createSet\(mealSet = null\) \{ tapFeedback\(\)/);
   const community = readFileSync('src/components/CommunityView.vue', 'utf8');
   assert.match(community, /@click="\$feedback\(\); mode = 'latest'"/);

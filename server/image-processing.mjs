@@ -36,3 +36,9 @@ async function renderDisplayImage(bytes, variant) {
   }
   throw new Error('图片预览压缩失败，请使用较小尺寸的照片');
 }
+
+export async function isHighResolutionPreview(bytes) {
+  const sharp = await imageProcessor();
+  const metadata = await sharp(bytes, { limitInputPixels: 64000000, sequentialRead: true, failOn: 'error' }).metadata();
+  return Math.max(metadata.width || 0, metadata.height || 0) > settings.detail.edge;
+}

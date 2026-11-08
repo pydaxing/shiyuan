@@ -183,11 +183,28 @@ test('original photos and bounded previews travel as files through the full clie
   assert.ok(calls.every(item => !('base64' in item) && Buffer.byteLength(JSON.stringify(item)) < 1024));
   assert.equal(rows.get(`users:${userId}`).familyId, 'test-family');
   assert.equal(rows.has(`users:${hash(openid)}`), false, 'upload does not create or modify an account');
+  openid = 'transport-test-user';
+  app.cloudStatus.value = { phase: 'ready', familyId: 'test-family', userId };
+  const legacyCover = await module.exports.main({ action: 'mediaContent', fileId: croppedId, variant: 'cover' });
+  assert.equal(legacyCover.ok, true);
+  assert.deepEqual(Buffer.from(legacyCover.data.base64, 'base64'), decryptImage(storedFiles.get(croppedRecord.variants.detail.fileId), croppedRecord.variants.detail.encryptionKey), 'old cropped covers reuse their best preview without recompression or recropping');
+  const coverPreview = await sharp({ create: { width: 1440, height: 720, channels: 3, background: '#465b71' } }).jpeg({ quality: 90 }).toBuffer();
+  temporaryFiles.set('high-cover.jpg', coverPreview);
+  const highCoverId = await app.uploadCloudImage('album-cover.jpg', { previewPath: 'high-cover.jpg', coverPath: 'high-cover.jpg' });
+  const highCoverRecord = rows.get(`media:${hash(highCoverId)}`);
+  assert.equal(highCoverRecord.variants.cover.width, 1440);
+  assert.equal(highCoverRecord.variants.cover.height, 720);
+  assert.ok(highCoverRecord.variants.cover.bytes <= 320000);
+  assert.equal(highCoverRecord.variants.detail.width, 960);
+  const highResponse = await module.exports.main({ action: 'mediaContent', fileId: highCoverId, variant: 'cover', transport: 'url' });
+  assert.equal(highResponse.ok, true);
+  assert.equal(highResponse.data.version, `${highCoverId}#display-cover-v1`);
+
 });
 
 test('every image entry uses the shared picker or the compressed profile uploader', () => {
   for (const component of ['FamilyEditor', 'RecipeEditor', 'SetEditor', 'StockEditor', 'InventoryView']) {
-    assert.match(readFileSync(`src/components/${component}.vue`, 'utf8'), /<ImagePicker\b/);
+    assert.match(readFileSync(`src/components/${component}.vue`, 'utf8'), /<(?:ImagePicker|InlinePhotoEditor)\b/);
   }
   assert.match(readFileSync('src/components/RecipeEditor.vue', 'utf8'), /<StepImagePicker\b/);
   assert.match(readFileSync('src/components/ImagePicker.vue', 'utf8'), /chooseLocalImage/);

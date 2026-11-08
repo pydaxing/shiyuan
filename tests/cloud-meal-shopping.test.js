@@ -140,12 +140,13 @@ for (const action of ['completed', 'cancelled', 'deleted', 'prepared']) {
   });
 }
 
-test('unfinished packages remain editable after midnight but old meals cannot be served', async () => {
+test('unfinished packages are archived after midnight without deleting history or allowing old meals to be served', async () => {
   const server = await fixture();
   server.advance(4);
   let current = await server.bootstrap();
   current = await success(server.command('saveShoppingDraft', [server.orderId, server.recipeId, server.draft, server.signature(current)], current.revision));
-  assert.equal(shoppingCartMeals(current.snapshot, '2026-10-30').length, 1);
+  assert.deepEqual(shoppingCartMeals(current.snapshot, '2026-10-30'), []);
+  assert.equal(current.snapshot.orders[0].shoppingDrafts.length, 1);
   const rejected = await server.command('updateOrder', [server.orderId, 'completed'], current.revision);
   assert.equal(rejected.ok, false);
   assert.equal(rejected.code, 'INVALID');
@@ -153,5 +154,5 @@ test('unfinished packages remain editable after midnight but old meals cannot be
   const restored = await server.bootstrap();
   assert.equal(restored.revision, current.revision);
   assert.deepEqual(restored.snapshot.orders, current.snapshot.orders);
-  assert.equal(shoppingCartMeals(restored.snapshot, '2026-10-30').length, 1);
+  assert.deepEqual(shoppingCartMeals(restored.snapshot, '2026-10-30'), []);
 });

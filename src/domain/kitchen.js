@@ -1,7 +1,8 @@
-import { validateImage, stepImages } from './presentation.js';
+import { validateImage, stepImages, hasRecipeCover } from './presentation.js';
+import { canonicalRecipeId, isPrivateRecipeCollection, sameRecipeContent } from './recipe-identity.js';
 
-export const UNITS = ['g', 'kg', '斤', '两', 'ml', 'L', '个', '根', '只', '条', '块', '片', '张', '颗', '粒', '瓣', '朵', '棵', '把', '束', '勺', '茶匙', '汤匙', '杯', '碗', '瓶', '罐', '盒', '袋', '包', '头', '段', '滴', '撮', '盘', '泵', '副', '芽', '小勺', '大勺', '铲勺'];
-export const SELECTABLE_UNITS = UNITS.filter(unit => !['小勺', '大勺', '铲勺'].includes(unit));
+export const UNITS = ['g', 'kg', '斤', '两', 'ml', 'L', '个', '根', '只', '条', '块', '片', '张', '颗', '粒', '瓣', '朵', '棵', '把', '束', '勺', '匙', '茶匙', '汤匙', '杯', '碗', '瓶', '罐', '盒', '袋', '包', '头', '段', '滴', '撮', '盘', '泵', '副', '芽', '小勺', '大勺', '铲勺'];
+export const SELECTABLE_UNITS = UNITS.filter(unit => !['匙', '小勺', '大勺', '铲勺'].includes(unit));
 export const MEALS = ['早餐', '午餐', '晚餐', '宵夜'];
 export const CATEGORIES = ['荤菜', '素菜', '汤羹', '主食', '小食', '饮品', '其他'];
 export const MAX_RECIPE_STEPS = 60;
@@ -168,18 +169,19 @@ export function validatePurchase(purchase) {
   if (!hasTextAmount(purchase)) throw new Error('按需备料确认需要文字用量');
 }
 
-export function recipeFieldErrors(recipe, { requireStepTitles = false } = {}) {
+export function recipeFieldErrors(recipe, { requireStepTitles = false, requireCover = false, requireDetails = false } = {}) {
   const errors = {};
+  if (requireCover && !hasRecipeCover(recipe?.image)) errors.image = '请先添加菜品封面图';
   if (!recipe || typeof recipe.title !== 'string' || !recipe.title.trim() || recipe.title.trim().length > 30) errors.title = '菜名需要 1～30 个字';
   if (!CATEGORIES.includes(recipe?.category)) errors.category = '请选择菜品分类';
   if (!Number.isInteger(Number(recipe?.servings)) || Number(recipe?.servings) < 1 || Number(recipe?.servings) > 20) errors.servings = '基础份量需要是 1～20 人份';
   if (recipe?.minutes !== null && (!Number.isInteger(Number(recipe?.minutes)) || Number(recipe?.minutes) < 1 || Number(recipe?.minutes) > 600)) errors.minutes = '耗时需要是 1～600 分钟';
-  if (!Array.isArray(recipe?.ingredients) || !recipe.ingredients.length || recipe.ingredients.length > 30) errors.ingredients = '请填写 1～30 项食材';
+  if (!Array.isArray(recipe?.ingredients) || (requireDetails && !recipe.ingredients.length) || recipe.ingredients.length > 30) errors.ingredients = '请填写 1～30 项食材';
   else recipe.ingredients.forEach((ingredient, index) => {
     for (const [field, message] of Object.entries(ingredientFieldErrors(ingredient, true))) errors[`ingredients.${index}.${field}`] = message;
   });
-  if (requireStepTitles) {
-    if (!Array.isArray(recipe?.steps) || !recipe.steps.length) errors.steps = '请至少添加一个做法步骤并填写标题';
+  if (requireStepTitles || requireDetails) {
+    if (!Array.isArray(recipe?.steps) || (requireDetails && !recipe.steps.length)) errors.steps = '请至少添加一个做法步骤并填写标题';
     else if (recipe.steps.length > MAX_RECIPE_STEPS) errors.steps = `做法最多 ${MAX_RECIPE_STEPS} 步`;
     else recipe.steps.forEach((step, index) => {
       if (typeof step?.title !== 'string' || !step.title.trim() || step.title.trim().length > 40) errors[`steps.${index}.title`] = '请填写 1～40 字的步骤标题';
@@ -373,7 +375,7 @@ export function rebuildMealOrder(order) {
 
 export function assertMealEditable(order) {
   if (['pending', 'accepted'].includes(order?.status)) return;
-  throw Object.assign(new Error('这一餐已结束或已取消，请重新查看厨房'), { code: 'CONFLICT' });
+  throw Object.assign(new Error('这一餐已结束或已取消，请重新查看三餐'), { code: 'CONFLICT' });
 }
 
 export function mergeMealSelection(existing, incoming, { append = false } = {}) {
@@ -421,6 +423,20 @@ export function completeOrder(state, orderId, today = localDate(), completedAt =
 
 export function matchesImportedSource(entry, sourceId, collection, familyId) {
   if (!entry || !sourceId) return false;
+  const source = collection.recipes?.find(recipe => recipe.id === sourceId || recipe.canonicalRecipeId === sourceId);
+  const isDish = Boolean(source);
+  const privateShare = isPrivateRecipeCollection(collection);
+  if (isDish && privateShare && entry.identityVersion === 2 && entry.recipeOrigin === 'community') return false;
+  // The author's published local copy remains custom-origin, while its public
+  // identity can be reused by another published set. Private copies cannot
+  // claim this identity merely because they retain the same source lineage.
+  if (isDish && !privateShare && entry.identityVersion === 2 && entry.recipeOrigin === 'custom') {
+    return Boolean(entry.publishedPostId && canonicalRecipeId(entry) === canonicalRecipeId(source) && sameRecipeContent(entry, source));
+  }
+  if (isDish && entry.recipeOrigin === 'custom' && entry.forkedFromRecipeId) return false;
+  if (isDish && !privateShare && source.identityVersion === 2 && entry.identityVersion === 2 && entry.recipeOrigin === 'community'
+    && canonicalRecipeId(entry) === canonicalRecipeId(source)) return true;
+  if (isDish && Array.isArray(source.ingredients) && Array.isArray(source.steps) && !sameRecipeContent(entry, source)) return false;
   if (collection.familyId && collection.familyId === familyId && (entry.shareId || entry.id) === sourceId) return true;
   if (entry.sourceId !== sourceId) return false;
   if (collection.familyId) return entry.sourceFamilyId === collection.familyId;
@@ -429,18 +445,33 @@ export function matchesImportedSource(entry, sourceId, collection, familyId) {
 
 export function importCollection(recipes, collection, { newId, familyId } = {}) {
   const additions = [];
+  const privateShare = isPrivateRecipeCollection(collection);
   for (const recipe of collection.recipes) {
     if ([...recipes, ...additions].some(entry => matchesImportedSource(entry, recipe.id, collection, familyId))) continue;
-    const id = newId ? newId('recipe') : `import-${collection.familyId ? `${collection.familyId}-` : ''}${recipe.id}`;
-    additions.push({ ...clone(recipe), id, ...(newId ? { shareId: newId('shared-dish') } : {}), sourceId: recipe.id,
+    const publicId = canonicalRecipeId(recipe);
+    let id = privateShare ? (newId ? newId('recipe') : `import-${collection.familyId ? `${collection.familyId}-` : ''}${recipe.id}`) : publicId;
+    // Old releases allowed different households to use the same local ID.
+    // Preserve both legacy dishes without conflating them or rewriting history.
+    if ([...recipes, ...additions].some(entry => entry.id === id)) {
+      if (recipe.identityVersion === 2) throw new Error('菜品标识冲突，请刷新后重试');
+      id = newId ? newId('recipe') : `import-${collection.familyId || collection.id || 'legacy'}-${recipe.id}`;
+    }
+    const imported = { ...clone(recipe), id, shareId: privateShare ? id : publicId, identityVersion: 2,
+      recipeOrigin: privateShare ? 'custom' : 'community', sourceId: recipe.id,
       ...(collection.familyId ? { sourceFamilyId: collection.familyId } : {}),
-      ...(collection.id ? { sourcePostId: collection.id } : {}), author: collection.author });
+      ...(collection.id ? { sourcePostId: collection.id } : {}), author: collection.author };
+    delete imported.canonicalRecipeId;
+    delete imported.communityRecipeId;
+    delete imported.forkedFromRecipeId;
+    if (!privateShare) imported.communityRecipeId = publicId;
+    additions.push(imported);
   }
   return [...recipes, ...additions];
 }
 
-export function mealSetFieldErrors(mealSet, recipes) {
+export function mealSetFieldErrors(mealSet, recipes, { requireCover = false } = {}) {
   const errors = {};
+  if (requireCover && !hasRecipeCover(mealSet?.image)) errors.image = '请先添加套餐封面图';
   if (!mealSet || typeof mealSet.title !== 'string' || !mealSet.title.trim() || mealSet.title.trim().length > 30) errors.title = '套餐名称需要 1～30 个字';
   if (!Array.isArray(mealSet?.recipeIds) || mealSet.recipeIds.length < 2 || mealSet.recipeIds.length > 20 || new Set(mealSet.recipeIds).size !== mealSet.recipeIds.length || mealSet.recipeIds.some(id => !recipes.some(recipe => recipe.id === id))) errors.recipeIds = '套餐请选择 2～20 道不同菜品';
   return errors;

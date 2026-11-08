@@ -12,7 +12,7 @@ const labels = {
   addCollection: '加入家庭菜单', publishToCommunity: '发布分享', deleteCommunityPost: '删除分享', addComment: '发布评论', toggleCommentLike: '更新点赞',
 };
 const metadataOnly = new Set(['recordPurchase', 'addCollection', 'publishToCommunity', 'addComment']);
-const recipeFields = ['id', 'title', 'category', 'servings', 'minutes', 'image', 'nutrition', 'ingredients', 'steps', 'provenance'];
+const recipeFields = ['id', 'title', 'category', 'servings', 'minutes', 'image', 'nutrition', 'ingredients', 'steps', 'provenance', 'identityVersion', 'recipeOrigin', 'communityRecipeId', 'forkedFromRecipeId'];
 const pick = (value, fields) => value ? Object.fromEntries(fields.filter(field => value[field] !== undefined).map(field => [field, value[field]])) : null;
 const find = (items, id) => items?.find(item => item.id === id);
 const invalid = message => { throw Object.assign(new Error(message), { code: 'INVALID' }); };
@@ -74,7 +74,7 @@ function simulate(snapshot, operation, { admission = false } = {}) {
   let next = clone(snapshot);
   let sequence = 0;
   const args = clone(operation.args);
-  if (operation.name === 'saveRecipe') args[0].servings = 2;
+  if (operation.name === 'saveRecipe') args[0].servings = (args[1] && find(snapshot.recipes, args[1])?.servings) || 2;
   if (!admission && ['saveDishPreparation', 'setDishPrepared', 'saveShoppingDraft', 'removeShoppingDraft'].includes(operation.name)) {
     const index = operation.name === 'removeShoppingDraft' ? 2 : 3;
     args[index] = commandSignature(next, operation);
@@ -98,8 +98,12 @@ function simulate(snapshot, operation, { admission = false } = {}) {
     const field = operation.name === 'saveRecipe' ? 'recipes' : 'mealSets';
     const original = find(snapshot[field], args[1]);
     const saved = find(next[field], args[1]);
-    if (original.shareId === undefined) delete saved.shareId;
-    else saved.shareId = original.shareId;
+    // Forking a public recipe removes its old menu entry. The newly created
+    // pending recipe has its own share identity; never copy the source's back.
+    if (original && saved) {
+      if (original.shareId === undefined) delete saved.shareId;
+      else saved.shareId = original.shareId;
+    }
   }
   if (operation.name === 'saveDishPreparation') {
     const edit = find(next.orders, args[0])?.preparationEdits?.find(entry => entry.recipeId === args[1]);

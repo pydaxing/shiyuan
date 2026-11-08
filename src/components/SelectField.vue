@@ -6,7 +6,7 @@ import { dismissFocusedKeyboard } from '../services/keyboard.js';
 import { afterNativeRender } from '../composables/nativeRender.js';
 import { selectDropdownGeometry } from '../domain/select-dropdown.js';
 import Sheet from './Sheet.vue';
-const props = defineProps({ modelValue: String, options: Array, label: String, error: String, disabled: Boolean, centered: Boolean, variant: String, active: Boolean, tabindex: { type: Number, default: 0 } });
+const props = defineProps({ modelValue: String, options: Array, label: String, error: String, disabled: Boolean, inline: Boolean, inlineList: Boolean, inlinePills: Boolean, rowLayout: String, centered: Boolean, variant: String, active: Boolean, tabindex: { type: Number, default: 0 } });
 const emit = defineEmits(['update:modelValue', 'open-change']);
 const open = ref(false);
 const instance = getCurrentInstance();
@@ -59,7 +59,7 @@ watch(() => props.disabled, value => { if (value) close(false); });
 function choose(value) { emit('update:modelValue', value); close(); }
 async function show(event) {
   if (props.disabled) return;
-  if (props.variant === 'feed' && open.value) { close(); return; }
+  if ((props.variant === 'feed' || props.inline) && open.value) { close(); return; }
   dismissFocusedKeyboard();
   highlighted.value = props.active ? Math.max(0, props.options.indexOf(props.modelValue)) : 0;
   open.value = true;
@@ -94,9 +94,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <view :class="{ 'community-category-select': variant === 'feed', 'field-invalid': error }"><button ref="triggerRef" role="button" class="choice-trigger" :class="variant === 'feed' ? { 'community-filter-trigger': true, active } : { input: true, centered }" :aria-label="label" :aria-invalid="Boolean(error)" :aria-describedby="error ? errorId : undefined" :aria-expanded="open" :aria-haspopup="variant === 'feed' ? 'listbox' : 'dialog'" :aria-controls="variant === 'feed' && open ? dropdownId : undefined" :aria-pressed="variant === 'feed' ? active : undefined" :tabindex="tabindex" :disabled="disabled" @click="show" @keydown="onDropdownKey" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="choice-label">{{ props.modelValue }}</text><view v-if="variant === 'feed'" class="feed-filter-chevron" :class="{ 'is-open': open }" aria-hidden="true" /><AppIcon v-else-if="!centered" name="chevron" class="choice-chevron" /></button>
+  <view :class="{ 'inline-list-field': inlineList, 'inline-pill-field': inlinePills, 'editor-category-pills': inlinePills && variant === 'categories', 'community-category-select': variant === 'feed', 'is-inline-open': inline && open, 'field-invalid': error, 'editor-amount-row': rowLayout, 'editor-amount-text': rowLayout === 'text' }"><slot name="leading" /><slot v-if="rowLayout !== 'text'" name="quantity" /><button ref="triggerRef" role="button" class="choice-trigger" :class="variant === 'feed' ? { 'community-filter-trigger': true, active } : { input: variant !== 'row', 'field-row-trigger': variant === 'row', centered }" :aria-label="label" :aria-invalid="Boolean(error)" :aria-describedby="error ? errorId : undefined" :aria-expanded="open" :aria-haspopup="variant === 'feed' ? 'listbox' : inline ? undefined : 'dialog'" :aria-controls="variant === 'feed' && open ? dropdownId : undefined" :aria-pressed="variant === 'feed' ? active : undefined" :tabindex="tabindex" :disabled="disabled" @click="show" @keydown="onDropdownKey" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="choice-label">{{ props.modelValue }}</text><view v-if="variant === 'feed'" class="feed-filter-chevron" :class="{ 'is-open': open }" aria-hidden="true" /><AppIcon v-else-if="!centered || inlineList" name="chevron" :class="variant === 'row' ? 'field-row-chevron' : 'choice-chevron'" :size="variant === 'row' || inlineList ? 16 : 20" /></button>
+    <slot name="trailing" />
     <FieldError ref="fieldError" :error="error" :error-id="errorId" />
-    <Sheet v-if="open && variant !== 'feed'" :title="label" :preferred-height="['units', 'categories'].includes(variant) ? 0 : 156 + Math.ceil(options.length / 2) * 70" @close="close"><view class="choice-options" :class="{ 'choice-options-units': variant === 'units', 'choice-options-categories': variant === 'categories' }"><button role="button" v-for="option in options" :key="option" :aria-pressed="modelValue === option" :class="{ selected: modelValue === option }" @click="$feedback(); choose(option)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text>{{ option }}</text><AppIcon v-if="modelValue === option" name="check" active /></button></view></Sheet>
+    <view v-if="inline && open" class="choice-options inline-choice-options" :class="{ 'inline-list-options': inlineList }"><button v-for="option in options" :key="option" class="inline-choice-option" :aria-pressed="modelValue === option" :class="{ selected: modelValue === option }" @click="choose(option)" hover-class="touch-feedback"><text>{{ option }}</text><AppIcon v-if="inlineList && !inlinePills && modelValue === option" name="check" active :size="18" /></button></view>
+    <Sheet v-if="open && !inline && variant !== 'feed'" :title="label" :preferred-height="['units', 'categories'].includes(variant) ? 0 : 156 + Math.ceil(options.length / 2) * 70" @close="close"><view class="choice-options" :class="{ 'choice-options-units': variant === 'units', 'choice-options-categories': variant === 'categories' }"><button role="button" v-for="option in options" :key="option" :aria-pressed="modelValue === option" :class="{ selected: modelValue === option }" @click="$feedback(); choose(option)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text>{{ option }}</text><AppIcon v-if="modelValue === option" name="check" active /></button></view></Sheet>
     <!-- #ifdef H5 -->
     <Teleport to="body">
     <!-- #endif -->
@@ -121,3 +123,8 @@ onUnmounted(() => {
     <!-- #endif -->
   </view>
 </template>
+
+<style scoped>
+.inline-choice-options { margin: 8px 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.inline-choice-options > .inline-choice-option { min-width: 44px; min-height: 44px; padding: 8px 12px; font-size: var(--type-control); }
+</style>

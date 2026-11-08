@@ -186,7 +186,8 @@ test('sharing lives in the detail toolbar and ordering lives beside the title', 
   for (const path of ['src/components/RecipeSheet.vue', 'src/components/SetSheet.vue']) {
     assert.match(read(path), /MenuDetailActions :selected="selected" :busy="props.busy"/);
     assert.match(read(path), /#action/);
-    assert.match(read(path), /@share="share"/);
+    assert.match(read(path), /@share="\$emit\('share', (recipe|mealSet)\)"/);
+    assert.doesNotMatch(read(path), /:sharing="busy"/);
     assert.doesNotMatch(read(path), /\bDetailAction\b|label="编辑"|移出我家菜单/);
   }
   const footer = read('src/components/MenuDetailActions.vue');

@@ -4,7 +4,10 @@ export function memoryRepository() {
   const clone = value => structuredClone(value);
   function adapter(data) {
     function table(name) { if (!data.has(name)) data.set(name, new Map()); return data.get(name); }
-    const matches = (row, where) => Object.entries(where).every(([key, value]) => value?.regex !== undefined ? new RegExp(value.regex, 'i').test(row[key]) : value?.contains !== undefined ? row[key]?.includes(value.contains) : row[key] === value);
+    const pathValues = (value, path) => !path.length ? [value]
+      : Array.isArray(value) ? value.flatMap(item => pathValues(item, path))
+        : pathValues(value?.[path[0]], path.slice(1));
+    const matches = (row, where) => Object.entries(where).every(([key, value]) => pathValues(row, key.split('.')).some(actual => value?.regex !== undefined ? new RegExp(value.regex, 'i').test(actual) : value?.contains !== undefined ? actual?.includes(value.contains) : actual === value));
     const project = (rows, fields) => fields ? rows.map(row => Object.fromEntries(['_id', ...fields].filter(field => row[field] !== undefined).map(field => [field, row[field]]))) : rows;
     return {
       async get(name, id) { return clone(table(name).get(id) || null); },

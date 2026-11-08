@@ -15,6 +15,20 @@ export function pageHeaderHeight(windowInfo = {}, capsule = null) {
   return width > 760 ? 64 : 52;
 }
 
+// Full-screen editors use a 44px back-button row, but share the title center
+// and lower boundary of the primary page header, irrespective of its color.
+export function sheetPageHeaderStyle(windowInfo = {}, capsule = null) {
+  const width = Number(windowInfo.windowWidth || windowInfo.screenWidth) || 375;
+  const titleInset = capsule?.left ? Math.max(60, width - Number(capsule.left) + 8) : 108;
+  const main = capsule === null ? null : pageHeaderStyle(windowInfo, capsule);
+  const height = main ? Number.parseFloat(main.minHeight) : pageHeaderHeight(windowInfo);
+  const center = main
+    ? (Number.parseFloat(main.paddingTop) + height - Number.parseFloat(main.paddingBottom)) / 2
+    : height / 2;
+  const top = Math.max(0, center - 22);
+  return { height: `${height}px`, paddingTop: `${top}px`, paddingBottom: `${Math.max(0, height - top - 44)}px`, '--sheet-page-title-inset': `${titleInset}px` };
+}
+
 export function sheetTopInset(windowInfo, capsule = null) {
   const statusBar = Math.max(0, Number(windowInfo.statusBarHeight) || 0);
   if (capsule === null) return Math.max(24, statusBar);

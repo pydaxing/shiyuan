@@ -1,4 +1,5 @@
 import { snapshotFamilyPublicIdentity, postFamilySnapshot, familySnapshotAssetIds } from '../src/domain/family-public-snapshot.js';
+import { isSharedFamilyMeal } from './meal-access.mjs';
 
 const PRIVATE_COLLECTIONS = ['recipes', 'meal_sets', 'orders', 'inventory', 'purchases', 'invites', 'shares', 'requests'];
 const BATCH_SIZE = 25;
@@ -92,7 +93,7 @@ export function createFamilyDeletion({ repository, now = Date.now, cleanupMedia,
     const post = state.postId ? await db.get('posts', state.postId) : (await db.list('posts', { familyId: family.id, status: 'deleted' }, { limit: 1 }))[0];
     if (!post) {
       if (state.postId) { delete state.postId; delete state.postCollection; return state; }
-      state.phase = 'media'; return state;
+      state.phase = 'mealPosts'; return state;
     }
     if (post.familyId !== family.id || post.status !== 'deleted') fail('帖子归属已变化，请联系管理员', 'CLEANUP_DATA_INVALID');
     state.postId = post._id;
@@ -108,6 +109,23 @@ export function createFamilyDeletion({ repository, now = Date.now, cleanupMedia,
         delete state.postId; delete state.postCollection;
       }
     }
+    return state;
+  }
+
+  async function mealPostBatch(db, family) {
+    const state = { ...family.deletion };
+    const rows = await db.list('meal_posts', { spaceId: family.id }, { limit: BATCH_SIZE, after: state.after || '' });
+    for (const post of rows) {
+      const keepsPersonalArchive = isSharedFamilyMeal(post) && post.visibility === 'family' && Array.isArray(post.participantUserIds) && post.participantUserIds.length > 0;
+      if (post.status === 'published' && (post.visibility === 'public' || keepsPersonalArchive)) continue;
+      // Shared meals remain the participants' canonical diary archive, including
+      // their media roots. Never infer participants from current membership or
+      // broaden legacy private records when deleting their owning family.
+      await db.set('meal_posts', post._id, { id: post.id, spaceId: family.id, authorId: post.authorId, status: 'deleted', deletedAt: now() });
+      state.deletedDocuments += 1;
+    }
+    state.after = rows.at(-1)?._id || state.after || '';
+    if (rows.length < BATCH_SIZE) { state.phase = 'media'; delete state.after; }
     return state;
   }
 
@@ -138,6 +156,7 @@ export function createFamilyDeletion({ repository, now = Date.now, cleanupMedia,
         if (family.deletion.phase === 'public') deletion = await publicBatch(db, family);
         else if (family.deletion.phase === 'private') deletion = await privateBatch(db, family);
         else if (family.deletion.phase === 'imports') deletion = await importBatch(db, family);
+        else if (family.deletion.phase === 'mealPosts') deletion = await mealPostBatch(db, family);
         else if (family.deletion.phase === 'posts') deletion = await postBatch(db, family);
         else fail('家庭清理进度异常，请联系管理员', 'CLEANUP_DATA_INVALID');
         const next = { ...family, deletion };

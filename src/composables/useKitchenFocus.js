@@ -7,7 +7,7 @@ export function kitchenOrderAnchor(index) { return `kitchen-meal-${index}`; }
 function scrollToCard(anchor, isCurrent, options = {}) {
   return new Promise(resolve => {
     const info = uni.getSystemInfoSync();
-    const inset = homeMenuGeometry(info, info.uniPlatform === 'mp-weixin' ? uni.getMenuButtonBoundingClientRect?.() : null).kitchenTop;
+    const inset = homeMenuGeometry(info, info.uniPlatform === 'mp-weixin' ? uni.getMenuButtonBoundingClientRect?.() : null).kitchenTop + (options.headerExtension || 0);
     const query = uni.createSelectorQuery();
     if (options.scope) query.in(options.scope);
     query.select(`#${anchor}`).boundingClientRect();

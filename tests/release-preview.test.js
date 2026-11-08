@@ -69,6 +69,18 @@ test('a local demo build is rejected even when it includes matching cloud names'
   await assert.rejects(app.verify(), /本地演示包/);
 });
 
+test('preview resolves minified cloud constants but rejects false or unknown aliases', async context => {
+  const app = await fixture(context);
+  for (const declaration of ['const I=!0;', 'const a=1,I=true;']) {
+    await app.write('dist/release/miniprogram/services/cloud.js', declaration + app.client.replace('exports.cloudMode=!0', 'exports.cloudMode=I'));
+    await app.verify();
+  }
+  for (const declaration of ['const I=!1;', 'let I=true;', '']) {
+    await app.write('dist/release/miniprogram/services/cloud.js', declaration + app.client.replace('exports.cloudMode=!0', 'exports.cloudMode=I'));
+    await assert.rejects(app.verify(), /本地演示包/);
+  }
+});
+
 test('production builds stamp both output layouts with the production AppID', async context => {
   const app = await fixture(context);
   await app.write('dist/build/mp-weixin/project.config.json', { appid: 'wx064ea991e5e41495', projectname: 'Preview fixture' });

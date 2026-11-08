@@ -1,5 +1,13 @@
+import { directoryImage } from './ingredient-directory.js';
+import { ingredientArt } from './ingredient-art.js';
 export const DEFAULT_DISH_COVER = '/static/dish-default.jpg';
 export const DEFAULT_SET_COVER = '/static/meal-set-default.jpg';
+
+// A display placeholder is never a cover selected by the recipe author.
+export function hasRecipeCover(image) {
+  if (typeof image !== 'string' || !image.trim() || [DEFAULT_DISH_COVER, DEFAULT_SET_COVER].includes(image)) return false;
+  try { validateImage(image); return true; } catch { return false; }
+}
 
 export function foodCover(image, kind = 'dish') {
   return image || (kind === 'set' || kind === 'menu' ? DEFAULT_SET_COVER : DEFAULT_DISH_COVER);
@@ -29,8 +37,21 @@ export function recipeStepTitle(step) {
   return /^(?:步骤\s*[\d零〇一二三四五六七八九十百]+|第?\s*[\d零〇一二三四五六七八九十百]+\s*步|step\s*\d+|\d+)\s*[.、:：。]?$/i.test(title) ? '' : title;
 }
 
+// Display only meaningful method content; legacy numeric-only drafts are not steps.
+// Keep persisted recipes and order snapshots intact.
+export function recipeDisplaySteps(steps) {
+  return (Array.isArray(steps) ? steps : []).filter(step => step && (
+    recipeStepTitle(step) || typeof step.text === 'string' && step.text.trim()
+    || stepImages(step).some(image => typeof image === 'string' && image.trim())
+  ));
+}
+
 export function ingredientImage(name) {
   const clean = String(name || '').trim();
+  const canonical = ({ 西红柿: '番茄', 马铃薯: '土豆', 食盐: '盐', 青葱: '小葱', 香葱: '小葱', 生姜: '姜', 大蒜: '蒜' })[clean] || clean;
+  if (ingredientArt[canonical]) return ingredientArt[canonical];
+  const listedImage = directoryImage(clean);
+  if (listedImage) return listedImage;
   if (/番茄|西红柿/.test(clean)) return '/static/ingredient-tomato.png';
   if (/蛋/.test(clean)) return '/static/ingredient-eggs.png';
   if (/鸡|牛肉|排骨|猪肉|鱼|虾/.test(clean)) return '/static/ingredient-meat.png';

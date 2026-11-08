@@ -60,7 +60,7 @@ test('native share cards choose the same dish or set default and retain resolved
   }
 });
 
-test('cloud save, publish, friend sharing and import accept default covers without storing packaged artwork', async () => {
+test('legacy image-less dishes retain friend-share access but cannot publish until a cover is added', async () => {
   const repository = memoryRepository();
   const app = createApplication({ repository, now: () => Date.parse('2026-10-20T03:00:00Z'), signFiles: async () => ({}) });
   let sequence = 0;
@@ -74,7 +74,10 @@ test('cloud save, publish, friend sharing and import accept default covers witho
     current = await call('command', { name, args, revision: current.revision, requestId: `cover-command-${++sequence}`, includeFeed: false });
   };
   const recipes = createSeed().recipes;
-  await mutate('saveRecipe', [{ ...recipes[0], image: '' }]);
+  await mutate('saveRecipe', [recipes[0]]);
+  const stored = (await repository.list('recipes', { familyId: current.familyId }))[0];
+  await repository.set('recipes', stored._id, { ...stored, value: { ...stored.value, image: '' } });
+  current = await call('bootstrap', { includeFeed: false });
   await mutate('saveRecipe', [recipes[1]]);
   const blankDish = current.snapshot.recipes.find(recipe => recipe.image === '');
   const customDish = current.snapshot.recipes.find(recipe => recipe.image !== '');
@@ -93,10 +96,10 @@ test('cloud save, publish, friend sharing and import accept default covers witho
     const imported = await call('importShare', { token: share.token }, 'recipient');
     const collection = kind === 'dish' ? imported.snapshot.recipes : imported.snapshot.mealSets;
     assert.equal(collection.find(entry => entry.title === item.title).image, '');
-    await mutate('publishToCommunity', [item.id, kind]);
-    const published = await call('readPost', { postId: current.value, includeComments: false });
-    assert.equal(published.post.image, '');
-    if (kind === 'set') assert.equal(published.post.recipes[0].image, customDish.image);
+    const rejected = await app({ action: 'command', name: 'publishToCommunity', args: [item.id, kind], revision: current.revision, requestId: `cover-rejected-${kind}` }, { OPENID: 'author' });
+    assert.equal(rejected.ok, false);
+    assert.match(rejected.message, /封面图/);
+    assert.equal((await repository.list('posts')).length, 0);
   }
   const customShare = await call('createDishShare', { familyId: current.familyId, itemId: customDish.id, kind: 'dish' });
   assert.equal(customShare.image, customDish.image);
