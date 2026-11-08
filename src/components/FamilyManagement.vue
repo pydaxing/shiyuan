@@ -114,7 +114,7 @@ function deleteFamily(family = familyDetails()) {
   const expectedCurrentFamilyId = cloudStatus.value.familyId;
   const modal = options => new Promise((resolve, reject) => uni.showModal({ confirmColor: NATIVE_UI_COLORS.primary, cancelColor: NATIVE_UI_COLORS.muted, ...options, success: resolve, fail: () => reject(new Error('无法打开确认窗口，请重试')) }));
   return perform('deleteFamily', {}, familyId === expectedCurrentFamilyId, async () => {
-    const warning = await modal({ title: '删除家庭？', content: `将删除「${familyName}」，所有成员都会离开，家庭私有的菜品、菜单、订单、库存和日记将被清理。已分享的美食及发布时的家庭名称、头像和封面会保留；其他家庭收藏的副本不受影响。此操作不能撤销。`, confirmText: '继续', cancelText: '取消', confirmColor: NATIVE_UI_COLORS.danger });
+    const warning = await modal({ title: '删除家庭？', content: `将删除「${familyName}」，所有成员都会离开，家庭私有的菜品、套餐、安排、库存等数据将被清理。已发布的美食和公开餐食保留；已归入成员个人日记的家庭共享餐食继续保留，原可见范围不变，其余家庭日记清理。美食发布时的家庭名称、头像和封面，以及其他家庭的收藏不受影响。此操作不能撤销。`, confirmText: '继续', cancelText: '取消', confirmColor: NATIVE_UI_COLORS.danger });
     if (!warning.confirm) return;
     requireFamily(familyId, expectedCurrentFamilyId);
     const confirmation = await modal({ title: '输入家庭名称确认', editable: true, placeholderText: familyName, confirmText: '删除', cancelText: '取消', confirmColor: NATIVE_UI_COLORS.danger });
@@ -130,7 +130,8 @@ function leave(family = familyDetails()) {
   const expectedCurrentFamilyId = cloudStatus.value.familyId;
   const changesFamily = familyId === expectedCurrentFamilyId;
   const lastMember = target.memberCount === 1;
-  const consequence = lastMember ? '你是最后一位成员，退出后将自动删除这个家庭，清理家庭私有的菜品、菜单、订单、库存和日记。已分享的美食及发布时的家庭名称、头像和封面会保留。此操作不能撤销。' : `${target.owner ? '管理员将自动交接给最早加入且仍在家的成员。' : ''}家庭记录会保留给其他成员；若退出时已无其他成员，家庭将自动删除并清理私有数据，保留已分享的美食及发布时的家庭名称、头像和封面。家庭删除后无法恢复。`;
+  const cleanupNotice = '家庭私有的菜品、套餐、安排、库存等数据将被清理。已发布的美食和公开餐食保留；已归入成员个人日记的家庭共享餐食继续保留，原可见范围不变，其余家庭日记清理。美食发布时的家庭名称、头像和封面会保留。此操作不能撤销。';
+  const consequence = lastMember ? `你是最后一位成员，退出后将自动删除这个家庭。${cleanupNotice}` : `${target.owner ? '管理员将自动交接给最早加入且仍在家的成员。' : ''}家庭记录会保留给其他成员；若退出时已无其他成员，家庭将自动删除。${cleanupNotice}`;
   return perform('leaveFamily', {}, changesFamily, async () => {
     const confirmation = await new Promise((resolve, reject) => uni.showModal({ cancelColor: NATIVE_UI_COLORS.muted, title: `退出「${target.name}」？`, content: `${consequence}其他家庭不受影响。${changesFamily && props.unsavedChanges ? '名称与封面未保存的修改也将放弃。' : ''}`, confirmText: '确认退出', cancelText: '取消', confirmColor: NATIVE_UI_COLORS.danger, success: resolve, fail: () => reject(new Error('无法打开确认窗口，请重试')) }));
     if (!confirmation.confirm) return;

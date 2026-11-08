@@ -70,7 +70,7 @@ defineExpose({ refresh: () => load(false, true), loadMore: more, showRecords: ()
     </view>
     <view v-if="!entries.length && !loading && !error" class="meal-history-empty"><text>把好好吃饭的日子，慢慢记下来</text></view>
     <MealListEnd v-if="loading" loading>加载中…</MealListEnd>
-    <MealListEnd v-else-if="entries.length">{{ hasMore ? '继续上滑' : '记录从这里开始' }}</MealListEnd>
+    <MealListEnd v-else-if="entries.length && !hasMore && !error">已显示全部记录</MealListEnd>
   </view>
 </template>
 <style scoped>
