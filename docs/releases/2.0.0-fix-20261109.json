@@ -3,13 +3,13 @@
   "versionCode": 20000,
   "tag": "v2.0.0-fix-20261109",
   "sourceCommit": "d1b29d581bd70ff773e9ef8e7d08e9d7bdcfe6b0",
-  "stage": "development_uploaded",
+  "stage": "review_submitted",
   "uploadedAt": "2026-11-08T17:23:33.034Z",
   "uploadBytes": 1992263,
   "taskId": "confirmation_upload_20ab17cc-3557-4a40-948c-aaea752a6edb",
   "versionReuseAuthorization": "User explicitly requested reusing 2.0.0. Original v2.0.0 tag and release record preserved.",
   "evidence": "Official final asynchronous upload success; public platform experience selection not independently reread.",
-  "reviewSubmitted": false,
+  "reviewSubmitted": true,
   "productionPublished": false,
   "backendDeployed": false,
   "changes": [
@@ -2143,5 +2143,12 @@
       }
     ]
   },
-  "backup": "artifacts/uploads/2.0.0-fix-20261109/release-before/"
+  "backup": "artifacts/uploads/2.0.0-fix-20261109/release-before/",
+  "reviewEvidence": {
+    "source": "User confirmation in current conversation",
+    "confirmedOn": "2026-11-09",
+    "exactSubmissionTime": null,
+    "platformIndependentlyRead": false,
+    "note": "User reports submitting the latest uploaded 2.0.0 repair package; approval and production release not confirmed."
+  }
 }

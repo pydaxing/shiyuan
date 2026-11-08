@@ -9,7 +9,7 @@
 </p>
 
 <p align="center">
-  <a href="docs/版本与发布.md"><img src="docs/images/readme/badges/version.svg" alt="源码版本 1.0.0" height="24" /></a>
+  <a href="docs/版本与发布.md"><img src="docs/images/readme/badges/version.svg" alt="源码版本 2.0.0" height="24" /></a>
   <img src="docs/images/readme/badges/wechat.svg" alt="微信小程序" height="24" />
   <img src="docs/images/readme/badges/vue.svg" alt="Vue 3" height="24" />
   <img src="docs/images/readme/badges/cloudbase.svg" alt="微信云开发 CloudBase" height="24" />
@@ -23,6 +23,8 @@
   <a href="docs/开发接手指南.md">开发文档</a>
 </p>
 
+> **2.0.0 已提交微信审核**（2026-11-09，用户确认），尚未确认审核通过或正式发布。下方展示 2.0 界面；微信搜索入口的正式版本仍以平台为准。查看 [2.0 更新说明](docs/releases/2.0.0.md) 与 [发布台账](docs/发布版本台账.md)。
+
 ## 关于食愿
 
 > 「今天吃啥？」
@@ -31,9 +33,9 @@
 
 两个人也好，一家人也好，每天吃什么，是一个小问题，却要每天重新做决定。想吃的人一时没有主意，做饭的人除了下厨，还要想菜单、记住大家的口味、确认材料够不够。
 
-**食愿是一款家庭饮食规划与采购助手，让「今天吃什么」变成一家人可以一起完成的安排。**
+**食愿是一款兼顾个人与家庭的饮食规划、菜谱和餐食记录小程序。一个人认真吃饭，一家人一起安排。**
 
-把喜欢的菜收进自家菜单，家人挑选想吃的菜，在厨房汇成同一餐，再按菜准备食材。负责点菜的人有具体的选择，负责做饭的人能看到这一餐的安排；菜谱、用量和采购清单也有了共同的去处。
+把喜欢的菜收进自家菜单，家人挑选想吃的菜，在「小灶」汇成同一餐，再按菜准备食材。负责点菜的人有具体的选择，负责做饭的人能看到这一餐的安排；菜谱、用量和餐食记录也有了共同的去处。
 
 没有灵感时，就去「美食」看看别人家的拿手菜。喜欢的做法可以加入自家菜单，按家人的口味修改；自己做得好的菜也可以分享出去。一家人的菜单，就这样随着每一次发现、尝试和调整，慢慢丰富起来。
 
@@ -41,77 +43,76 @@
 
 ## 看看食愿
 
-页面内容来自微信开发者工具中连接真实云数据的截图，与 **iPhone 17 标准版边框合成**为下方效果图。左右滑动浏览完整页面，点击图片查看大图。
+以下八张图于 **2026-11-09** 从 2.0.0 送审源码对应的微信预览采集，涵盖菜单、安排、备菜、美食、发现、记录、日记和我的。页面内容来自微信开发者工具中连接真实云数据的截图，与 **iPhone 17 标准版边框合成**为下方效果图。左右滑动浏览完整页面，点击图片查看大图。
 
 <table>
-  <thead>
-    <tr>
-      <th width="280" align="center" nowrap>属于一家人的食愿</th>
-      <th width="280" align="center" nowrap>美食 · 发现想吃的</th>
-      <th width="280" align="center" nowrap>菜单 · 留下喜欢的</th>
-      <th width="280" align="center" nowrap>厨房 · 安排一起吃的</th>
-      <th width="280" align="center" nowrap>备菜 · 按餐准备</th>
-      <th width="280" align="center" nowrap>采购 · 按菜整理</th>
-      <th width="280" align="center" nowrap>冰箱 · 记住家里有的</th>
-      <th width="280" align="center" nowrap>我家 · 留下餐单日常</th>
-    </tr>
-  </thead>
+  <thead><tr>
+    <th width="280" align="center" nowrap>菜单 · 收好想吃的</th>
+    <th width="280" align="center" nowrap>安排 · 计划每一餐</th>
+    <th width="280" align="center" nowrap>备菜 · 看清用量</th>
+    <th width="280" align="center" nowrap>美食 · 寻找灵感</th>
+    <th width="280" align="center" nowrap>发现 · 分享日常</th>
+    <th width="280" align="center" nowrap>记录 · 留下这一餐</th>
+    <th width="280" align="center" nowrap>日记 · 回看日常</th>
+    <th width="280" align="center" nowrap>我的 · 自己与家人</th>
+  </tr></thead>
   <tbody>
     <tr>
-      <td width="280" align="center" nowrap><a href="docs/images/readme/family-cover-phone.png"><img src="docs/images/readme/family-cover-phone.png" alt="iPhone 17 边框效果图：食愿家庭名称与封面页面，展示一家人的名称及家庭封面" width="280" /></a></td>
-      <td width="280" align="center" nowrap><a href="docs/images/readme/discover-phone.png"><img src="docs/images/readme/discover-phone.png" alt="iPhone 17 边框效果图：食愿美食推荐页，展示真实云端菜品列表、分类导航和搜索入口" width="280" /></a></td>
-      <td width="280" align="center" nowrap><a href="docs/images/readme/menu-phone.png"><img src="docs/images/readme/menu-phone.png" alt="iPhone 17 边框效果图：食愿家庭菜单页面，用于浏览自家菜品并选择想吃的菜" width="280" /></a></td>
-      <td width="280" align="center" nowrap><a href="docs/images/readme/kitchen-phone.png"><img src="docs/images/readme/kitchen-phone.png" alt="iPhone 17 边框效果图：食愿厨房页面，展示家庭餐食安排与菜品信息" width="280" /></a></td>
-      <td width="280" align="center" nowrap><a href="docs/images/readme/preparation-phone.png"><img src="docs/images/readme/preparation-phone.png" alt="iPhone 17 边框效果图：食愿厨房备菜页面，展示本餐菜品的食材配料、用量与准备状态" width="280" /></a></td>
-      <td width="280" align="center" nowrap><a href="docs/images/readme/shopping-phone.png"><img src="docs/images/readme/shopping-phone.png" alt="iPhone 17 边框效果图：食愿采购清单页面，按餐食与菜品整理待准备的食材配料" width="280" /></a></td>
-      <td width="280" align="center" nowrap><a href="docs/images/readme/fridge-phone.png"><img src="docs/images/readme/fridge-phone.png" alt="iPhone 17 边框效果图：食愿冰箱页面，用于查看和管理家庭已有食材及存放分类" width="280" /></a></td>
-      <td width="280" align="center" nowrap><a href="docs/images/readme/family-diary-phone.png"><img src="docs/images/readme/family-diary-phone.png" alt="iPhone 17 边框效果图：食愿我家页面展开餐单记录，展示家庭餐食记录" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/v2/menu-phone.png"><img src="docs/images/readme/v2/menu-phone.png" alt="食愿 2.0 真实微信页面与 iPhone 边框合成：菜单 · 收好想吃的，按分类浏览美食与自建菜，留下喜欢的味道" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/v2/arrange-phone.png"><img src="docs/images/readme/v2/arrange-phone.png" alt="食愿 2.0 真实微信页面与 iPhone 边框合成：安排 · 计划每一餐，选择日期和餐次，把几道菜安排到同一餐" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/v2/preparation-phone.png"><img src="docs/images/readme/v2/preparation-phone.png" alt="食愿 2.0 真实微信页面与 iPhone 边框合成：备菜 · 看清用量，按餐查看每道菜的食材与用量，准备更从容" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/v2/food-phone.png"><img src="docs/images/readme/v2/food-phone.png" alt="食愿 2.0 真实微信页面与 iPhone 边框合成：美食 · 寻找灵感，浏览公开菜谱，把喜欢的做法加入自己的菜单" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/v2/discovery-phone.png"><img src="docs/images/readme/v2/discovery-phone.png" alt="食愿 2.0 真实微信页面与 iPhone 边框合成：发现 · 分享日常，看看大家正在吃什么，为喜欢的餐食点赞" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/v2/record-phone.png"><img src="docs/images/readme/v2/record-phone.png" alt="食愿 2.0 真实微信页面与 iPhone 边框合成：记录 · 留下这一餐，选择安排或上传实拍，自由选择餐食可见范围" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/v2/diary-phone.png"><img src="docs/images/readme/v2/diary-phone.png" alt="食愿 2.0 真实微信页面与 iPhone 边框合成：日记 · 回看日常，按日期回看餐食，家庭共同记录也能个人回顾" width="280" /></a></td>
+      <td width="280" align="center" nowrap><a href="docs/images/readme/v2/profile-phone.png"><img src="docs/images/readme/v2/profile-phone.png" alt="食愿 2.0 真实微信页面与 iPhone 边框合成：我的 · 自己与家人，管理个人资料与家庭，从这里进入饮食日记" width="280" /></a></td>
     </tr>
     <tr>
-      <td align="center" nowrap>起个喜欢的家庭名，再选一张温暖的封面</td>
-      <td align="center" nowrap>逛逛别人家的拿手菜，发现下一道想吃的</td>
-      <td align="center" nowrap>把家人喜欢的每道菜，慢慢收进自家菜单</td>
-      <td align="center" nowrap>汇总家人今天想吃的，一起安排好这一餐</td>
-      <td align="center" nowrap>按这一餐调整食材量，逐道确认备菜进度</td>
-      <td align="center" nowrap>想好做什么再买什么，按菜整理采购清单</td>
-      <td align="center" nowrap>冷藏冷冻常温分开记，看看家里还有什么</td>
-      <td align="center" nowrap>展开一餐一饭的记录，留下家里餐单日常</td>
+      <td align="center" nowrap>按分类浏览美食与自建菜，留下喜欢的味道</td>
+      <td align="center" nowrap>选择日期和餐次，把几道菜安排到同一餐</td>
+      <td align="center" nowrap>按餐查看每道菜的食材与用量，准备更从容</td>
+      <td align="center" nowrap>浏览公开菜谱，把喜欢的做法加入自己的菜单</td>
+      <td align="center" nowrap>看看大家正在吃什么，为喜欢的餐食点赞</td>
+      <td align="center" nowrap>选择安排或上传实拍，自由选择餐食可见范围</td>
+      <td align="center" nowrap>按日期回看餐食，家庭共同记录也能个人回顾</td>
+      <td align="center" nowrap>管理个人资料与家庭，从这里进入饮食日记</td>
     </tr>
   </tbody>
 </table>
 
 ## 一家人的日常
 
-### 从想吃，到开饭
+### 从想吃，到记下这一餐
 
-**挑选菜品 → 安排一餐 → 按菜备料 → 整理采购 → 一起开饭**
+**收进菜单 → 安排日期和餐次 → 按菜备料 → 拍照记录 → 回看饮食日记**
 
-- **把「都行」变成具体的选择。** 家人从自己的菜单里挑菜，也能选择搭配好的套餐。同一餐汇总到厨房，想吃什么、谁选了什么，都有地方查看。
-- **用量跟着这一餐走。** 做饭前可调整本餐的食材和配料，确认哪道菜已经备齐。临时少做一点、多放一点，都不用改掉原来的菜谱。
-- **买什么，先从做什么开始。** 把需要采购的菜主动加入清单，按餐、按菜查看对应材料，保留每道菜的用量，少一些临到买菜时的猜测。
-- **好做法，慢慢变成自家的拿手菜。** 美食加入菜单后得到可独立编辑的副本，来源仍保留。以后再做，可以沿用家里喜欢的版本；餐单记录也能留下平常每一餐的记录。
+- **自己用，也能一起用。** 普通首次进入默认个人模式；通过家庭邀请加入后开启家庭模式。个人菜单与安排独立，家庭模式下共享同一个小灶。
+- **先把菜记下来。** 创建菜品填写封面、名称和类别即可；时长不填按 20 分钟保存。食材与做法默认收起，可以以后补充；发布到美食前必须补全，分享给微信好友不要求先公开发布。
+- **美食与自建，来源清楚。** 从美食加入菜单而未修改的菜沿用原菜品身份；实际编辑后生成新的自建菜。仅打开编辑或原样保存不会产生副本。自建菜主动发布后，其他人才能在美食中看到。
+- **一餐共同记录，个人也能回看。** 家庭餐食关联记录时的成员，家庭日记共同可见，对应成员在个人模式也能回看；个人餐食归个人空间。新加入的家人不会自动获得所有历史餐食的个人归档。
+- **可见范围由你选择。** 记录可公开到发现，也可仅留在饮食日记。未手动记录的有效安排跨天后自动归档，默认公开；已有记录保留原选择，删除过的记录不会自动补回。
+- **删除按所在空间处理。** 家庭日记删除一餐，会同步移除关联个人日记中的该餐；个人日记移除来自家庭的餐食，仅影响自己，保留家庭和其他成员的记录。具体操作仍受账号权限限制。
 
-### 五个入口，各有一件日常事
+### 四个入口，各有一件日常事
 
 | 入口 | 能做什么 |
 | --- | --- |
-| **菜单** | 收藏家里常吃的菜，按分类浏览和搜索；编辑菜品、食材用量与图文做法，也能把几道菜组合成套餐。 |
-| **厨房** | 安排今天、明天、后天的餐食，查看家人选了什么；按菜确认备菜、调整本餐用量，过往餐单自动归档，无需再点击开饭。 |
-| **美食** | 浏览推荐与最新分享，按分类寻找做菜灵感；把喜欢的菜加入自家菜单，分享自己的拿手菜。 |
-| **食材** | 主动把本餐需要的食材加入采购，按餐或按菜查看；可选开启冰箱，按冷藏、冷冻、常温管理库存。 |
-| **我家** | 创建、加入与切换家庭，设置名称和封面，邀请家人、管理成员；每个家庭都有独立的菜单与餐食安排。 |
+| **小灶** | 在菜单中浏览、自建菜品或组合套餐；安排日期与餐次、加菜、查看备菜清单、记录这一餐。套餐选入安排后按其中的菜品处理。 |
+| **美食** | 浏览公开菜谱与完整做法，将喜欢的菜加入菜单；补全自建菜的食材和步骤后公开分享。 |
+| **发现** | 浏览公开餐食、点赞、上传实拍。美食菜图片打开菜谱详情，自建菜和实拍图打开大图，历史无图菜以文字展示。 |
+| **我的** | 修改头像昵称、切换个人与家庭模式、管理家庭、进入饮食日记和使用说明。 |
 
-冰箱是可选的家庭工具，采购清单也可以独立使用。当前的采购能力用于整理备餐所需材料，真实下单、支付和配送尚未接入。
+餐食记录的可见范围与菜谱是否发布到美食是两件事：公开一餐不等于公开其中自建菜的完整菜谱。退出或清理家庭后的日记保留规则见 [2.0 更新说明](docs/releases/2.0.0.md)。
 
 ## 接下来，还想做好这些事
 
-食愿先把共同选菜、安排餐食、按菜备料这条日常流程做好，再逐步扩展一餐饭前后的服务。**以下为后续规划，尚未成为当前版本的功能。**
+食愿先把选菜、安排餐食、按菜备料和饮食记录这条日常流程做好，再逐步扩展一餐饭前后的服务。**以下为后续规划，尚未成为当前版本的功能。**
 
 | 方向 | 想解决的问题 | 后续设想 |
 | --- | --- | --- |
 | **AI 选餐与推荐** | 每天还是会有不想翻菜单、也不知道吃什么的时候。 | 下一阶段结合家庭偏好与用餐需求，提供可以继续挑选、调整的菜品和餐食建议。 |
 | **AI 餐食搭配分析** | 单道菜会做了，一整餐怎样搭配更合适，却不容易判断。 | 围绕食材组成和搭配提供分析与建议，让日常餐食更丰富；不作为医疗或健康结果承诺。 |
-| **按菜采购，按量准备** | 菜想好了，买菜时却容易凭感觉多买，或者买回了用不上的材料。 | AI 能力稳定后，再在现有按菜食材清单基础上接入一个官方采购渠道，衔接所需用量和可购买食材。 |
+| **按菜采购，按量准备** | 菜想好了，买菜时却容易凭感觉多买，或者买回了用不上的材料。 | AI 能力稳定后，再在现有备菜清单基础上接入一个官方采购渠道，衔接所需用量和可购买食材。 |
 
 这些方向会随着实际使用反馈继续调整。希望未来的食愿，既能帮人决定吃什么，也能让准备一餐饭更有把握。
 
@@ -154,6 +155,7 @@ npm run build:release
 
 | 文档 | 适合什么时候阅读 |
 | --- | --- |
+| [2.0 更新说明](docs/releases/2.0.0.md) | 查看本轮变化、发布状态与已知验收边界 |
 | [开发接手指南](docs/开发接手指南.md) | 换电脑、换会话，或第一次加入开发 |
 | [交互约定](UX-CONTRACT.md) | 修改餐食流程、数据行为与页面交互 |
 | [设计规范](DESIGN.md) | 调整布局、颜色、组件与视觉细节 |

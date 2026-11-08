@@ -1,0 +1,220 @@
+{
+  "frame": {
+    "basename": "iphone17.png",
+    "width": 388,
+    "height": 800,
+    "sourceSha256": "6fd24f0b61434f1bbf07ee3ec7d1e2b965abd518a4be8bd7e997add2ac789f05",
+    "removedFaintPixels": 6947,
+    "upscaleDoesNotAddHardwareDetail": true
+  },
+  "geometry": {
+    "screen": {
+      "left": 16,
+      "top": 7,
+      "width": 356,
+      "height": 786
+    },
+    "safe": {
+      "left": 24,
+      "top": 64,
+      "width": 340,
+      "height": 672
+    },
+    "clock": {
+      "left": 39,
+      "top": 35
+    },
+    "indicators": {
+      "right": 348,
+      "top": 35
+    },
+    "home": {
+      "centerX": 194,
+      "top": 770,
+      "width": 101,
+      "height": 4
+    }
+  },
+  "canvas": {
+    "width": 832,
+    "height": 1656
+  },
+  "images": [
+    {
+      "name": "menu",
+      "source": "docs/images/readme/v2/menu.png",
+      "output": "docs/images/readme/v2/menu-phone.png",
+      "sourceSize": {
+        "width": 728,
+        "height": 1576
+      },
+      "sourceApplicationRows": [
+        84,
+        1508
+      ],
+      "applicationSourceSha256": "20abb611f165f078840005e7224542d7cdeae3322df3c225694a57037fb5d091",
+      "applicationOutput": {
+        "left": 76,
+        "top": 162,
+        "width": 680,
+        "height": 1331
+      },
+      "completeApplicationPreserved": true,
+      "frameOrMaskChangedApplicationPixels": 0
+    },
+    {
+      "name": "arrange",
+      "source": "docs/images/readme/v2/arrange.png",
+      "output": "docs/images/readme/v2/arrange-phone.png",
+      "sourceSize": {
+        "width": 728,
+        "height": 1576
+      },
+      "sourceApplicationRows": [
+        84,
+        1508
+      ],
+      "applicationSourceSha256": "1cd7e06ac0b8be2e70d6b9de4ef332265c0a947f8c56a6d81fd2115010a40970",
+      "applicationOutput": {
+        "left": 76,
+        "top": 162,
+        "width": 680,
+        "height": 1331
+      },
+      "completeApplicationPreserved": true,
+      "frameOrMaskChangedApplicationPixels": 0
+    },
+    {
+      "name": "preparation",
+      "source": "docs/images/readme/v2/preparation.png",
+      "output": "docs/images/readme/v2/preparation-phone.png",
+      "sourceSize": {
+        "width": 728,
+        "height": 1576
+      },
+      "sourceApplicationRows": [
+        84,
+        1508
+      ],
+      "applicationSourceSha256": "5d4376f734df6ee53d0cdf427015d64faffb08ab2708091b289f48f8f4195e24",
+      "applicationOutput": {
+        "left": 76,
+        "top": 162,
+        "width": 680,
+        "height": 1331
+      },
+      "completeApplicationPreserved": true,
+      "frameOrMaskChangedApplicationPixels": 0
+    },
+    {
+      "name": "food",
+      "source": "docs/images/readme/v2/food.png",
+      "output": "docs/images/readme/v2/food-phone.png",
+      "sourceSize": {
+        "width": 728,
+        "height": 1576
+      },
+      "sourceApplicationRows": [
+        84,
+        1508
+      ],
+      "applicationSourceSha256": "bad3be122aec86d73770c34fcb29c78a2b0ad91688f9685fe2328bac25953bc2",
+      "applicationOutput": {
+        "left": 76,
+        "top": 162,
+        "width": 680,
+        "height": 1331
+      },
+      "completeApplicationPreserved": true,
+      "frameOrMaskChangedApplicationPixels": 0
+    },
+    {
+      "name": "discovery",
+      "source": "docs/images/readme/v2/discovery.png",
+      "output": "docs/images/readme/v2/discovery-phone.png",
+      "sourceSize": {
+        "width": 728,
+        "height": 1576
+      },
+      "sourceApplicationRows": [
+        84,
+        1508
+      ],
+      "applicationSourceSha256": "7326773ee141816642443f60c61eebf1731966667a05c8ac4eaf39f0a92177c2",
+      "applicationOutput": {
+        "left": 76,
+        "top": 162,
+        "width": 680,
+        "height": 1331
+      },
+      "completeApplicationPreserved": true,
+      "frameOrMaskChangedApplicationPixels": 0
+    },
+    {
+      "name": "record",
+      "source": "docs/images/readme/v2/record.png",
+      "output": "docs/images/readme/v2/record-phone.png",
+      "sourceSize": {
+        "width": 728,
+        "height": 1576
+      },
+      "sourceApplicationRows": [
+        84,
+        1508
+      ],
+      "applicationSourceSha256": "d7dc9eee566cdc0abdbe9e86accfb980a5f1ca557d59613b339808d2bdeb8c39",
+      "applicationOutput": {
+        "left": 76,
+        "top": 162,
+        "width": 680,
+        "height": 1331
+      },
+      "completeApplicationPreserved": true,
+      "frameOrMaskChangedApplicationPixels": 0
+    },
+    {
+      "name": "diary",
+      "source": "docs/images/readme/v2/diary.png",
+      "output": "docs/images/readme/v2/diary-phone.png",
+      "sourceSize": {
+        "width": 728,
+        "height": 1576
+      },
+      "sourceApplicationRows": [
+        84,
+        1508
+      ],
+      "applicationSourceSha256": "4ca345a29e570f9877e4913be1a6eb18e7caa4a547403eddf2f55224be95c68b",
+      "applicationOutput": {
+        "left": 76,
+        "top": 162,
+        "width": 680,
+        "height": 1331
+      },
+      "completeApplicationPreserved": true,
+      "frameOrMaskChangedApplicationPixels": 0
+    },
+    {
+      "name": "profile",
+      "source": "docs/images/readme/v2/profile.png",
+      "output": "docs/images/readme/v2/profile-phone.png",
+      "sourceSize": {
+        "width": 728,
+        "height": 1576
+      },
+      "sourceApplicationRows": [
+        84,
+        1508
+      ],
+      "applicationSourceSha256": "a8a204a453c0b8a06371e2e13af015a3ddf3fc3dab04828eb254b193cd4987d1",
+      "applicationOutput": {
+        "left": 76,
+        "top": 162,
+        "width": 680,
+        "height": 1331
+      },
+      "completeApplicationPreserved": true,
+      "frameOrMaskChangedApplicationPixels": 0
+    }
+  ]
+}

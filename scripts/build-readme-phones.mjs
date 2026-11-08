@@ -114,8 +114,9 @@ for (const name of names) {
   const inputPath = path.join(sourceDirectory, name + '.png');
   const { data, info: source } = await sharp(inputPath).removeAlpha().raw().toBuffer({ resolveWithObject: true });
   const supported = (source.width === 591 && source.height === 1280)
-    || (source.width === 640 && source.height === 1386);
-  if (!supported) throw new Error(name + ': expected a preserved 591 × 1280 or 640 × 1386 WeChat screenshot.');
+    || (source.width === 640 && source.height === 1386)
+    || (source.width === 728 && source.height === 1576);
+  if (!supported) throw new Error(name + ': expected a preserved 591 × 1280, 640 × 1386 or 728 × 1576 WeChat screenshot.');
   const sourceRatio = source.width / 591;
   const sourceTop = Math.round(68 * sourceRatio);
   const sourceBottom = source.height - Math.round(54 * sourceRatio);
