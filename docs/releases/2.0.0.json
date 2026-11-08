@@ -1,0 +1,2127 @@
+{
+  "version": "2.0.0",
+  "versionCode": 20000,
+  "tag": "v2.0.0",
+  "sourceCommit": "40447b7cdd504048bcfb74fdbb940554aa8348de",
+  "stage": "development_uploaded",
+  "uploadedAt": "2026-11-08T16:45:50.350Z",
+  "uploadBytes": 1992201,
+  "evidence": "Official wechatide upload (发布体验版) final asynchronous task status=success and nested success=true. Public platform experience selection not independently reread.",
+  "taskId": "confirmation_upload_f896f98e-3239-4d43-aec0-0ce61e21028f",
+  "reviewSubmitted": false,
+  "productionPublished": false,
+  "backendDeployed": false,
+  "platformBefore": {
+    "confirmedBy": "user",
+    "date": "2026-11-09",
+    "production": "1.0.4",
+    "experience": "1.0.4",
+    "underReview": null
+  },
+  "validation": {
+    "testsPassed": 2584,
+    "testsFailed": 0,
+    "weixinBuild": true,
+    "cloudTargetVerified": true,
+    "nativePreview": "Real cloud dist/release: menu, discovery, public recipe cover + 11 ingredients/5 steps, profile checked read-only. Final image-compressed build recompiled and menu/cover checked; console 0 errors.",
+    "limitations": [
+      "New-user normal/invitation onboarding not verified with real new account.",
+      "Dual-account sharing/deletion and mobile experience regression not completed in this release."
+    ],
+    "excludedWorktree": "Existing docs/design, docs planning/implementation notes, design-qa.md, premium-audit.json, output/, outputs/ remain outside source commit; not build inputs. Generated cloudfunctions/meal-diary-archive is reproducible from committed server/scripts. Full private inventory: artifacts/releases/2.0.0/excluded-worktree.txt"
+  },
+  "failedAttempt": {
+    "sourceCommit": "d131ccb9c06172f5be579105dfcb89a53c2968c9",
+    "reason": "2493KB exceeded 2MB; no successful upload. Compressed image assets before final build."
+  },
+  "artifact": {
+    "algorithm": "sha256",
+    "manifestDigest": "8c610c46c06eac3f9d27cd1a468ce7e53ffb80bc3f3233326730fb1147f6be1c",
+    "files": [
+      {
+        "path": "app.js",
+        "sha256": "b224b6f5519de32366310e488b336c961984fe326b869caed0b39f36a424e799"
+      },
+      {
+        "path": "app.json",
+        "sha256": "94f9776f15ec1e1562c0228de349c453832a719f34e38943ab15b4ec74fcd684"
+      },
+      {
+        "path": "app.wxss",
+        "sha256": "f7791e1bcc6a98f9df5fb9ef2be2132f45143b7dbc5b37185c40c90eb6a3ffa7"
+      },
+      {
+        "path": "common/assets.js",
+        "sha256": "98ccac6574767b649be70a6e2d01a838792a8c6d9adeb4245a3c1246f6028bc8"
+      },
+      {
+        "path": "common/vendor.js",
+        "sha256": "f1c135392d1c7faa33b9f9efa031630eb07f70869b9d4169ce200a0f97b9be25"
+      },
+      {
+        "path": "components/AddDishesSheet.js",
+        "sha256": "ffb691fa428fe02a11cc4f608537bb3caab0c4355aa1a1c22cd8307664508145"
+      },
+      {
+        "path": "components/AddDishesSheet.json",
+        "sha256": "63625dddf521733cd934f15b638262df5f805ff7e2d4c01b7e3edd2a77311899"
+      },
+      {
+        "path": "components/AddDishesSheet.wxml",
+        "sha256": "5ac0572108a6ad2cb2456d7803ab1e915008f224bce1b3e969027394b779d767"
+      },
+      {
+        "path": "components/AddDishesSheet.wxss",
+        "sha256": "085e1fdd9512283468cb94d3153fecea05ee08d619e3fabbc4a6f5031a5ef814"
+      },
+      {
+        "path": "components/AppIcon.js",
+        "sha256": "84deb7ba204fafd2b4efc12b9adab6ea21ceeb417aa0ec2fab5d29ca018ae54a"
+      },
+      {
+        "path": "components/AppIcon.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/AppIcon.wxml",
+        "sha256": "8d93341866f21dd759a96f96f5a92f8e6cad2a849b9ea12c6a34f40545c58f0d"
+      },
+      {
+        "path": "components/CloudConnection.js",
+        "sha256": "43db37d5e490c33eb01fc4c5adfaf2369b066f1f363f06da002e213f1d7ce3f7"
+      },
+      {
+        "path": "components/CloudConnection.json",
+        "sha256": "98516d3dc08703470b3aef31a016bca5a58c473ff0360bd3f60cbcb6e97424a6"
+      },
+      {
+        "path": "components/CloudConnection.wxml",
+        "sha256": "a4a6531d22cb0d21a8c33e0f5460dd21b9e43d127476b3ebf01a2cbd2b477907"
+      },
+      {
+        "path": "components/CloudConnection.wxss",
+        "sha256": "7932fe1cc4485a3b139bf942655926f54b8dd8f4bd4592c3e488a709e997b557"
+      },
+      {
+        "path": "components/CommentItem.js",
+        "sha256": "0252de3b0de62acb1fea43f37797abc28099db2ef09bff770cc10e95a7dfcfcf"
+      },
+      {
+        "path": "components/CommentItem.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/CommentItem.wxml",
+        "sha256": "0eed548697515f560722cae634f3c840e4302ed365fe86bbdf02055a577bc06b"
+      },
+      {
+        "path": "components/CommunityByline.js",
+        "sha256": "e28ccc511ef7f50cbabf988568db3ab0dbdb5a17fc6937a935749c1b5c4220f5"
+      },
+      {
+        "path": "components/CommunityByline.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/CommunityByline.wxml",
+        "sha256": "0868347ef8bf01cb626ad93002588fd71503b47cab96fd7570237eced7a72daa"
+      },
+      {
+        "path": "components/CommunityFamilyCount.js",
+        "sha256": "59c6eb4f58de9120b66f667836d1c6bf374a31cd59a658eb2870f9741b2fbc40"
+      },
+      {
+        "path": "components/CommunityFamilyCount.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/CommunityFamilyCount.wxml",
+        "sha256": "d04f8dbcf268cac043c33116d601cd5f3a546ad21f1426ea7a89f82e2aa34386"
+      },
+      {
+        "path": "components/CommunityView.js",
+        "sha256": "deeb0842e7bef9a25feaac99299052d71c4c3de4f3a9975fac6ff6d7c828a733"
+      },
+      {
+        "path": "components/CommunityView.json",
+        "sha256": "39a87cca577716d36e536d194c7c0f26ab588aceb887883a803a327e0500db55"
+      },
+      {
+        "path": "components/CommunityView.wxml",
+        "sha256": "8b3490fcdc010092f1371142831faec463a9e188f01e9c46a5cd483890772b4b"
+      },
+      {
+        "path": "components/FamilyAppearanceDetails.js",
+        "sha256": "a08167dbd0c3401393e626f5f265234801b7f69545ffefaa3f80c9b328a0c63d"
+      },
+      {
+        "path": "components/FamilyAppearanceDetails.json",
+        "sha256": "06e1321142e3708c1f04f664f232e690643e4d21fe211e94be6665be20204bae"
+      },
+      {
+        "path": "components/FamilyAppearanceDetails.wxml",
+        "sha256": "23d812bffd2f1527a0cbf03fe86b199b62c751be4040b702a3f5e49388fb3a11"
+      },
+      {
+        "path": "components/FamilyAppearanceDetails.wxss",
+        "sha256": "37b02af24695e4982a8b90c3ec937f2238d4f32e665860b5c4ee8b8ccef543de"
+      },
+      {
+        "path": "components/FamilyCoverImage.js",
+        "sha256": "a351cdc2165106fee55bbd3aff6b2ed844967ce442f3d04d23f98b3f25174346"
+      },
+      {
+        "path": "components/FamilyCoverImage.json",
+        "sha256": "448a8fa2f39a34c235e9a87a96d1ae157c48e946cf2baad84361eef97f9f1777"
+      },
+      {
+        "path": "components/FamilyCoverImage.wxml",
+        "sha256": "6f709e8805203b80eaaccb9d121cb45364d644714bdca9413e07181595e99c8b"
+      },
+      {
+        "path": "components/FamilyCoverImage.wxss",
+        "sha256": "3c77a46031fb9c9d078406e004685928d75f9a7da6218a879d79f0022bf62a87"
+      },
+      {
+        "path": "components/FamilyCreationFields.js",
+        "sha256": "f847b61936ca1040336c59411d51b09e644a034d49056eb2a71423d7905fc460"
+      },
+      {
+        "path": "components/FamilyCreationFields.json",
+        "sha256": "f0bd1f8b28089b534b3b0d039d8f670984aed3d2c4b6339f59557f85b6ff0c9e"
+      },
+      {
+        "path": "components/FamilyCreationFields.wxml",
+        "sha256": "ba1f738797a82362620e2f3acf0cb4f1613d6852f162cfc733abe6424324979a"
+      },
+      {
+        "path": "components/FamilyCreationFields.wxss",
+        "sha256": "251f7084d34ef9f24ad0b8bb3c416daccb9fb1e9ec130f513cbad9bb0451eab2"
+      },
+      {
+        "path": "components/FamilyEditor.js",
+        "sha256": "d7d200bba0c8bd0c21d6316ef9ec4c1434fa7c5474b9968685e0a28737d0c641"
+      },
+      {
+        "path": "components/FamilyEditor.json",
+        "sha256": "2d66e580820b3a7aea6fcd8fc5bb302267fefd28c43e99ae9bc5b9a9315b59ce"
+      },
+      {
+        "path": "components/FamilyEditor.wxml",
+        "sha256": "ab30a4988e7772610f87c59f71405da673e1b896136e70793f7356b2bc9d86c4"
+      },
+      {
+        "path": "components/FamilyEditor.wxss",
+        "sha256": "c1b606ed5bf748031482d19c6d8fe37adcfe31c98bea70cad95cb26ea9c6611a"
+      },
+      {
+        "path": "components/FamilyInviteCard.js",
+        "sha256": "0bb66e767636cf3d3fac32b531250b7633dde9d786f6b1458cd1d43df612ba7b"
+      },
+      {
+        "path": "components/FamilyInviteCard.json",
+        "sha256": "086923b7e9eb74a079331f32e2a7fd1ffc19f19c65bd4e89a1577854e8c1e05d"
+      },
+      {
+        "path": "components/FamilyInviteCard.wxml",
+        "sha256": "07b523e147fb4f9925c8993f1a1f0e5b78612d1647de8bce4cc35dffc1b5b414"
+      },
+      {
+        "path": "components/FamilyManagement.js",
+        "sha256": "ebda0251f49e42982e1a965207bebd96a1cb8be6a9388304da457dfa8d6d4fae"
+      },
+      {
+        "path": "components/FamilyManagement.json",
+        "sha256": "f8788544496f318e65b1f5dad54e1fe05d3e0ca6aa18084dc85ea782f388c20a"
+      },
+      {
+        "path": "components/FamilyManagement.wxml",
+        "sha256": "ca704a061a2182f821b6e5da12c6c62ea57ab35610e5209bce495e2c1a7e5ef0"
+      },
+      {
+        "path": "components/FamilyManagement.wxss",
+        "sha256": "e326e37fe23d6325b274786afb73581d9769d2b55e3ab8feddccebe90e05d607"
+      },
+      {
+        "path": "components/FamilyView.js",
+        "sha256": "de0c1de5e047245a3d11eb2c65b91b61308d22797e49164948eae6603ea5ef97"
+      },
+      {
+        "path": "components/FamilyView.json",
+        "sha256": "34f4b41117db5436eb79571aeb67eacb1ea6ebd356fce437f3e1ce57a7a0107e"
+      },
+      {
+        "path": "components/FamilyView.wxml",
+        "sha256": "d1788ed4f7b89c8d49ba0d5a1a07330db2258c96f962d0fa546812b21f00d953"
+      },
+      {
+        "path": "components/FamilyView.wxss",
+        "sha256": "67b09534d2c7f006626c874976b0177a4ef219d36b9eb157b2dad19c7fd488b2"
+      },
+      {
+        "path": "components/FieldError.js",
+        "sha256": "5b0e0216eb1b6614f1f1a98cb8873b6851b39090f115880497c40d277834075c"
+      },
+      {
+        "path": "components/FieldError.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/FieldError.wxml",
+        "sha256": "15fef1d980f224e9ba04ddfa5b55695f5bfd1170db8815f038c94ba05faa1baf"
+      },
+      {
+        "path": "components/FoodDetailSheet.js",
+        "sha256": "84e3b0e91f80868926a25926fe03ee5f24073af188f18f0f308376e504b7439e"
+      },
+      {
+        "path": "components/FoodDetailSheet.json",
+        "sha256": "e1fe9ed47afc2cc7de1960851036d787af990a2829baa09cc6648716ae5a0594"
+      },
+      {
+        "path": "components/FoodDetailSheet.wxml",
+        "sha256": "a7b7a8c55daedaac567e6aa95b0974e5609a1e4a108c9749ff755b7000e31041"
+      },
+      {
+        "path": "components/FoodThumbnail.js",
+        "sha256": "4d38062644dd2d6cc24bb46c3c4987e18526aaea5f3771280efe1b62e35d7746"
+      },
+      {
+        "path": "components/FoodThumbnail.json",
+        "sha256": "448a8fa2f39a34c235e9a87a96d1ae157c48e946cf2baad84361eef97f9f1777"
+      },
+      {
+        "path": "components/FoodThumbnail.wxml",
+        "sha256": "f8b3b1a79b179f804f15cdc6ad049c516c2951963eb7a432b403b8c4905b1bef"
+      },
+      {
+        "path": "components/FoodThumbnail.wxss",
+        "sha256": "b840d5631f58d866c7fa9e1c0868fedc6ee104e5401973121b2ea99e29412b5d"
+      },
+      {
+        "path": "components/FormField.js",
+        "sha256": "84c37bf02e1ff8c2af993a9da00c6380eced0dac771339268dbfc390507a4874"
+      },
+      {
+        "path": "components/FormField.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/FormField.wxml",
+        "sha256": "d8be401c4e17e80ddaa7638ab457c8f19df23d99dd5b18676fc09825b8596217"
+      },
+      {
+        "path": "components/FriendForwardButton.js",
+        "sha256": "93ab9e925ec0126e89c07d3686f4e418ff102b91f9a77aebf62f9ab20adeab00"
+      },
+      {
+        "path": "components/FriendForwardButton.json",
+        "sha256": "086923b7e9eb74a079331f32e2a7fd1ffc19f19c65bd4e89a1577854e8c1e05d"
+      },
+      {
+        "path": "components/FriendForwardButton.wxml",
+        "sha256": "37985f2fe364681d70ef151b9b01dd213957cf77b9847c8fc8aa278e7f2f6d23"
+      },
+      {
+        "path": "components/FriendShareSheet.js",
+        "sha256": "dc12ee2a109c89fb8268ad2e28b8115e0ae3f233d6e8352c989da0ccef239f3c"
+      },
+      {
+        "path": "components/FriendShareSheet.json",
+        "sha256": "745883ee2dc07147be4b4efc12584c77cb382b44e09bbbece175d95bb690748b"
+      },
+      {
+        "path": "components/FriendShareSheet.wxml",
+        "sha256": "df3942eb93f69c0c6a07eb366c493ee3063ef329782332d8bc1b2b3c847c59c2"
+      },
+      {
+        "path": "components/HomeMenu.js",
+        "sha256": "742f280e0ae8d97c9fc9acd008a3fd1f47f94b0344699f4f4fe8e101dd15a863"
+      },
+      {
+        "path": "components/HomeMenu.json",
+        "sha256": "1e9a691ce7c52da689affb2af2641c26ee91edcb13fb2056ae4c3125af352816"
+      },
+      {
+        "path": "components/HomeMenu.wxml",
+        "sha256": "cd39795f6486aab5d3f9b6899068e92889ba2e7d1437e6514acadd5b5a5c852d"
+      },
+      {
+        "path": "components/HomeMenu.wxss",
+        "sha256": "38de1f42fdf61849f08270568ac9574c1d673ab4c289fabe0bee18f114a20bd8"
+      },
+      {
+        "path": "components/HomeWelcome.js",
+        "sha256": "f3dc3a46d55ed10a42a88828880003c0fa42cc61f80254cfe83f1064e4c978cb"
+      },
+      {
+        "path": "components/HomeWelcome.json",
+        "sha256": "06e1321142e3708c1f04f664f232e690643e4d21fe211e94be6665be20204bae"
+      },
+      {
+        "path": "components/HomeWelcome.wxml",
+        "sha256": "77e1e5db487f20722165eab9126042c4826f64973e83b8fe7ee60a7ee98b467e"
+      },
+      {
+        "path": "components/HomeWelcome.wxss",
+        "sha256": "f3c76962088791ce341f327082109f010ff2ce50b8337594d1e8b4e717534469"
+      },
+      {
+        "path": "components/ImageCropSurface.js",
+        "sha256": "ac022de9116e803631f51cfb9c7b24169127cb1653ecc7426e3e946be1d23afb"
+      },
+      {
+        "path": "components/ImageCropSurface.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/ImageCropSurface.wxml",
+        "sha256": "5642a49dca9713c21feb7426e4480c7a7feba6df0207db6cc7870a664be7e6c1"
+      },
+      {
+        "path": "components/ImageCropSurface.wxss",
+        "sha256": "dd71939e31abcae65acdfe1f9c64c069f6bba7191bf33447e77fdbae4a6db04d"
+      },
+      {
+        "path": "components/ImageCropper.js",
+        "sha256": "8ae1316f48f635c6c853267c312b9dfad5cc7e55935b1fcaf54193e36356bcf7"
+      },
+      {
+        "path": "components/ImageCropper.json",
+        "sha256": "581c423499292d6ac3339187b16a69ece0be5e04930807292dd3139c293bd148"
+      },
+      {
+        "path": "components/ImageCropper.wxml",
+        "sha256": "f8693cbd8a5b5f0120b5e3078c09a8804b47c996ca5177085959ffddb861c493"
+      },
+      {
+        "path": "components/ImageCropper.wxss",
+        "sha256": "f9ba90359c29ba3d4aa50f2f7a27247fe2d2759b705bfce0c4aad14a7a3c79fc"
+      },
+      {
+        "path": "components/ImagePicker.js",
+        "sha256": "c3bd3724aba832e32232f5835f78b51ca7b2d59b0485356bdf6878782630262f"
+      },
+      {
+        "path": "components/ImagePicker.json",
+        "sha256": "75201a2fc99c8030accde0d9c3b1a324084ae4361df0602dc5eb26037b6ecd8b"
+      },
+      {
+        "path": "components/ImagePicker.wxml",
+        "sha256": "9e9d5610b206150fbb7a8e5f31978a837496f92b51ba2bfec603b6646717ef3d"
+      },
+      {
+        "path": "components/ImagePicker.wxss",
+        "sha256": "afbf6831b23543ef6fbedd64e670523c626e3ef1be06a184f5c96a1b47a00b86"
+      },
+      {
+        "path": "components/ImageUploadProgress.js",
+        "sha256": "af44f9a3ec105d1f513552e2d32ee1924a87d3154bc2dd4d607d8264748e72fd"
+      },
+      {
+        "path": "components/ImageUploadProgress.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/ImageUploadProgress.wxml",
+        "sha256": "0a6a1ed157ee94ad07c675232fd1ff8220a18c125f62a9c78be31d521a40f42d"
+      },
+      {
+        "path": "components/ImageUploadProgress.wxss",
+        "sha256": "7f4d83afacaf98493cbdf1ceb20af93f616ec0d9dcc75b6c4487c12548a7f813"
+      },
+      {
+        "path": "components/IngredientTable.js",
+        "sha256": "42e15ad5067e8be1c98d91ee5acd743f28fe57713acc20de9c939f9f85cf4971"
+      },
+      {
+        "path": "components/IngredientTable.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/IngredientTable.wxml",
+        "sha256": "717709bbac5c384c4401daf9152f9f9be9f6a79410c79f97315fb5a2c2346a2c"
+      },
+      {
+        "path": "components/IngredientTable.wxss",
+        "sha256": "35d0eed67ea8699bc040b4cd7c7bbcc5ae1b4c6e75734ec3ec33217225d80996"
+      },
+      {
+        "path": "components/InlineMealDate.js",
+        "sha256": "adf5d6e5768a42b7d10f58986f9c243a5d4fa7c46dfb7358b8f6180e4daa1eae"
+      },
+      {
+        "path": "components/InlineMealDate.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/InlineMealDate.wxml",
+        "sha256": "4ccc1777f0e34615d8b9d5b37d569ef2d3dbb781ce8b1680ddc7a5a8c88fe7e9"
+      },
+      {
+        "path": "components/InlineMealDate.wxss",
+        "sha256": "c49b8957555a8e954616d18381dad9738a0cd73728e85b9665afe654a9a7bf7e"
+      },
+      {
+        "path": "components/InlinePhotoEditor.js",
+        "sha256": "f0ad361ff694bcd42365a00eda95a303dedec926892aff367a96c575480490e5"
+      },
+      {
+        "path": "components/InlinePhotoEditor.json",
+        "sha256": "fd755ba07663ee05fa8ce9ad0ab16f7d25c7becb4b9bc8b367393f852d66be06"
+      },
+      {
+        "path": "components/InlinePhotoEditor.wxml",
+        "sha256": "3c6571701d008315d6a7ba1d355f38c483b3a5202e379a9c3f4767217e01a790"
+      },
+      {
+        "path": "components/InlinePhotoEditor.wxss",
+        "sha256": "3926e7516648adc49905beab1c0d6249fd6d99f646e84f5dbad93f6dbc03d93c"
+      },
+      {
+        "path": "components/LazyImage.js",
+        "sha256": "7fbf343df328d1cc9d645c73e0d53e1967a1a9c9dfc5a091c315de77fd575eed"
+      },
+      {
+        "path": "components/LazyImage.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/LazyImage.wxml",
+        "sha256": "71f34de8d2333c505a1b6c7cad7fc3599491d3154cba26946302729b12fbf230"
+      },
+      {
+        "path": "components/LazyImage.wxss",
+        "sha256": "a618689cebb9e0bce6292d8bc0cdc4bdc535f963a4b1a283be0ec63c29977d57"
+      },
+      {
+        "path": "components/MealBar.js",
+        "sha256": "86aca83e600e57eb05aaaebea983b2eafc6de2633d3d6e1442632782b0fa66ad"
+      },
+      {
+        "path": "components/MealBar.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/MealBar.wxml",
+        "sha256": "94c366f4e5eeee99228f01db779eff16544a4e4c1c311cadde8840ffce27990c"
+      },
+      {
+        "path": "components/MealBar.wxss",
+        "sha256": "c064f2b0f4329107d7757b3793a6b0aef844ea8224fa9dd2dc0ec965f7887912"
+      },
+      {
+        "path": "components/MealDishList.js",
+        "sha256": "b81a702479c00678502bba39a85b136bd37cd34c8b50d157efaddca4b4c8c817"
+      },
+      {
+        "path": "components/MealDishList.json",
+        "sha256": "37d79f43e744af319dffd9cb703ceb09ed295aa86976f25b9d473193c776c0b7"
+      },
+      {
+        "path": "components/MealDishList.wxml",
+        "sha256": "f8edc020c36e838bfc4366874af2cd95f819f7b48038fc980512256be3a88601"
+      },
+      {
+        "path": "components/MealListEnd.js",
+        "sha256": "d509d2c7e2137c0fa751920ed6337745b585a21ac618c59e11b95d1f0df3727a"
+      },
+      {
+        "path": "components/MealListEnd.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/MealListEnd.wxml",
+        "sha256": "9d7e5d61b6fd0e3df0944e85d1c4bc7948412c850f1c565b9c9b505f95bb0d83"
+      },
+      {
+        "path": "components/MealListEnd.wxss",
+        "sha256": "cb3b0d7744566069d67135bfe720e461c0cb8f144b6cadbec0ec19b71ccbd08c"
+      },
+      {
+        "path": "components/MealMoodTags.js",
+        "sha256": "af885b0eb567d79924865098da169e2514f52369f3c3048dc3fcbd8c86d99672"
+      },
+      {
+        "path": "components/MealMoodTags.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/MealMoodTags.wxml",
+        "sha256": "c1b1baceee442db3f9f64b6d9026820a06ca98727db744458bfe7b4c80c42861"
+      },
+      {
+        "path": "components/MealMoodTags.wxss",
+        "sha256": "e029a031adfa18414477cd013e80c7c5df1c382b30d5c19453866b0487e08dc0"
+      },
+      {
+        "path": "components/MealPostCard.js",
+        "sha256": "e6653653b78a42c64146048ed090afa2e0abeebb616e0d44629ff61f9dbca4ee"
+      },
+      {
+        "path": "components/MealPostCard.json",
+        "sha256": "013df733926031e1a4b0d6f52f1eca572512ff099c8137f4ed15b1ceb06ce5b2"
+      },
+      {
+        "path": "components/MealPostCard.wxml",
+        "sha256": "287339b022d04dc01c8e9e96133f98cad50c6dd7d2b98e6cdbff563dc79c89df"
+      },
+      {
+        "path": "components/MealPostCard.wxss",
+        "sha256": "7ff92ac8cddb7692310a71ca6cc9bf187dcc3162793e7d1bd372693ea66c906b"
+      },
+      {
+        "path": "components/MealPreparationSheet.js",
+        "sha256": "4faa9462e38da2eddd7bf7d37160553b45510d6b865861995ff106dd298d51ce"
+      },
+      {
+        "path": "components/MealPreparationSheet.json",
+        "sha256": "7559cce9e5245708a8d8f821f568e58caf00c91776cc82c6c9092eeb02cdcd0d"
+      },
+      {
+        "path": "components/MealPreparationSheet.wxml",
+        "sha256": "f5411e8f25cef2e7a27d9a6fec45676e9fd2bba70860cf5f3990bc192a6bf3eb"
+      },
+      {
+        "path": "components/MealPreparationSheet.wxss",
+        "sha256": "8bdc48ecd2413132ef44eed160d547e8901dc922f0a26f842ae298691039dea5"
+      },
+      {
+        "path": "components/MealPublishSheet.js",
+        "sha256": "6f810708f1e9c8b1c46ab4ca0f96ad9a799f7fcc4f56635b8301a5b58f75bffa"
+      },
+      {
+        "path": "components/MealPublishSheet.json",
+        "sha256": "86691d905159ae38a164e93528431ff11f31cd6d221204945c6a5cf4060cce76"
+      },
+      {
+        "path": "components/MealPublishSheet.wxml",
+        "sha256": "f5338cdb724ad2350cbeace9c2e99085287efce42362298d37bee33c12d4c5e5"
+      },
+      {
+        "path": "components/MealPublishSheet.wxss",
+        "sha256": "026a90aa1bec8dd26f6c824f060cece8916028ff89995b568c34d25d714e9126"
+      },
+      {
+        "path": "components/MealSquare.js",
+        "sha256": "e602f7d19e2c6375b73e270887c10f41ad7cf2c127018b319fd46f323ca1c1a2"
+      },
+      {
+        "path": "components/MealSquare.json",
+        "sha256": "174239739dfdf3aef78d027b37237a41645391ddf889cb090533bd3d4d25e32b"
+      },
+      {
+        "path": "components/MealSquare.wxml",
+        "sha256": "28d822ee91c2da29bca88b012861eba2c46f5916b0f0b218caababf79a2e12d0"
+      },
+      {
+        "path": "components/MealSquare.wxss",
+        "sha256": "bc1bb3a36a93bd820cbd16bc8a28a8b26bc3ef15c74ddc7778d348dc256ddfaf"
+      },
+      {
+        "path": "components/MealTimeline.js",
+        "sha256": "4e920640c0d5de5620caebe1bcc52ce95ae1a6d169057cdfac26b586e566b293"
+      },
+      {
+        "path": "components/MealTimeline.json",
+        "sha256": "9a4a3b85c72cdba5962ad037d57f8cc27ba0b19f0e1a3ed488087f1ffca71fbe"
+      },
+      {
+        "path": "components/MealTimeline.wxml",
+        "sha256": "5a92ceba2802c487d4620682367b73714dbd341989f9d31100918f78622ed152"
+      },
+      {
+        "path": "components/MealTimeline.wxss",
+        "sha256": "e077b6f10fb2d776c6e0cf8261a10f79e4561c4f8926242535840847a3c0317e"
+      },
+      {
+        "path": "components/MenuDetailActions.js",
+        "sha256": "f8ddf2ce9380b47743f25cb3db63a09e3d4c9a9b641c81228d4c2b286e3e219c"
+      },
+      {
+        "path": "components/MenuDetailActions.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/MenuDetailActions.wxml",
+        "sha256": "b3d129a52d092d7f9dc5b7198bdb8ed833c1128edc9f109b72ceee3354990710"
+      },
+      {
+        "path": "components/MenuDetailActions.wxss",
+        "sha256": "5a8dd6522efefbd229a845675e9b48df092151aa3868f17c1505200b7c945f19"
+      },
+      {
+        "path": "components/MenuSwipeRow.js",
+        "sha256": "228d20599ece3999ad2a0c817eedcdca73e515249b622587f4d38bc50c4b2687"
+      },
+      {
+        "path": "components/MenuSwipeRow.json",
+        "sha256": "37d79f43e744af319dffd9cb703ceb09ed295aa86976f25b9d473193c776c0b7"
+      },
+      {
+        "path": "components/MenuSwipeRow.wxml",
+        "sha256": "ce61c94f7507eb5534645d3224acfe5ee5fbc5ce94889267cff4f967ea9b7788"
+      },
+      {
+        "path": "components/MenuSwipeRow.wxss",
+        "sha256": "2fa5a1164ed1d53fbcfa37df9da921782e2ff0b5845f132f2c2c4d975943f0ca"
+      },
+      {
+        "path": "components/MutationSyncStatus.js",
+        "sha256": "103382ab92f25ea9d1fefb3c975c5dd793a419500c3e7e070fe796b57c15006d"
+      },
+      {
+        "path": "components/MutationSyncStatus.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/MutationSyncStatus.wxml",
+        "sha256": "55d24cffa8773c80a7b01eb4fbda9a06749cf13f6658ae2be9fc4e3d7fbf6065"
+      },
+      {
+        "path": "components/MutationSyncStatus.wxss",
+        "sha256": "bb8a9e3371b5a824756ce09c33d5ce62870cb994c2123a54e463770eb478e2ce"
+      },
+      {
+        "path": "components/NativeShareButton.js",
+        "sha256": "3dfc67b94af7929c0a22d05ed066245006431239dfed2f2ef5db74c8f628eba9"
+      },
+      {
+        "path": "components/NativeShareButton.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/NativeShareButton.wxml",
+        "sha256": "40cc8620a9042e7c513ddad59d47972693a1ba0f329a8f133cba50f276ebd8ac"
+      },
+      {
+        "path": "components/OrderActionMenu.js",
+        "sha256": "c1740574acc9ea4b5eb487f081f01548809764a0dbfed81c78781695a998b1d2"
+      },
+      {
+        "path": "components/OrderActionMenu.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/OrderActionMenu.wxml",
+        "sha256": "45cbc54fd1ff7d68b4f8fb9e63a84a39bd7123065aa8e93cbc44422891a35f40"
+      },
+      {
+        "path": "components/OrderActionMenu.wxss",
+        "sha256": "367260aa0c5402b22b0a5663b99315ba4ea59c92332b6e7647ae82684c55a7d6"
+      },
+      {
+        "path": "components/PageHeader.js",
+        "sha256": "1c3cef5731442d8a0afb8dfc16f0e2fb5883462aa9b349cd3c5ef86bb53f0c0b"
+      },
+      {
+        "path": "components/PageHeader.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/PageHeader.wxml",
+        "sha256": "269a4e12673694a74844d0a8399a49d564dee670fe8c94374b5cb6525ec57915"
+      },
+      {
+        "path": "components/PrivacyConsent.js",
+        "sha256": "15ade5f1bae550e1b8727cd9403eb8b5120e9d447888fa7e2ef0364f330a8f63"
+      },
+      {
+        "path": "components/PrivacyConsent.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/PrivacyConsent.wxml",
+        "sha256": "d1372b42385172aa758d351febb77a29524a7440d6b2a3e8aec88a76c0b28f59"
+      },
+      {
+        "path": "components/PrivacyConsent.wxss",
+        "sha256": "fbbf318a76d02b2b111aa53a3612285fd6576bdc1d16be0e9aee0cc554fb751e"
+      },
+      {
+        "path": "components/ProfileEditor.js",
+        "sha256": "c576331299e5e8a75a29f2c483baa1996866817c0d7cf151b89af7267e2adc64"
+      },
+      {
+        "path": "components/ProfileEditor.json",
+        "sha256": "7887d307bb947c36fe744fb6885316a424ef42e3c79955ab3fb530fc9446f3fe"
+      },
+      {
+        "path": "components/ProfileEditor.wxml",
+        "sha256": "5b590f43adf19c20d3561eb7f5b948a48e9b1ab441232d798cb12425398e4bdc"
+      },
+      {
+        "path": "components/ProfileEditor.wxss",
+        "sha256": "1c9572f5c67af6da55431a70afa0e1863ea1c3379eb5c0eb2cffb1797b6f07da"
+      },
+      {
+        "path": "components/ProfileFields.js",
+        "sha256": "7019834c0608d057fed8925ad4ff7e7f1aab0242e50fb0a67578b9e81af91875"
+      },
+      {
+        "path": "components/ProfileFields.json",
+        "sha256": "db60ce48713f4455c66177c68fda13e11d7aba7fcab5feeaf958d2f756ca8fb3"
+      },
+      {
+        "path": "components/ProfileFields.wxml",
+        "sha256": "f980392ebad9ec3302c6e41e12c049538138281de06cb9f0e047ca5b464f6ee1"
+      },
+      {
+        "path": "components/ProfileFields.wxss",
+        "sha256": "4f222c711415e7f48cb1f565d45eff82297d843f45fe3eceb160e1f402883d74"
+      },
+      {
+        "path": "components/RecipeContent.js",
+        "sha256": "ea108580aec5c5ca6bc9a0be78bdeaba54b1773e7a0710b0c7e2e1f8baa398a0"
+      },
+      {
+        "path": "components/RecipeContent.json",
+        "sha256": "50d974eb6b1d906e4257196e82e600634abf67f034852ce5a538a3aadb006f37"
+      },
+      {
+        "path": "components/RecipeContent.wxml",
+        "sha256": "72f8ac737c08be7910d1b8f51b64ca2e3e1f929543abfed0b79d07be90ce5896"
+      },
+      {
+        "path": "components/RecipeCover.js",
+        "sha256": "39cd43dd67439e9345e502f405c3e3641dcd3c041bc2b2e3b211459c7d63fad9"
+      },
+      {
+        "path": "components/RecipeCover.json",
+        "sha256": "2c0bce3cddad9f3acb112df065e5fcf07f23500b90e8c7d6733d03400106d00b"
+      },
+      {
+        "path": "components/RecipeCover.wxml",
+        "sha256": "148e3af54db564687bbbfaed3abe3e9007dd50e18f3df6d6bfdb882e4ab38fae"
+      },
+      {
+        "path": "components/RecipeCover.wxss",
+        "sha256": "d8098ef2ab428ff8b7502da6684235fe06e48b80fbd9e98c61b6816b34f49f8d"
+      },
+      {
+        "path": "components/RecipeDetailLoading.js",
+        "sha256": "726f461feb0826af114a53de03e3ac0dd08d8418e83c7638c06d4d237fd61c43"
+      },
+      {
+        "path": "components/RecipeDetailLoading.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/RecipeDetailLoading.wxml",
+        "sha256": "4db89649cea23539ea426f9630d9bcefb6e9b2b133f722959f98e88c1bd34f55"
+      },
+      {
+        "path": "components/RecipeEditor.js",
+        "sha256": "d085b2aad0a54a73682cea736e6d916caa0ddb6cad7e046fcd7353705a4dedec"
+      },
+      {
+        "path": "components/RecipeEditor.json",
+        "sha256": "604c49e1ea7762268959383646a6a3323ad0f064af11648ee32c148ccbe7ac0b"
+      },
+      {
+        "path": "components/RecipeEditor.wxml",
+        "sha256": "6b4e43cd06eedf7d147e25a686ff1c0ff7eb21906932162ed0397deec3864bfe"
+      },
+      {
+        "path": "components/RecipeEditor.wxss",
+        "sha256": "251d9ad9bc9b44ce1d792ec521c4b9adfaa07b75035e44415432ebab256ac0ed"
+      },
+      {
+        "path": "components/RecipeListMeta.js",
+        "sha256": "def165e09ee52316a0ad757b849e38f8713b9b389c4f5d59c3caa7031a0395dc"
+      },
+      {
+        "path": "components/RecipeListMeta.json",
+        "sha256": "d1a3f3a4cece35cad4b65655c42769f27c603849c7f9c1a4e71b40707ca344af"
+      },
+      {
+        "path": "components/RecipeListMeta.wxml",
+        "sha256": "790306f4769b8e4b02d6edb595d94a405c42316b3bf0ea47ff9aafa9434369c9"
+      },
+      {
+        "path": "components/RecipeListMeta.wxss",
+        "sha256": "fad791d09817d7e2e18a90509df8ed3fd0105ec250595edc42dc88dd3e490500"
+      },
+      {
+        "path": "components/RecipeSheet.js",
+        "sha256": "2464edef53d0e35f30f053db48aff078207efa3406cdb147b45a5295e19c1501"
+      },
+      {
+        "path": "components/RecipeSheet.json",
+        "sha256": "c73ffdbce70966a3649055fd597489b4818ece72b73ffa51372a168e80768e31"
+      },
+      {
+        "path": "components/RecipeSheet.wxml",
+        "sha256": "57b7a2e9e0541eee7efb7d5e8b1a5ce667f2f2687c80997e2b7d5c39ca2a6571"
+      },
+      {
+        "path": "components/RecipeSheet.wxss",
+        "sha256": "4cf3e55571c8a7aaa6cb1018c83834772ff924a59d4fa6a96127f3b3d18a35a8"
+      },
+      {
+        "path": "components/SelectField.js",
+        "sha256": "0ac188f3cd47549b882a0c258c417875ff8fcc7a44c395273753769fcf7e0980"
+      },
+      {
+        "path": "components/SelectField.json",
+        "sha256": "2ebc0272a20f80009e3a4ecbed0f26976653ad0f1f4bf924fd9d6aaacdfd3c63"
+      },
+      {
+        "path": "components/SelectField.wxml",
+        "sha256": "f52f4a51e2ac6622750507ac1c864974dbb5c0135bb8022a41d56500ebac297a"
+      },
+      {
+        "path": "components/SelectField.wxss",
+        "sha256": "9899952dfd9dfcb0048724dc35e7bf2404242b1ea7d972c97c9d3ef951b15d43"
+      },
+      {
+        "path": "components/SetEditor.js",
+        "sha256": "d0a75018ba68142042fa2303e5aec411c7f89c7f5922b3d5e5a87658d9f32ba4"
+      },
+      {
+        "path": "components/SetEditor.json",
+        "sha256": "b963869c2be9774eecea8e35c086b084f2e96002eca31c3c7d5f2b153626137d"
+      },
+      {
+        "path": "components/SetEditor.wxml",
+        "sha256": "78f61f5e6133ae087a5f45456270890485add883ae8e6adf1c55c496a4745c55"
+      },
+      {
+        "path": "components/SetEditor.wxss",
+        "sha256": "6b175dad9e26c8a4d8a5a73ec2b591be9127f283e1622d4c3c95614ddc91a7b2"
+      },
+      {
+        "path": "components/SetSheet.js",
+        "sha256": "f7302d20706acee832d9954c057a966aec28ca4f52a47b55a7048edf57e4d369"
+      },
+      {
+        "path": "components/SetSheet.json",
+        "sha256": "5c33448c67f4c3eac71f79a961c52746b711399586e153e1a90b23dc7d3ce06b"
+      },
+      {
+        "path": "components/SetSheet.wxml",
+        "sha256": "a0ffc323c8f15c4cffb24862f2f38caeb5db4bbaf1d2083fc8c64b58836d4011"
+      },
+      {
+        "path": "components/ShareSheet.js",
+        "sha256": "7e7e13b3fe8f51e919e15b07ac0595f50f0870e36a0d9fe349df0d6e4af9a0e2"
+      },
+      {
+        "path": "components/ShareSheet.json",
+        "sha256": "4ec68c3aaa81010e33891b90dff4ddd8eae45da6386d8e2d7291f75bec1470b9"
+      },
+      {
+        "path": "components/ShareSheet.wxml",
+        "sha256": "68ea8babf09a21b80101493808e2b16d72adbcc50b79a9c310a2b8ffcc6edfbe"
+      },
+      {
+        "path": "components/ShareSheet.wxss",
+        "sha256": "0aefa9768e4808e164eb0839c3677e8e98d8f706b713a6c323ba3f027cac9281"
+      },
+      {
+        "path": "components/Sheet.js",
+        "sha256": "8ad63a3e416a1f75d3758a256c869ed69756b5bc9f57b47f0ceb7193118c6d6a"
+      },
+      {
+        "path": "components/Sheet.json",
+        "sha256": "6e72dadc3680e796aee6cd518838aed27738a42c14bf6b1e9a9067044115c815"
+      },
+      {
+        "path": "components/Sheet.wxml",
+        "sha256": "cd21d1bccc2e4aaee2ee23c3b13dc065cfe05dc29f73bb363ade608b20eea7a2"
+      },
+      {
+        "path": "components/StepImagePicker.js",
+        "sha256": "362ba4bd1a4e7a3ffa3bf99e6e8325a6bde9ce87584ef507706f4b07b419792a"
+      },
+      {
+        "path": "components/StepImagePicker.json",
+        "sha256": "3a0143eb60ad6a2ad080816d493ce58d01429a8fa289ba379b6b2f1b7bd7747e"
+      },
+      {
+        "path": "components/StepImagePicker.wxml",
+        "sha256": "542fd8ad4f77ac2638a4593e3e6d2721ad9e8f08dfa730cf4ce324818f2bcff6"
+      },
+      {
+        "path": "components/StepImagePicker.wxss",
+        "sha256": "8667540b2b51c511befc402520c724d454eb410eec228b817822187bde4b8edf"
+      },
+      {
+        "path": "components/StretchCover.js",
+        "sha256": "bdba25793a1aa07bb827b004290a2ac7ec65b0e831524face26a092ed0b3adcd"
+      },
+      {
+        "path": "components/StretchCover.json",
+        "sha256": "638db41400899237402d3c5be0a4eb79d50ddc12d7cabdcc56df4842a2716de8"
+      },
+      {
+        "path": "components/StretchCover.wxml",
+        "sha256": "2270c338091caaf883c2ef8c9375e7376cce13d9d7909357865e8115c424df1e"
+      },
+      {
+        "path": "components/StretchCover.wxss",
+        "sha256": "5ab6c8208c0509497455c32656fccd43d38b3bdeb84ff47842e8c746b3be1869"
+      },
+      {
+        "path": "composables/fieldReveal.js",
+        "sha256": "1ab4ef70563411828824703a92a7fb48572ae6b0a287aea690562f0e32adde5a"
+      },
+      {
+        "path": "composables/nativeRender.js",
+        "sha256": "ff04dcd2c1638c57ff6c70f5ae25e58e788199900bbc8217e323a2b86a214a97"
+      },
+      {
+        "path": "composables/sheetStack.js",
+        "sha256": "328999c953925a1f7301058efa36e75cfbcd3eaa475b06783dbbffdd37c48ae4"
+      },
+      {
+        "path": "composables/useCommunityFeedViewport.js",
+        "sha256": "63d99b396e045a7c7722da288687434295113b50342ee5cc44550f689144178f"
+      },
+      {
+        "path": "composables/useCommunityNavigation.js",
+        "sha256": "7ede04b9b8245b1bd08c41c6397f5e2658dd696112eb031ccb25695276d5fc97"
+      },
+      {
+        "path": "composables/useFriendShare.js",
+        "sha256": "bc1c06dd5641238a8d52c9ef02ca16ddb5a938e42db7a42729cbf3efbeea7f54"
+      },
+      {
+        "path": "composables/useHomeMenuViewport.js",
+        "sha256": "3a6458d1c5513bdc7c52d7d0ad9081e5903adf60d23f482f2bcab48fc7fc8464"
+      },
+      {
+        "path": "composables/useKitchenFocus.js",
+        "sha256": "d38bd9fd1458dff07c550bf3c2c3a255eaecc59772ef761bd5f771ca04cb477b"
+      },
+      {
+        "path": "composables/useMealDraft.js",
+        "sha256": "9c0df117379bd49bee30171a24ae5c0d25854d91fb1de9a85adb96a80fd7a6f2"
+      },
+      {
+        "path": "composables/useMealPosts.js",
+        "sha256": "dc5639047a78eb70df19085891e652891dd8b3ebb6dd8be770b384f1e13ccfa0"
+      },
+      {
+        "path": "composables/useNavigationAppearance.js",
+        "sha256": "cbb4a41a0fbda938922723d49868ba58e73a6ec9fed46ab3f8222360bac5e89f"
+      },
+      {
+        "path": "composables/usePageLock.js",
+        "sha256": "759528ee031b3cec776678d87638b5c0c0fc8733c80fefcd6eac5b6425a96e61"
+      },
+      {
+        "path": "composables/useRecipeAccordion.js",
+        "sha256": "6bc8fec53ca20c6ebae29cc71cb6d912daa82d19d87274354d276867278f7b09"
+      },
+      {
+        "path": "composables/useSheetScroll.js",
+        "sha256": "70529d893740d2141b7ccf6e332b6111b68644f57ba8798a3a69042a8a9d22fb"
+      },
+      {
+        "path": "composables/useSheetSizing.js",
+        "sha256": "b12caf4fc81d124d3df66b34f39fdfe5596fa04c30a873b6c5acc9406c15e917"
+      },
+      {
+        "path": "data/seed.js",
+        "sha256": "355b87c9829d171d9adb9a70ec8be6254f11cdfd7c30306752f0479028b26e9a"
+      },
+      {
+        "path": "domain/actions.js",
+        "sha256": "2091130b38f26dbd4be1fbd5702bc502cfebf6a511481d077fae607854e5a42b"
+      },
+      {
+        "path": "domain/checkout.js",
+        "sha256": "4eb90adeae92798fd4a6b965991fad45149b40e7308e55e2a9b0c527016dcdf9"
+      },
+      {
+        "path": "domain/community-features.js",
+        "sha256": "f4c13ebf6324af7d3b998cf88ef4e5deea408a749b0d5affafdfff04b12b6548"
+      },
+      {
+        "path": "domain/community-policy.js",
+        "sha256": "6a2142d367124da0bbaa25f40aff982e96358c434fc7048af0f360f3614557d2"
+      },
+      {
+        "path": "domain/community-publications.js",
+        "sha256": "f27f38dbd8912787469a33ed015d3dd8d299e78d6bd92f9cd472bbb8f5d2bda1"
+      },
+      {
+        "path": "domain/default-profile.js",
+        "sha256": "0829183b15e5a6ad9c947d36036784df5afae00aa17092fb9a29473e9d23443b"
+      },
+      {
+        "path": "domain/empty.js",
+        "sha256": "d326991e6fca8efbb32a2b82df2f8139cde0c771f5e4801579f0089ce8ea0ee6"
+      },
+      {
+        "path": "domain/family.js",
+        "sha256": "8dbcd2961e0b87bb03a6c433fb5bfee0fed0717f00eec8af25f20274aba03531"
+      },
+      {
+        "path": "domain/food-detail.js",
+        "sha256": "703ed7c0174dc054a3edd92d99c203537dbea5b6dcb93978c4fd0621c7821ee8"
+      },
+      {
+        "path": "domain/food-feed.js",
+        "sha256": "8f06afa0abf77f9fe85cdfb64727dd131289fa2c540b9d9cfb1a00d2819a1194"
+      },
+      {
+        "path": "domain/home-menu.js",
+        "sha256": "d30f157d515f20ca7f752c09c01a617cb598bf6c1f69c14e3323f84caeccee8e"
+      },
+      {
+        "path": "domain/home-welcome.js",
+        "sha256": "d7eafc00927cce121589eadecd60afcd40be39b3a4f81dd89c329d7e2cfb774b"
+      },
+      {
+        "path": "domain/image-crop.js",
+        "sha256": "77609ec37f1e53fadf8db961a7ea2d90d1639f4a4c90d657faf2b0400bb2f838"
+      },
+      {
+        "path": "domain/image-variants.js",
+        "sha256": "49494b589e027862e07d65f5e4e486dbb35ecf22ac3e36fd5b0fda6c47253e25"
+      },
+      {
+        "path": "domain/ingredient-art.js",
+        "sha256": "09e16c07b4887e3f93111bf68d6fcd3c27d43406fd4b04d66670f8910fa7cfc5"
+      },
+      {
+        "path": "domain/ingredient-directory.js",
+        "sha256": "e996875b1fe5822f1ae6633905280131ddb4dd0dc6cb97d0a5bc6a45e49e42e5"
+      },
+      {
+        "path": "domain/ingredient-units.js",
+        "sha256": "5214381bfe48cc6213d480427b5e58e3d5becc734122c2d1f3cf6557f6679b54"
+      },
+      {
+        "path": "domain/kitchen.js",
+        "sha256": "fcf177e6ff99801dc5ef529d1defd31e990436400ef11946e2d735f1f3441454"
+      },
+      {
+        "path": "domain/meal-additions.js",
+        "sha256": "a146e9b1cd461c3c34370354470b16c8a48415244152aad01fcabc0ed1a7c630"
+      },
+      {
+        "path": "domain/meal-post-media.js",
+        "sha256": "481eed5c1b84b7bd5253698721e154c9ac0728ed134f5b0e846afa8ad3688243"
+      },
+      {
+        "path": "domain/meal-preparation.js",
+        "sha256": "1c99a3b02a4500a5cc45271384684ad2a5de04459bd55de6cdb57efbc90cd369"
+      },
+      {
+        "path": "domain/meal-removal.js",
+        "sha256": "596aa4dbce9d179e36f038fc3632d5c3021c39736c5295b9ebdcbfbb9df4c6a8"
+      },
+      {
+        "path": "domain/meal-shopping.js",
+        "sha256": "2a2bf0578de35f2ae2eb318ed7d5eaa0085ebf7f1b029047102943af2f0b4909"
+      },
+      {
+        "path": "domain/meal-social.js",
+        "sha256": "3c86beb06d9b25168bfbc119759f0ebe99383cb2ad8947c60b96da2fb0b4c772"
+      },
+      {
+        "path": "domain/mobile.js",
+        "sha256": "7a332bbc08c5e230d7ff5911926b2cc1b8a70d578381ffd6e15ad94106bde581"
+      },
+      {
+        "path": "domain/navigation.js",
+        "sha256": "e6f52df1608388d8147d2904db91dc70128abbf8a802b59d3c37fbf24c233033"
+      },
+      {
+        "path": "domain/order-action-menu.js",
+        "sha256": "d568ec20b949cd86347c4fd87b1e17e657a70405a5178b67dde01861321643f8"
+      },
+      {
+        "path": "domain/presentation.js",
+        "sha256": "cf8e8f6a4731aa7cfb88f11cbb46def4530153a5f0629c6c70b503976724441e"
+      },
+      {
+        "path": "domain/recipe-identity.js",
+        "sha256": "3711aebeeec1ad05fe2fd9e3b17ee9b920a056322714db88bd4a1c8c4a672d8c"
+      },
+      {
+        "path": "domain/select-dropdown.js",
+        "sha256": "cbe241156800c94a1055745be431e68fd5a32aab871285b1c0bf9ce2096aee57"
+      },
+      {
+        "path": "domain/sharing.js",
+        "sha256": "a7c7fc63fc565cdf138a4c8efdb8ef68a36431afd34755cba3ed3dbfe83563f2"
+      },
+      {
+        "path": "domain/ui-theme.js",
+        "sha256": "c9c46b8c7fb3a42ef79358932ec0306cc9804c199698e02e2fe57b101a6a606a"
+      },
+      {
+        "path": "domain/workspace-identity.js",
+        "sha256": "56ff62480acf99bfebfac7eeb4a66fd898dd91f753534ce69cb82a2aa28fbd23"
+      },
+      {
+        "path": "pages/index/index.js",
+        "sha256": "3ad5c167fdc0070c878ac0de16a517a9cc0d591e838bcdc1a79b91e07b1d7e84"
+      },
+      {
+        "path": "pages/index/index.json",
+        "sha256": "df19de4c5e416ce47544ab286e7cbb4378a43d38cc2a7d798b5e614311db3d66"
+      },
+      {
+        "path": "pages/index/index.wxml",
+        "sha256": "d53a001d1980ae809530e2a91ad5e7f8dd05aa403c703518f48879bb76843366"
+      },
+      {
+        "path": "pages/index/index.wxss",
+        "sha256": "21a969274f8a2e3ee978c368a5b06ffe066311329a3ab65da50c98cd070f463d"
+      },
+      {
+        "path": "pages/invite/index.js",
+        "sha256": "1270919d4d9112e02027169ab6944e6c6aa699a8614f8fd47184fedf8318a8d2"
+      },
+      {
+        "path": "pages/invite/index.json",
+        "sha256": "1a0f0ae67fc905e8f8b14953f49ba91300f0ebcdca4fc3325594762fe32075d2"
+      },
+      {
+        "path": "pages/invite/index.wxml",
+        "sha256": "45ffe39b8ecdc25d72362895eeeaad83f39f93b8c1c618428a3d60b02a109689"
+      },
+      {
+        "path": "pages/privacy/index.js",
+        "sha256": "ebe3e75c5d23dc1aae77575bb62b79907796931009bc339f298009a222eee27a"
+      },
+      {
+        "path": "pages/privacy/index.json",
+        "sha256": "8a57c70dcf2fcdfe71e9bc1f6e644fa825015624326878ecc1a91a5a5237b0f5"
+      },
+      {
+        "path": "pages/privacy/index.wxml",
+        "sha256": "d20103ce79724818f7bc87d81674ef4e666f40ab6f0d7cb6882b1115d1f96d2e"
+      },
+      {
+        "path": "pages/privacy/index.wxss",
+        "sha256": "5c714a45c744e5b06eed60f7b46e9ddc0473112add92e9015eac5bb426e733a0"
+      },
+      {
+        "path": "pages/shared/index.js",
+        "sha256": "b94d0e8587d7300999deb734f7f33f5c176a85bba5925bd06789b992a89c12c4"
+      },
+      {
+        "path": "pages/shared/index.json",
+        "sha256": "6764197eb4f3b96ef7c7e75efe15cc887a88e771923d043f080a2f4bf4f0cf9c"
+      },
+      {
+        "path": "pages/shared/index.wxml",
+        "sha256": "c2ba01e590c3746ba3cec1e7ee68712454effb4a93951243b553d678e0b136ce"
+      },
+      {
+        "path": "services/cached-reads.js",
+        "sha256": "3102bb9f72282783929c82b94f9ff0a86822793a6f08793244c2266d59afa3f2"
+      },
+      {
+        "path": "services/cloud-errors.js",
+        "sha256": "5db795fe7ce91af23f07acb7c7250aa43da1afd6ae2256432cdf58f4c7d16ffb"
+      },
+      {
+        "path": "services/cloud.js",
+        "sha256": "ecb7a4574bf0eb8eefd4ff5b2ac385867e98a9010818047359a6867571c38875"
+      },
+      {
+        "path": "services/command-journal.js",
+        "sha256": "011714cafb9466f17a678055be7fc6ea2e59e40a6c7de33ec57bd65b0d762f98"
+      },
+      {
+        "path": "services/command-projection.js",
+        "sha256": "9ad38e8f0924bccff1c4521a8eca4b54fae99714189c0956259189070d094f54"
+      },
+      {
+        "path": "services/command-queue.js",
+        "sha256": "f54dba01e9951f352ecc31a9d70a76343aeb079d4b3b5582a8e372f954ec7406"
+      },
+      {
+        "path": "services/community-feed.js",
+        "sha256": "feae9d9ea11cf22297abf9e1fca52f03afea3f4ff2d1051fb4bfdd9c044bfb18"
+      },
+      {
+        "path": "services/family-invitation.js",
+        "sha256": "e8b86e10127971adc81cbdd2a0f032b4711054c532bef68380980eddb61aa542"
+      },
+      {
+        "path": "services/feedback.js",
+        "sha256": "89211c03e175ac5bf78a9d974bee99dd0ae2b47846b4bc94ac9f5ae280eaec97"
+      },
+      {
+        "path": "services/image-crop.js",
+        "sha256": "ed755525b965931e6d7d268618499495a850cfaec6aabbb7ae70008e7e9c3d4b"
+      },
+      {
+        "path": "services/image-manifests.js",
+        "sha256": "de24ddb96fcaa1db68ebe4a3f67b6cee219dafa9e1c885f00bcfad5118e3c774"
+      },
+      {
+        "path": "services/image-storage.js",
+        "sha256": "6d4a148881cc7e443271e351ec7709fab8651949653511eb6edb9b973c219c0e"
+      },
+      {
+        "path": "services/images.js",
+        "sha256": "e87f48f7b6088cfa35fe6d34d36362a2ed2ee7f1a5bbb8491bb25bb46d4924ef"
+      },
+      {
+        "path": "services/import-provenance.js",
+        "sha256": "9a653048015f2b8b19c88bbe83827dad1ecad4b4cbbc62784ef55439029c2e56"
+      },
+      {
+        "path": "services/keyboard.js",
+        "sha256": "9f4444013527b442f7d71dd73abcaa0efb2d52a8f8fdf631f6699e709231bb1f"
+      },
+      {
+        "path": "services/legacy-publication-status.js",
+        "sha256": "1c38096002fd95e5725edb7cfe4c11424f8bdbaffe8259a8c8e04969a8629f7c"
+      },
+      {
+        "path": "services/media-batch.js",
+        "sha256": "57ab759c5232e7ea3b536e5b03630460ce044fe79456f43041d879cd0d0569ba"
+      },
+      {
+        "path": "services/media-cache.js",
+        "sha256": "1df0a6747546822f1ba1cb3af84c73bcd3c7ef9f24d8cb468e202c253c7b0221"
+      },
+      {
+        "path": "services/mutation-feedback.js",
+        "sha256": "5004a8281440f851cfc6b10af46061ae3b223016d95542f6a906256b251b466a"
+      },
+      {
+        "path": "services/native-share.js",
+        "sha256": "2221ecddfa895ba120cc66609a5cceb30992ee4d114fcb67e0f0ae0b6d0e8e38"
+      },
+      {
+        "path": "services/persistent-cache.js",
+        "sha256": "9fb04df551f0aa9f7bd7de9e53ec3df6ffe3ba4ff5f8d95bc7f7b47fa397636b"
+      },
+      {
+        "path": "services/prepared-invitation.js",
+        "sha256": "a1e07ac9ccbfed518a73a0288948a7c52292ab9a0dd0a111aa589038a77b1e5e"
+      },
+      {
+        "path": "services/prepared-shares.js",
+        "sha256": "3e2133cb8b5ec9b85a9445b76df971b993dd94addde12b1fe79dcb3b249f26ea"
+      },
+      {
+        "path": "static/beef.png",
+        "sha256": "09d2a512dafc971c454bd6c6e6c94673ac5f7077ffb144d69b2c0eb7b9dc1e13"
+      },
+      {
+        "path": "static/brand-shiyuan.png",
+        "sha256": "422b05c65a9c687b24dc95b7f9e830e4f2fd4d33aed604cabec97d3136c7783c"
+      },
+      {
+        "path": "static/broccoli.png",
+        "sha256": "59a4d7b4ca8bef99332cda097c317ca8fbba2c850847310ba002536c4a5a74ca"
+      },
+      {
+        "path": "static/chicken.png",
+        "sha256": "12e160421a30b6e310a00650dc6102368c9717ab645d37cacad6802a538b5016"
+      },
+      {
+        "path": "static/cover-upload-background.jpg",
+        "sha256": "1fcb7b19adae3f217a3a65a3ce3725f041d67a76abdafb7f7225a9961f2343a4"
+      },
+      {
+        "path": "static/default-avatars/food-01.png",
+        "sha256": "46558bc949c077cdd1ae087b9e8a8801e536472f7109dbc0cb99fee80008db14"
+      },
+      {
+        "path": "static/default-avatars/food-02.png",
+        "sha256": "d76db56bdf8a485babdd8132885f1ec79ab411d7e8aeb59929c1afbdca7647ce"
+      },
+      {
+        "path": "static/default-avatars/food-03.png",
+        "sha256": "36a867ef3482b4cabe65e4018d097eed8c2209d995d3f29b24a5eeae79639533"
+      },
+      {
+        "path": "static/default-avatars/food-04.png",
+        "sha256": "48aa62383f1d962da75e3e270581dd5729239c2b1ac410517565ed17e21a93b9"
+      },
+      {
+        "path": "static/default-avatars/food-05.png",
+        "sha256": "2efeb2a1191d99a50f26ed457285710e1294a5db636563e56dd878d83d9a5a9f"
+      },
+      {
+        "path": "static/default-avatars/food-06.png",
+        "sha256": "1ab48e26a3c7f66ee00f15eed43efce4b7e316d939c3dd80827c592e3d27f60b"
+      },
+      {
+        "path": "static/default-avatars/food-07.png",
+        "sha256": "643a3550286e0c6295ab452aa78fa68b66fb6795240c790aae11d3655fc20b66"
+      },
+      {
+        "path": "static/default-avatars/food-08.png",
+        "sha256": "71526923cd8ee614b35dc99e06fd1d294ce0956b5b472c398933739218816723"
+      },
+      {
+        "path": "static/default-avatars/food-09.png",
+        "sha256": "9d7693458df8e06bb641d36142d16c02994827b7b812665a9b453ff2d5f64dc6"
+      },
+      {
+        "path": "static/default-avatars/food-10.png",
+        "sha256": "e2775baa36ca2f1ddc94005d4f8a78e4352ec5cced84b93994634e60f4bb2e9f"
+      },
+      {
+        "path": "static/default-avatars/food-11.png",
+        "sha256": "bc73ff5cdb64bb30d60f00746a067c0989b97aa78a1e7b221724e9277397b8f0"
+      },
+      {
+        "path": "static/default-avatars/food-12.png",
+        "sha256": "6be6f983fb36e82d1fc715cd566185bf6dd8632bf4fc5440f4ec755b936d6f09"
+      },
+      {
+        "path": "static/default-avatars/food-13.png",
+        "sha256": "81885ec6a1db61e500d1947d635431197ea249e8e0b63dd394751a5e723a9f94"
+      },
+      {
+        "path": "static/default-avatars/food-14.png",
+        "sha256": "c18e58120fb557d7048cd7af42d38861c45f1b88945020e57383366f9f8228dc"
+      },
+      {
+        "path": "static/default-avatars/food-15.png",
+        "sha256": "7fae5c4985eeb6aaf629cddfa91203c2ea48f7c49bdf8e856bc41440760433d9"
+      },
+      {
+        "path": "static/default-avatars/food-16.png",
+        "sha256": "1f4341524078a8fe9d5d7b2d69e1f797a56b27108005249668fb449b2cad5964"
+      },
+      {
+        "path": "static/default-avatars/food-17.png",
+        "sha256": "5607b546c43be4b8fd9512fbe35b963fb12462224d0a8096462bcdd9ffbbb5ed"
+      },
+      {
+        "path": "static/default-avatars/food-18.png",
+        "sha256": "6c6a73715852debef69c64e8fc98db3fcd50bb76b0a6ddd4c8c06d36641e340b"
+      },
+      {
+        "path": "static/default-avatars/food-19.png",
+        "sha256": "12201787f34cacd87d686f6ad9c234256cc9a7a7d969fd5e7cf3ae28c09ad2da"
+      },
+      {
+        "path": "static/default-avatars/food-20.png",
+        "sha256": "3c7568bdf5d8abcf1d07f844c6b25354d6bc2168611961d3b1fcf09a1e1950d2"
+      },
+      {
+        "path": "static/dish-default.jpg",
+        "sha256": "49985d204a2418cf4bfeaaded0c5273bb04da2ed75085349b48311efd7b7ad5c"
+      },
+      {
+        "path": "static/entry-window-logo.png",
+        "sha256": "61e46754e3a59f3a8180aa6f1736c702d4bed3e90b9344f1ef53e10a1efe9b55"
+      },
+      {
+        "path": "static/entry-window-wordmark.png",
+        "sha256": "5e0a25cf5e23cd5c3454d01b09e90f02ccc5eb419b6fcf44d0bc3230861eae65"
+      },
+      {
+        "path": "static/entry-window.jpg",
+        "sha256": "59bb5c50e62b87dcc9d949be394035506904803597f7530ae9a17b32dfdb7355"
+      },
+      {
+        "path": "static/family-garden.png",
+        "sha256": "8448f2a1a98d845edb12840316260f4f7eb8c54466cd737063b024251b44f1f6"
+      },
+      {
+        "path": "static/family-home-default.jpg",
+        "sha256": "27ebfee2c95fe1d108221c1b425e6b9ee093a13f299cd851fcc574f040c14473"
+      },
+      {
+        "path": "static/family-moon.png",
+        "sha256": "6fe493aaee1706cc3176d759cfe12cbc3dcbbfc80cf9d506bc76eb03be0aaf61"
+      },
+      {
+        "path": "static/family-orchard.png",
+        "sha256": "894bad816097c56525fe6528be05946a4d1dc0e591d21e8b6dc725f45ad4e07f"
+      },
+      {
+        "path": "static/family-sunrise.png",
+        "sha256": "c4724b721b06247baf985f0804a329c3e9df32f75f632f376230f8195a469063"
+      },
+      {
+        "path": "static/family-table.png",
+        "sha256": "957b3b2c32f4467542a33e416e40788f4be9d4eea4900ce6a6012ddfaf0e85e5"
+      },
+      {
+        "path": "static/family-tea.png",
+        "sha256": "047ffb563e55c7b94d01ec14552756b80b9f23eae87fc8f63c7d2329be3efa8d"
+      },
+      {
+        "path": "static/icon-alert-danger-active.png",
+        "sha256": "bed9ecf32226e5b61f0cf4470115250c2b634639f1717f6f45a3e1205b866628"
+      },
+      {
+        "path": "static/icon-alert-danger.png",
+        "sha256": "bed9ecf32226e5b61f0cf4470115250c2b634639f1717f6f45a3e1205b866628"
+      },
+      {
+        "path": "static/icon-arrow-active.png",
+        "sha256": "dc152b089319301a6211d7b6266f2977d89b8e580de0022fed854720d6d35d81"
+      },
+      {
+        "path": "static/icon-arrow-down-active.png",
+        "sha256": "b920edd0af59b8b84b70ebdfeabf876eceaa81bc111b933f9c7c26e82e9b1a31"
+      },
+      {
+        "path": "static/icon-arrow-down-circle-active.png",
+        "sha256": "4548ff8cba689c3c6f24b6481f691b6b20f0a8451605d928e6c51a0b3b1b2497"
+      },
+      {
+        "path": "static/icon-arrow-down-circle.png",
+        "sha256": "4f814402c5b00eb07855aa065cd48a51169f99ae9173cf796066702ab78cfe55"
+      },
+      {
+        "path": "static/icon-arrow-down.png",
+        "sha256": "c14811916b37d853c1c73b15781dfabcfc7931bf9f85f76e07b5e68b43fa4bdf"
+      },
+      {
+        "path": "static/icon-arrow-inverse-active.png",
+        "sha256": "030389b524971950b07b6555c0b83b2476346542005c640c8fd297891e6ab9a4"
+      },
+      {
+        "path": "static/icon-arrow-inverse.png",
+        "sha256": "030389b524971950b07b6555c0b83b2476346542005c640c8fd297891e6ab9a4"
+      },
+      {
+        "path": "static/icon-arrow-left-active.png",
+        "sha256": "a8d83c5cb575b80480c87d7bf08d1f18cb6ed4fa899525c3ab94c3593fc0b5db"
+      },
+      {
+        "path": "static/icon-arrow-left.png",
+        "sha256": "ec4ca215e2d3b77a605fbc2dd68d981d6f2a428abefb200964c163d2b8cc2351"
+      },
+      {
+        "path": "static/icon-arrow-up-active.png",
+        "sha256": "e454a7428875e30900eae26b26903428bc03db862aa8de8aa249faf743b14f84"
+      },
+      {
+        "path": "static/icon-arrow-up-circle-active.png",
+        "sha256": "8554534be993764be415ccea08fe3c5cdd99c4c5b9887c6900d81ebd06974e34"
+      },
+      {
+        "path": "static/icon-arrow-up-circle.png",
+        "sha256": "7fda8c25608895c709f43216f250e1e496939a1d8bdb72e887d95ebdcd02ff7e"
+      },
+      {
+        "path": "static/icon-arrow-up.png",
+        "sha256": "65dcc8c866ea7eb650f91f8fe57115c4258ef2610567afbe91bf4d669bbd57e2"
+      },
+      {
+        "path": "static/icon-arrow.png",
+        "sha256": "0edef435554740a73c823d1b5726247af9b26542fc571893382358ce86620e39"
+      },
+      {
+        "path": "static/icon-calendar-active.png",
+        "sha256": "f770fcb1388f4ba2aadfe3a77dcc21742c500948c3ca21d27bd205fb3ea0cf79"
+      },
+      {
+        "path": "static/icon-calendar.png",
+        "sha256": "92cf7e5b5275083e94a24baa915d4861125b1d553d4f0b298b44ac433273f5d1"
+      },
+      {
+        "path": "static/icon-camera-active.png",
+        "sha256": "b6e51b2f27c6c163aa4e2835eb1fcadb1abd61b305d8debf2258f6d4a8924cdd"
+      },
+      {
+        "path": "static/icon-camera-inverse-active.png",
+        "sha256": "fd688ff5defa8a8d5f8b4cb641ea8b4975a7b1b38041fa0f578a38321b1fbb93"
+      },
+      {
+        "path": "static/icon-camera-inverse.png",
+        "sha256": "fd688ff5defa8a8d5f8b4cb641ea8b4975a7b1b38041fa0f578a38321b1fbb93"
+      },
+      {
+        "path": "static/icon-camera.png",
+        "sha256": "c0fdcfc9f62ea2fa35bc5c88c9a75346e9232281647d4d54c49dc02d54325d1b"
+      },
+      {
+        "path": "static/icon-cancel-active.png",
+        "sha256": "a8bea02d0c226686c06c2654c04384e429ed7a0ef14c858aa85f21761cfc91f3"
+      },
+      {
+        "path": "static/icon-cancel.png",
+        "sha256": "4d2053b00304f61c740052f151f532138fe4a10536726cb2078bf8dfe4b8604a"
+      },
+      {
+        "path": "static/icon-check-active.png",
+        "sha256": "0a734ad61a1b5c8804dd47c556b7ef815f080d7450ad8bf0e1b87a5241ee398a"
+      },
+      {
+        "path": "static/icon-check-inverse-active.png",
+        "sha256": "ecc7d4e4266af8197cae3824ad9c1a3fab613ccd99d7e7cc3e333b527000212c"
+      },
+      {
+        "path": "static/icon-check-inverse.png",
+        "sha256": "ecc7d4e4266af8197cae3824ad9c1a3fab613ccd99d7e7cc3e333b527000212c"
+      },
+      {
+        "path": "static/icon-check.png",
+        "sha256": "32e4c1e20bc0e7fc1a405eac323075a39850aadff5973679c61bd3e2c612cdc9"
+      },
+      {
+        "path": "static/icon-chef-active.png",
+        "sha256": "c2f5f3d77dd863b03d1490da965d66d0f4aa404ae2f1bbfbb588fb7a2187df47"
+      },
+      {
+        "path": "static/icon-chef-inverse-active.png",
+        "sha256": "886b9d0d3f8a6ce164655dc560525b581cbaad791146ec9ae41cc7c016b045b2"
+      },
+      {
+        "path": "static/icon-chef-inverse.png",
+        "sha256": "886b9d0d3f8a6ce164655dc560525b581cbaad791146ec9ae41cc7c016b045b2"
+      },
+      {
+        "path": "static/icon-chef.png",
+        "sha256": "c18afb9399c7ad25859a1c458ff8271f59a50dd3c6ad3fe5ba690849547d4f2c"
+      },
+      {
+        "path": "static/icon-chevron-active.png",
+        "sha256": "686e5a0ead65752c500178428a82b165abae4f81d689a4ebbf94dcfddabb3aac"
+      },
+      {
+        "path": "static/icon-chevron.png",
+        "sha256": "24c2fb5c5ab54f65481004a789c0664c11c0c7b786ee20aade2aa92a2372e538"
+      },
+      {
+        "path": "static/icon-clock-active.png",
+        "sha256": "9ea9cfcef706dfdc3ceec25b76ccb6a672b0373d0c147fcbcd84d7fd745ab6f4"
+      },
+      {
+        "path": "static/icon-clock-inverse-active.png",
+        "sha256": "4e059275a301efc5ba7799ac3a59b94e44bcb8f1126ee7b68e22daf9ef97c5f2"
+      },
+      {
+        "path": "static/icon-clock-inverse.png",
+        "sha256": "4e059275a301efc5ba7799ac3a59b94e44bcb8f1126ee7b68e22daf9ef97c5f2"
+      },
+      {
+        "path": "static/icon-clock.png",
+        "sha256": "8fd0adf792541a12fdbf16e6985527225f41ae78fdcbd6844cf04efa1c68dac1"
+      },
+      {
+        "path": "static/icon-close-active.png",
+        "sha256": "51e4afaa27e06f20930e4e9d36d3d91528d18a961864d946a958da332fc91d4e"
+      },
+      {
+        "path": "static/icon-close-inverse-active.png",
+        "sha256": "8c0896faa4efc4442fc11e71b0acc79fbc5ad2ba1fb7f284ffde1268b01e0807"
+      },
+      {
+        "path": "static/icon-close-inverse.png",
+        "sha256": "8c0896faa4efc4442fc11e71b0acc79fbc5ad2ba1fb7f284ffde1268b01e0807"
+      },
+      {
+        "path": "static/icon-close.png",
+        "sha256": "222fddbe93f7232a08c05d274fd86ee6f60499cb32541f6905045080b3ed8b43"
+      },
+      {
+        "path": "static/icon-community-active.png",
+        "sha256": "5d0baaa3e32efed6991d1445450d6867d76a3096341a57756abf301c4ac5c3fa"
+      },
+      {
+        "path": "static/icon-community.png",
+        "sha256": "d220ba5a1deb88621acbc90d2dd752e6ecae78db9b1070c57b8db5a9d999e1c6"
+      },
+      {
+        "path": "static/icon-crown-active.png",
+        "sha256": "52ff7b5e3d7cb5b45f7aeae850bf1a71dc8bc1784383ae5ac9962932fcbe3056"
+      },
+      {
+        "path": "static/icon-crown.png",
+        "sha256": "20da73e0e8aef6bf3eebb280ecf15732f9d414975edf8fdec48932fe258709cd"
+      },
+      {
+        "path": "static/icon-detail-collapse-active.png",
+        "sha256": "44034084f3cb981f0d7bd0f38037fff79b89763b9f857e32d3c6ce1c89327209"
+      },
+      {
+        "path": "static/icon-detail-collapse.png",
+        "sha256": "9dc8b67837a3cbf0f32b039d226ab3c406caff85cdb41b3e749d1ab4906c2c5d"
+      },
+      {
+        "path": "static/icon-detail-share-active.png",
+        "sha256": "98b6660d02bb13e8cc6a17d6f5dc992a5c875fe89d2632cedff6899f55c32e10"
+      },
+      {
+        "path": "static/icon-detail-share.png",
+        "sha256": "b2d592e99c2fedf7604af3784b4b817452668d9715c3159ae1a21ff66e634fda"
+      },
+      {
+        "path": "static/icon-edit-active.png",
+        "sha256": "9c1fd5e9f45c3ff60b993a238078b08ad22eb3675c80f90c1ad5722ed90e35a6"
+      },
+      {
+        "path": "static/icon-edit-inverse-active.png",
+        "sha256": "f0505a3f9d409f4fe866f250c87f4331481e716f1f9d4cea280cfa3d8a75d941"
+      },
+      {
+        "path": "static/icon-edit-inverse.png",
+        "sha256": "f0505a3f9d409f4fe866f250c87f4331481e716f1f9d4cea280cfa3d8a75d941"
+      },
+      {
+        "path": "static/icon-edit.png",
+        "sha256": "b91a5db279511d1935eb100e8268ac7c415b71f35c0855880e2bb3b671f2dbb7"
+      },
+      {
+        "path": "static/icon-exit-active.png",
+        "sha256": "98c27c4f964c238a89880a3559e07a2c2f38062eb5429c02fad71b97ba92c95f"
+      },
+      {
+        "path": "static/icon-exit.png",
+        "sha256": "a263e14f48baa6526a10f4ed727c8c7f43f404f3099fcadb9a7a5301c17abf7f"
+      },
+      {
+        "path": "static/icon-family-active.png",
+        "sha256": "66ee44a37fe0fc2459bd6936380ed6a00de49c1aca1fca2475fd0aedf7ec6ea4"
+      },
+      {
+        "path": "static/icon-family.png",
+        "sha256": "fe139efb192826a05d52466b44b6fe4a3fd7458e263eab97d346f66550ddde65"
+      },
+      {
+        "path": "static/icon-grid-active.png",
+        "sha256": "d34226bc184bf8915d9d467a9f40c4ed5b431a47165b0252058f17f68dcdfb13"
+      },
+      {
+        "path": "static/icon-grid.png",
+        "sha256": "d7af16cb20f688fe87a4aa6c2354ff4adf5f0bcd946d7a0cc0a41e91033c120d"
+      },
+      {
+        "path": "static/icon-heart-inverse-active.png",
+        "sha256": "30b50ae672b1484709dfde0e01b247309d6696a3b2e9ccb502d88a03f37a6417"
+      },
+      {
+        "path": "static/icon-heart-inverse.png",
+        "sha256": "30b50ae672b1484709dfde0e01b247309d6696a3b2e9ccb502d88a03f37a6417"
+      },
+      {
+        "path": "static/icon-heart-liked-active.png",
+        "sha256": "713819fd4080c480fb93e757f339d73c99920bc83a6bba4a2f0db6ead99ac004"
+      },
+      {
+        "path": "static/icon-heart-liked.png",
+        "sha256": "713819fd4080c480fb93e757f339d73c99920bc83a6bba4a2f0db6ead99ac004"
+      },
+      {
+        "path": "static/icon-heart-social-active.png",
+        "sha256": "a99a0b08ad0c081953e9b27216cfe17231c5c2acf1582f780bcf90b731580bd0"
+      },
+      {
+        "path": "static/icon-heart-social.png",
+        "sha256": "a99a0b08ad0c081953e9b27216cfe17231c5c2acf1582f780bcf90b731580bd0"
+      },
+      {
+        "path": "static/icon-identity-home-inverse-active.png",
+        "sha256": "0f469491f43f327985633e120e6e874fc7769e466b7d691f86335aecde36c819"
+      },
+      {
+        "path": "static/icon-identity-home-inverse.png",
+        "sha256": "0f469491f43f327985633e120e6e874fc7769e466b7d691f86335aecde36c819"
+      },
+      {
+        "path": "static/icon-identity-person-inverse-active.png",
+        "sha256": "a000baa95cc7180feed65f5934cfb9bda0ed7cf24433dc2993a44a3d20da7791"
+      },
+      {
+        "path": "static/icon-identity-person-inverse.png",
+        "sha256": "a000baa95cc7180feed65f5934cfb9bda0ed7cf24433dc2993a44a3d20da7791"
+      },
+      {
+        "path": "static/icon-inventory-active.png",
+        "sha256": "3a0cde2232ac994f2e7c14380e3ee8f9a27311efb57e0a2aaa5ddc6269618e23"
+      },
+      {
+        "path": "static/icon-inventory.png",
+        "sha256": "8f11512fe7fe25613da2705725a63837a9f3d3a55d6fa8a489d38750bb7640bb"
+      },
+      {
+        "path": "static/icon-list-active.png",
+        "sha256": "2d876cd1175e61799eb7b91d0769ad9d3cc2627e44de935a103b4a04331aab8a"
+      },
+      {
+        "path": "static/icon-list.png",
+        "sha256": "958d54a863c540bb81f109209b5daa6f1db94f007bb94d8d287d566f3e979118"
+      },
+      {
+        "path": "static/icon-lock-active.png",
+        "sha256": "d862653fbcfc7f05699019b06a692f0b4b1e8c653e7aca207192281d077e1c9d"
+      },
+      {
+        "path": "static/icon-lock.png",
+        "sha256": "930904e8435d1a90a119e9afbcd81fcebb29149adb9b00b814c58d223224a649"
+      },
+      {
+        "path": "static/icon-meal-breakfast-active.png",
+        "sha256": "1b2947b2c4a9b3c790452b265e8ce40e2ef9277652136c349d1d40326ff41b35"
+      },
+      {
+        "path": "static/icon-meal-breakfast.png",
+        "sha256": "4f1d29dd78951425bf6cf31007914ce7152063e831cf5dfcb7312c92816b9057"
+      },
+      {
+        "path": "static/icon-meal-dinner-active.png",
+        "sha256": "d233572573fd213a3f03cb3c073a028dbc8226de2bda1ff44ba006ac337cf037"
+      },
+      {
+        "path": "static/icon-meal-dinner.png",
+        "sha256": "c6885b9aad1483ff39f57ec613572c61e79c88376fae99a14e93384ec35bdabc"
+      },
+      {
+        "path": "static/icon-meal-lunch-active.png",
+        "sha256": "2d32f7a76b30108a934ecb5313562f2b45b292a409e04de96817640a97a05fda"
+      },
+      {
+        "path": "static/icon-meal-lunch.png",
+        "sha256": "3db095cda83b206a14c0e776079292538773859ed64b8adc5e2fd2ab6ad27469"
+      },
+      {
+        "path": "static/icon-meal-set-active.png",
+        "sha256": "b4effed1f4b78ebf45956edc34376ad0537d453d3b93783bb94b715ddb21cc17"
+      },
+      {
+        "path": "static/icon-meal-set.png",
+        "sha256": "1df568fcb8f6478eba29b3390e271f092b1b3c69d9eee251ff7d06be64a24f71"
+      },
+      {
+        "path": "static/icon-meal-snack-active.png",
+        "sha256": "854b8c9356b6e74a0bc9241ed84f6bfb4cd76aa219b14665fd56f415434ed6af"
+      },
+      {
+        "path": "static/icon-meal-snack.png",
+        "sha256": "a2236f6d49328900aae3e50074b276297987b5d92137961c546db8e81d39dd75"
+      },
+      {
+        "path": "static/icon-menu-active.png",
+        "sha256": "b87e8d04faad92424b87d126b7f4195f06fff0df23c915d203d549941d964601"
+      },
+      {
+        "path": "static/icon-menu-inverse-active.png",
+        "sha256": "45ba9e5ba5e4cfded86bdfab029c320df1bedc06d9be9881d5ec1a007234287c"
+      },
+      {
+        "path": "static/icon-menu-inverse.png",
+        "sha256": "45ba9e5ba5e4cfded86bdfab029c320df1bedc06d9be9881d5ec1a007234287c"
+      },
+      {
+        "path": "static/icon-menu-photo-active.png",
+        "sha256": "5a00e99281d90fa24e9f6860a30728b0c2b52ab30232eeab73a88efec5011b24"
+      },
+      {
+        "path": "static/icon-menu-photo.png",
+        "sha256": "5a00e99281d90fa24e9f6860a30728b0c2b52ab30232eeab73a88efec5011b24"
+      },
+      {
+        "path": "static/icon-menu.png",
+        "sha256": "960186c21b9fd70a9415e6281d810f0dcae8d7397bdabcff1b165216eaca5519"
+      },
+      {
+        "path": "static/icon-minus-active.png",
+        "sha256": "cd39cd651ec6c80b9becd98ae4ac5a7e8c350555d79a4bf9e58c7e96f44a63e9"
+      },
+      {
+        "path": "static/icon-minus.png",
+        "sha256": "1f837e5e0c5efd1c2bb3c681a64141bec27f3519b0aed29e31f4e38c5700f682"
+      },
+      {
+        "path": "static/icon-moments-active.png",
+        "sha256": "fa66590a072c1b16c99a45b69360a5e9c79073fb5120ddf400a1cafbf2ff53ac"
+      },
+      {
+        "path": "static/icon-moments.png",
+        "sha256": "edb11be90324059c5170ff3ced0d87fdf90628652982f584f3ccd527a1469087"
+      },
+      {
+        "path": "static/icon-plus-active.png",
+        "sha256": "d4851cb58595cdec2816442b47742d944316e73d87c825b73c516f69bb53de3b"
+      },
+      {
+        "path": "static/icon-plus-inverse-active.png",
+        "sha256": "de0ac28bb4c4d338be7ce6c05531e926c21ed35351d8241d48d85dd38203833e"
+      },
+      {
+        "path": "static/icon-plus-inverse.png",
+        "sha256": "de0ac28bb4c4d338be7ce6c05531e926c21ed35351d8241d48d85dd38203833e"
+      },
+      {
+        "path": "static/icon-plus.png",
+        "sha256": "a5e3c84a77e536bd57866824e62e35d6f6dba63951449cee094494c0e9906e2e"
+      },
+      {
+        "path": "static/icon-restore-active.png",
+        "sha256": "84e5241e06fee878b9b83c34859c5cb0f96c8018da5f1f8c9e8458fbef77492c"
+      },
+      {
+        "path": "static/icon-restore-inverse-active.png",
+        "sha256": "2f6d396cf60bd26ddd936bd0157e8b6c7411930fc1c723a471e75cef2096f29e"
+      },
+      {
+        "path": "static/icon-restore-inverse.png",
+        "sha256": "2f6d396cf60bd26ddd936bd0157e8b6c7411930fc1c723a471e75cef2096f29e"
+      },
+      {
+        "path": "static/icon-restore.png",
+        "sha256": "904a47197adf751d222c7a5697fef9d05148c70ace856259c9a706a6bb6dbdff"
+      },
+      {
+        "path": "static/icon-search-active.png",
+        "sha256": "8364a975bb75d9750b8e29b1d6d9171cf29fcd87f8cb60302267f4b4f2a3d5ea"
+      },
+      {
+        "path": "static/icon-search-rounded-active.png",
+        "sha256": "4d2b8626511d3fe4b1595daec616d1c12bc5e17b70ad444cfbfead1c9299e52a"
+      },
+      {
+        "path": "static/icon-search-rounded.png",
+        "sha256": "78bbc2ceb724e065b426d662d5ba5e78b0a843394aa56c353f7e535444ee7978"
+      },
+      {
+        "path": "static/icon-search.png",
+        "sha256": "aae3b7ba75cd69cc13d153beab635e98e56cc1a4cd2f44a3ef2513eb7cba470e"
+      },
+      {
+        "path": "static/icon-share-active.png",
+        "sha256": "80b3588c32fb5910c1825f805559ad52c98f6917f5b133742074eb350a9ea3ca"
+      },
+      {
+        "path": "static/icon-share-feed-active.png",
+        "sha256": "3ca684e624610be7f66c5ea081bba4d5790dc8273ebe66d86a260f95d8b22296"
+      },
+      {
+        "path": "static/icon-share-feed.png",
+        "sha256": "5e9296f1eecd044dcdc0301d2800503ef59820ae5fe54946edfc9726f9c72136"
+      },
+      {
+        "path": "static/icon-share.png",
+        "sha256": "5b3fd826796306e3737321687ea5b3af07ffc83b82d7f18902ca85e1fe4d4f03"
+      },
+      {
+        "path": "static/icon-shopping-active.png",
+        "sha256": "dc3e7d47d49e9748531888c66e77484070301a4f842a4dd39c6a0ac7e83ee95b"
+      },
+      {
+        "path": "static/icon-shopping-inverse-active.png",
+        "sha256": "597596cd8fae3cfe8b46940d60e67326b5ac165d24ad6756165c64f6410146cf"
+      },
+      {
+        "path": "static/icon-shopping-inverse.png",
+        "sha256": "597596cd8fae3cfe8b46940d60e67326b5ac165d24ad6756165c64f6410146cf"
+      },
+      {
+        "path": "static/icon-shopping.png",
+        "sha256": "73f555e24c2461102397ecc1b8314583573244826b3f2aefc3bfdb99653b4cb7"
+      },
+      {
+        "path": "static/icon-thumb-active.png",
+        "sha256": "a828cf72f34950cf3567648d1fa489101494877137ab2a16717a3b648e008f82"
+      },
+      {
+        "path": "static/icon-thumb.png",
+        "sha256": "b967973248f333fc402be5ede1e7c7b95496c07ee2b82ddd7bf85bcb47b3dcd2"
+      },
+      {
+        "path": "static/icon-trash-active.png",
+        "sha256": "f76e60a9b8c96bbdf1aa3b5c28536174f916f8a789fb3449a813a50159f6d6b0"
+      },
+      {
+        "path": "static/icon-trash-danger-active.png",
+        "sha256": "b039cc7a2b5c5e885465a780ff7a1fb23ce91e90c8a9b3d2005fae2bd296c908"
+      },
+      {
+        "path": "static/icon-trash-danger.png",
+        "sha256": "b039cc7a2b5c5e885465a780ff7a1fb23ce91e90c8a9b3d2005fae2bd296c908"
+      },
+      {
+        "path": "static/icon-trash-inverse-active.png",
+        "sha256": "7bff5280ec2515322049175e429588f635a8e235c4a36c1fba1ef49baa1de400"
+      },
+      {
+        "path": "static/icon-trash-inverse.png",
+        "sha256": "7bff5280ec2515322049175e429588f635a8e235c4a36c1fba1ef49baa1de400"
+      },
+      {
+        "path": "static/icon-trash.png",
+        "sha256": "54999ef060c82d4e6430945636727c62559bc2a914a869f596824df8652e50d1"
+      },
+      {
+        "path": "static/ingredient-bottle.png",
+        "sha256": "33784c977a6d27d6f35c97d6b359b98fc516b6fc11045d79e0eb5315d8739cb6"
+      },
+      {
+        "path": "static/ingredient-eggs.png",
+        "sha256": "1cee2a2e45e7ca72b51a2f218cb7650cab6d5480f8c43c7bd391207083537b8f"
+      },
+      {
+        "path": "static/ingredient-greens.png",
+        "sha256": "63327cd2d74fe7f10ed1ee0309c2198d57d65fd732e80b56dc0e2a62df9fd703"
+      },
+      {
+        "path": "static/ingredient-jar.png",
+        "sha256": "711005ee1811a482871f67345b140d95e817ac59a782f9ab7fd8a553f4844c70"
+      },
+      {
+        "path": "static/ingredient-meat.png",
+        "sha256": "50651339a72ddcd829c8b7e577f456d334868b481ee2a1d50697ef49917607b8"
+      },
+      {
+        "path": "static/ingredient-tomato.png",
+        "sha256": "8358e5ec54893843a273630bbb9a28ab9982887c3cdc6530c9b3eb9d0c9b6216"
+      },
+      {
+        "path": "static/ingredients/apple.png",
+        "sha256": "fe99de65af71fe6273fc9ea15b9f3c542049b72a243d15d39745f645c9a5c5c9"
+      },
+      {
+        "path": "static/ingredients/banana.png",
+        "sha256": "98fad10aeef7635a3f698f905d78b8958c3cbd1e80885539a60c1e5f71411177"
+      },
+      {
+        "path": "static/ingredients/beef.png",
+        "sha256": "1cf3bbba82e9fd1eb738805bdec9f2cc11116f8f657ad5ffeba807c89ed8b654"
+      },
+      {
+        "path": "static/ingredients/broccoli.png",
+        "sha256": "f4312e4af06d2576b155ff6f659d0f7b4d427abf126d5979df8581d9d17b7fa1"
+      },
+      {
+        "path": "static/ingredients/cabbage.png",
+        "sha256": "0716a0e8581ae7d4330168fd0b7cc1c4bf6013031b49816292e682e69d2b7d41"
+      },
+      {
+        "path": "static/ingredients/carrot.png",
+        "sha256": "3bc1f3d048c4f750d4c50969f44387a743264d403a3cff19ce411f5fd6d51e00"
+      },
+      {
+        "path": "static/ingredients/chicken-thigh.png",
+        "sha256": "e030c4078343f169ad98f7017ff92acc512ab27897504c48bcb2779eb68f8725"
+      },
+      {
+        "path": "static/ingredients/chicken.png",
+        "sha256": "ad419df6b3fe986e1286ee9c10d88f7504e9453bf15bead1797b609163eb7b04"
+      },
+      {
+        "path": "static/ingredients/cucumber.png",
+        "sha256": "0778be122aa2afca407529e07acfbf2880bfd10428f8ad10a06efb0d564ca586"
+      },
+      {
+        "path": "static/ingredients/eggs.png",
+        "sha256": "808671f7f24eb5477a84253e58d7f85a43c1102ad2bcf4fd494536e83a4d3c8d"
+      },
+      {
+        "path": "static/ingredients/fish.png",
+        "sha256": "82c80e6c56e9515bba40a8045dfce87bfb99ee8005b16309ceea1728d480be5b"
+      },
+      {
+        "path": "static/ingredients/garlic.png",
+        "sha256": "2d6635707ae54f1117d32374ae94ece514ad9c5bf99495848879b7775b79778b"
+      },
+      {
+        "path": "static/ingredients/ginger.png",
+        "sha256": "24f5a61a767e958ba3a2a5c5d82718c06487a656de0b3f214f0f8f1b48fe0eca"
+      },
+      {
+        "path": "static/ingredients/light-soy.png",
+        "sha256": "e2b664f286c2d751c7e21dd1210de3d23d348fa07c0fd3003fa60b9bdd6ed47d"
+      },
+      {
+        "path": "static/ingredients/milk.png",
+        "sha256": "d1e9b3603dd68611ba8a2d57b3f3f433278505041d378e0e9b794c8af250ece8"
+      },
+      {
+        "path": "static/ingredients/mushroom.png",
+        "sha256": "e31d48a7c1f0b4fe66a56843c8d8879da0044021114f58796e10ef9ef768aad9"
+      },
+      {
+        "path": "static/ingredients/noodles.png",
+        "sha256": "39c5b67837a59c9dd92c031e5ed12ca9253c9a07e68cd24b50c1d0a7e88db15f"
+      },
+      {
+        "path": "static/ingredients/oil.png",
+        "sha256": "7b7dd16b2c9a6acf5d2de64868375709a1d99a4be9c1916581adf0b35fe0e568"
+      },
+      {
+        "path": "static/ingredients/pork.png",
+        "sha256": "af706535ac4c7f0e95c04d24efb344ae21c48dab2b61114ad88d6d476274a4a5"
+      },
+      {
+        "path": "static/ingredients/potato.png",
+        "sha256": "d126c011b7f76498c0db87303f5158980740a6c54924eb0b94f692005ff4d2c1"
+      },
+      {
+        "path": "static/ingredients/ribs.png",
+        "sha256": "f5340ea34e7fc2ff15d7dcb0f827c42d4594b9956f4586854dede601be12e31e"
+      },
+      {
+        "path": "static/ingredients/rice.png",
+        "sha256": "07f514386c9794e69a03d4111358c5589a38c57506ae2ecf1448718c964b3c93"
+      },
+      {
+        "path": "static/ingredients/salt.png",
+        "sha256": "b41d11bc35662df5971a9b1d80d5159e7702b671285346a2e197358eb7394ec2"
+      },
+      {
+        "path": "static/ingredients/scallion.png",
+        "sha256": "513b732e930ba6730e96ce1957cb36e28f413dd0aa56ef8a11926d83d116a0f4"
+      },
+      {
+        "path": "static/ingredients/soy-sauce.png",
+        "sha256": "e2b664f286c2d751c7e21dd1210de3d23d348fa07c0fd3003fa60b9bdd6ed47d"
+      },
+      {
+        "path": "static/ingredients/spinach.png",
+        "sha256": "46cb43ac3fec83e3d845e8ca28b79f9c9b77ab4d849df75527e0a47aeecc2bea"
+      },
+      {
+        "path": "static/ingredients/tofu.png",
+        "sha256": "ecdf609b55b8ce079f5a406a5d4283d63a3b9374e2f772997a384859fefac8d1"
+      },
+      {
+        "path": "static/ingredients/tomato.png",
+        "sha256": "0db80c154a5e63972b72a09286b9f89eb59e90c6d105c20860125a0afd08f071"
+      },
+      {
+        "path": "static/meal-set-default.jpg",
+        "sha256": "a46390c1f1a6f692a4f62bc5ed2d61db92acd427370259a099cb3414ee2efefa"
+      },
+      {
+        "path": "static/personal-home-default.jpg",
+        "sha256": "1e34b7ec0a32c23ba1acd3bfbd92d22123e3847b7c2f3be5af9495b234d7bd4f"
+      },
+      {
+        "path": "static/pumpkin.png",
+        "sha256": "64479c269d8efe806760fb68b929ea1342c05814514707359640308166e71ea2"
+      },
+      {
+        "path": "static/rice.png",
+        "sha256": "13a9c6e17200327aeebaa681676fcfb4c11e4a9845ffda31fe5e686f3faedb4a"
+      },
+      {
+        "path": "static/soup.png",
+        "sha256": "b3166eab428a69aa3b1a2ae32c414d2fae7a286977b8a404b28eb5c2cc2bf0cd"
+      },
+      {
+        "path": "static/step-cook.png",
+        "sha256": "f8982347e2b18645de11f33543f5824c0dc1344b64008b9e80f09b3256549ace"
+      },
+      {
+        "path": "static/step-prep.png",
+        "sha256": "1fd1618b7dd42ba15669532accbf3fb2c53ce18b8f24653c6c491b59deef0680"
+      },
+      {
+        "path": "static/tofu.png",
+        "sha256": "5dcad98c8972dcb4f2806c71f4cb74e46a35397fb5fc0c5af2d4acf5a5f593dc"
+      },
+      {
+        "path": "static/tomato.png",
+        "sha256": "0eeb55aec6aedf456208eea8848452ec470a731a905e3d337dc5f2d4699857c1"
+      },
+      {
+        "path": "store.js",
+        "sha256": "e2004d7ab0d5ce7796fc0a01fe060aac123601e3da90d5f41591d9ba780ba457"
+      }
+    ]
+  }
+}
