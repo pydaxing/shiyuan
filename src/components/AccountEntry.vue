@@ -21,7 +21,7 @@ function phone(event) { return accountEntry.bind(event.detail, consent.value); }
       <template v-else-if="entry.phase === 'phone'">
         <button v-if="consent" class="primary-button full account-entry-button" open-type="getPhoneNumber" :class="{ 'is-disabled': entry.busy }" :disabled="entry.busy" @getphonenumber="phone" hover-class="none">{{ entry.busy ? '正在登录…' : '微信登录' }}</button>
         <button v-else class="primary-button full account-entry-button" @click="remindConsent" hover-class="none">微信登录</button>
-        <view :key="consentReminder" :class="{ 'account-entry-consent-reminder': consentReminder > 0 && !consent }"><PrivacyConsent v-model="consent" :disabled="entry.busy" /></view>
+        <view :class="{ 'account-entry-consent-reminder-a': !consent && consentReminder % 2 === 1, 'account-entry-consent-reminder-b': !consent && consentReminder > 0 && consentReminder % 2 === 0 }"><PrivacyConsent v-model="consent" :disabled="entry.busy" /></view>
       </template>
       <template v-else-if="entry.phase === 'error'">
         <text class="account-entry-title">暂时未能连接</text>
@@ -45,7 +45,9 @@ function phone(event) { return accountEntry.bind(event.detail, consent.value); }
 .account-entry-button::after { border: 0; }
 .account-entry-button.is-disabled { background: #405b46; color: #fff; opacity: .65; }
 @keyframes consent-nudge { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
-.account-entry-consent-reminder { animation: consent-nudge 360ms ease-in-out; }
+@keyframes consent-nudge-repeat { 0%, 100% { transform: translateX(0); } 20%, 60% { transform: translateX(-4px); } 40%, 80% { transform: translateX(4px); } }
+.account-entry-consent-reminder-a { animation: consent-nudge 360ms ease-in-out; }
+.account-entry-consent-reminder-b { animation: consent-nudge-repeat 360ms ease-in-out; }
 .account-entry-error { display: block; margin-top: 8px; color: var(--danger); font-size: var(--type-meta); line-height: 1.6; }
 @media (max-height: 600px) { .account-entry-brand { top: 24%; } .account-entry-actions { bottom: calc(12px + env(safe-area-inset-bottom)); } .account-entry-button { margin-top: 12px; } }
 </style>
