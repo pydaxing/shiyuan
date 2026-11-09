@@ -571,19 +571,19 @@ test('family mode switch sends a scoped request, prevents duplicate taps and ret
   assert.equal(familyNodes(api).find(node => node.props?.role === 'status')?.children, '关闭中...');
   assert.equal(identity(), '个人', 'identity and switch respond before the cloud request completes');
   assert.equal(familyNodes(api).some(node => node.props?.class === 'account-family-name'), false);
-  assert.deepEqual(notices, ['关闭中...'], 'announce the requested mode immediately');
+  assert.deepEqual(notices, [], 'pending status stays beside the switch without a toast');
   finish(); await pending;
-  assert.deepEqual(notices, ['关闭中...', '已关闭家庭模式']);
+  assert.deepEqual(notices, ['已关闭家庭模式']);
   assert.equal(familyNodes(api).some(node => node.props?.role === 'status'), false);
   assert.equal(control().props.disabled, undefined);
   assert.equal(modules.state.value.family.id, 'family-one', 'view never deletes or edits household membership locally');
   modules.state.value.family = { ...modules.state.value.family, id: 'personal-one', kind: 'personal' };
   const enabling = api.toggleMode(); await api.toggleMode();
   assert.deepEqual(requests.at(-1), ['switchWorkspace', { mode: 'family', expectedSpaceId: 'personal-one' }]);
-  assert.deepEqual(notices, ['关闭中...', '已关闭家庭模式', '开启中...']);
+  assert.deepEqual(notices, ['已关闭家庭模式']);
   modules.state.value.family = { ...modules.state.value.family, id: 'family-one', kind: 'family' };
   finish(); await enabling;
-  assert.deepEqual(notices, ['关闭中...', '已关闭家庭模式', '开启中...', '已开启家庭模式'], 'notice uses the requested mode even after the cloud snapshot changes');
+  assert.deepEqual(notices, ['已关闭家庭模式', '已开启家庭模式'], 'notice uses the requested mode even after the cloud snapshot changes');
   familyNodes(api).find(node => node.props?.class === 'account-row family-help-entry').props.onClick({ stopPropagation() {} });
   assert.equal(api.about.value, true);
 });
@@ -1291,7 +1291,7 @@ test('family switch failures preserve mode and missing family routes to manageme
   assert.equal(modules.state.value.family.kind, 'personal'); assert.equal(api.modeBusy.value, false);
   code = 'FAMILY_REQUIRED'; await api.toggleMode();
   assert.deepEqual(events, [['manage']]); assert.equal(api.modeError.value, '');
-  assert.deepEqual(notices, ['开启中...', '切换失败', '开启中...', '请先创建或加入家庭'], 'failed optimistic switches replace the immediate notice with actionable feedback');
+  assert.deepEqual(notices, ['切换失败', '请先创建或加入家庭'], 'failed optimistic switches replace the immediate notice with actionable feedback');
 });
 
 test('the whole profile projects the requested mode before cloud acknowledgement and rolls back together', async context => {

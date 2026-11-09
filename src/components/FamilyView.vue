@@ -29,7 +29,6 @@ async function toggleMode() {
   const enableFamilyMode = personal.value;
   requestedFamilyMode.value = enableFamilyMode;
   modeBusy.value = true; modeError.value = '';
-  notify(enableFamilyMode ? '开启中...' : '关闭中...');
   try {
     await manageFamily('switchWorkspace', { mode: enableFamilyMode ? 'family' : 'personal', expectedSpaceId: state.value.family.id });
     notify(enableFamilyMode ? '已开启家庭模式' : '已关闭家庭模式');

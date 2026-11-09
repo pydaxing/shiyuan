@@ -324,14 +324,14 @@ test('family mode rejection preserves identity and duplicate taps submit once', 
   });
   const pending = f.api.toggleMode(); await f.api.toggleMode();
   assert.deepEqual(calls, [{ action: 'switchWorkspace', args: { mode: 'personal', expectedSpaceId: 'family-a' } }]);
-  assert.deepEqual(messages, ['关闭中...'], 'toast appears before the network finishes and duplicate taps do not repeat it');
+  assert.deepEqual(messages, [], 'pending status does not produce a toast');
   assert.equal(f.api.modeBusy.value, true);
   assert.equal(f.api.displayedFamilyMode.value, false, 'switch moves immediately before cloud result');
   assert.equal(state.value.family.id, 'family-a', 'permissions stay in the confirmed workspace');
   task.reject(new Error('暂时无法切换')); await pending;
   assert.equal(f.api.modeBusy.value, false);
   assert.equal(f.api.modeError.value, '暂时无法切换');
-  assert.deepEqual(messages, ['关闭中...', '暂时无法切换']);
+  assert.deepEqual(messages, ['暂时无法切换']);
   assert.equal(f.api.personal.value, false);
   assert.equal(f.api.displayedFamilyMode.value, true, 'failure restores the switch');
   assert.equal(state.value.family.id, 'family-a');
