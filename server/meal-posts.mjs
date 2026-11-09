@@ -1,3 +1,5 @@
+import { mealRecipeSnapshots, matchMealRecipes } from './meal-dish-snapshots.mjs';
+import { isPrivateRecipeCollection, sameRecipeContent } from '../src/domain/recipe-identity.js';
 import { orderDiaryParticipants } from './meal-auto-archive.mjs';
 import { profileWithDefaults } from '../src/domain/default-profile.js';
 import { createIdentityPresentation, familyMealAvatar } from './identity-presentation.mjs';
@@ -34,20 +36,31 @@ function cursorOf(value) {
 // legacy recipe ID is never resolved by searching another family's recipe name.
 async function mealDishSources(db, post) {
   if (post.kind !== 'plan' || !post.orderId || !post.spaceId) return [];
+  if (Array.isArray(post.recipeSnapshots)) return matchMealRecipes(post, post.recipeSnapshots);
   const row = await db.get('orders', hash(`${post.spaceId}:${post.orderId}`));
   const order = row?.value;
-  if (row?.familyId !== post.spaceId || order?.id !== post.orderId || order.date !== post.date || order.meal !== post.meal || !Array.isArray(order.items)) return [];
-  const dishes = Array.isArray(post.dishes) ? post.dishes : [];
-  const recipes = order.items.slice(0, 50).map(item => item?.recipe);
-  const positional = dishes.length === recipes.length && dishes.every((dish, index) => visible(dish.title, 30) === visible(recipes[index]?.title, 30)
-    && (!dish.image || dish.image === recipes[index]?.image));
-  return dishes.map((dish, index) => {
-    if (dish.recipeId) {
-      const matches = recipes.filter(recipe => recipe?.id === dish.recipeId);
-      return matches.length === 1 ? matches[0] : null;
-    }
-    return positional && visible(dish.title, 30) ? recipes[index] : null;
-  });
+  if (row?.familyId === post.spaceId && order?.id === post.orderId && order.date === post.date && order.meal === post.meal && Array.isArray(order.items)) {
+    return matchMealRecipes(post, mealRecipeSnapshots(order));
+  }
+  // Legacy deleted arrangements: recover only a verified public import with
+  // the exact recorded identity and artwork. Never disclose a current private
+  // recipe or infer provenance from a name / stored display label.
+  const origin = createMealDishOrigins(db);
+  return Promise.all((post.dishes || []).map(async dish => {
+    if (!dish.recipeId) return null;
+    const current = await db.get('recipes', hash(`${post.spaceId}:${dish.recipeId}`));
+    const recipe = current?.familyId === post.spaceId ? current.value : null;
+    if (!recipe || recipe.id !== dish.recipeId || recipe.recipeOrigin !== 'community' || recipe.identityVersion !== 2
+      || recipe.forkedFromRecipeId || visible(recipe.title, 30) !== dish.title || recipe.image !== dish.image) return null;
+    const publicId = await origin.communityPostId(recipe, post);
+    if (!publicId) return null;
+    const published = await db.get('posts', publicId);
+    if (published?.status !== 'published' || isPrivateRecipeCollection(published)) return null;
+    const original = published.recipes?.find(item => [recipe.id, recipe.canonicalRecipeId, recipe.sourceId].filter(Boolean).includes(item.id)
+      && Array.isArray(item.ingredients) && Array.isArray(item.steps) && sameRecipeContent(recipe, item));
+    return original ? { ...original, id: recipe.id, identityVersion: 2, recipeOrigin: 'community', sourcePostId: publicId,
+      sourceFamilyId: published.familyId, sourceId: original.id, canonicalRecipeId: original.id } : null;
+  }));
 }
 
 function mealDishImage(value, post, additionalImages) {
@@ -269,7 +282,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       }
       const dishes = sourceOrder ? sourceOrder.items.slice(0, 50).map(item => ({ ...(item.recipe.id ? { recipeId: item.recipe.id } : {}), title: visible(item.recipe.title, 30), image: visible(item.recipe.image, 1000) })) : [];
       if (input.kind === 'plan') {
-        content = { date: sourceOrder.date, meal: sourceOrder.meal, title: `${sourceOrder.meal}这样搭配`, dishes, images: dishes.map(dish => dish.image).filter(Boolean).slice(0, 9), orderId: sourceOrder.id };
+        content = { date: sourceOrder.date, meal: sourceOrder.meal, title: `${sourceOrder.meal}这样搭配`, dishes, recipeSnapshots: mealRecipeSnapshots(sourceOrder), images: dishes.map(dish => dish.image).filter(Boolean).slice(0, 9), orderId: sourceOrder.id };
       } else {
         for (const fileId of input.images) {
           const media = await db.get('media', hash(fileId));

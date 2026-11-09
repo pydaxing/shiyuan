@@ -99,6 +99,8 @@ test('planned meals publish a minimal snapshot and never count as actual check-i
   assert.equal(JSON.stringify(result.data.post).includes('PRIVATE_ID'), false);
   assert.equal('spaceId' in result.data.post, false);
   assert.equal('authorId' in result.data.post, false);
+  assert.equal('recipeSnapshots' in result.data.post, false);
+  assert.equal((await f.repository.get('meal_posts', result.data.post.id)).recipeSnapshots[0].ingredients[0].name, 'SECRET');
   assert.equal((await f.call('publishMeal', { ...event, requestId: 'plan-request-0002' })).code, 'ALREADY_PUBLISHED');
   assert.equal(mealCheckinDays([result.data.post]), 0);
   assert.equal(mealTimeline([{ id: 'dinner', date: '2026-11-05', meal: '晚餐', status: 'accepted' }], [result.data.post]).length, 1);

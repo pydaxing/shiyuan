@@ -609,3 +609,36 @@ test('legacy unedited imports resolve their source post, edited forks never navi
   await setRecipe(f, { sourceId: 'public-recipe', sourceFamilyId: 'publisher', sourcePostId: published.id, recipeOrigin: 'custom', forkedFromRecipeId: 'public-recipe' });
   assert.equal(ok(await f.detail()).communityPostId, '');
 });
+
+test('recorded snapshots retain badges and exact steps after hiding a diary and removing its arrangement', async () => {
+  const f = await fixture({ dishes: [{ recipeId: 'dish-one', title: '番茄炒蛋', image: '/static/tomato.png' }] });
+  const { preserveMealRecipes } = await import('../server/meal-dish-snapshots.mjs');
+  await preserveMealRecipes(f.repository, spaceId, f.order);
+  await f.repository.set('meal_reactions', hash(`${postId}:${hash('alice')}`), { diaryHiddenAt: 1793870000000 });
+  await f.repository.remove('orders', hash(`${spaceId}:${orderId}`));
+  await f.repository.set('recipes', hash(`${spaceId}:dish-one`), { familyId: spaceId, value: { ...f.recipe, steps: [{ text: 'later changed' }] } });
+  const post = ok(await f.call('mealFeed', { spaceId: 'family-stranger' })).posts[0];
+  assert.equal(post.dishes[0].sourceKind, 'custom');
+  assert.equal('recipeSnapshots' in post, false);
+  assert.equal(ok(await f.detail()).recipe.steps[0].text, '炒熟即可');
+});
+
+test('deleted legacy arrangement recovers only an exact unchanged public import; withdrawal and private forks stay inaccessible', async () => {
+  const f = await fixture({ dishes: [{ recipeId: 'dish-one', title: '番茄炒蛋', image: '/static/tomato.png' }] });
+  await f.repository.remove('orders', hash(`${spaceId}:${orderId}`));
+  const recipe = { ...f.recipe, identityVersion: 2, recipeOrigin: 'community', sourceId: 'dish-one', sourceFamilyId: 'public-family', sourcePostId: 'public-source' };
+  await f.repository.set('recipes', hash(`${spaceId}:dish-one`), { familyId: spaceId, value: recipe });
+  const published = { id: 'public-source', familyId: 'public-family', status: 'published', kind: 'dish', recipes: [f.recipe] };
+  await f.repository.set('posts', published.id, published);
+  const post = ok(await f.call('mealFeed', { spaceId: 'family-stranger' })).posts[0];
+  assert.equal(post.dishes[0].sourceKind, 'community');
+  assert.equal(post.dishes[0].communityPostId, published.id);
+  assert.equal(ok(await f.detail()).recipe.steps[0].text, '炒熟即可');
+  for (const change of [{ recipeOrigin: 'custom' }, { steps: [{ text: 'private edit' }] }, { image: '/static/other.png' }, { id: 'different' }]) {
+    await f.repository.set('recipes', hash(`${spaceId}:dish-one`), { familyId: spaceId, value: { ...recipe, ...change } });
+    assert.equal((await f.detail()).code, 'NOT_FOUND');
+  }
+  await f.repository.set('recipes', hash(`${spaceId}:dish-one`), { familyId: spaceId, value: recipe });
+  await f.repository.set('posts', published.id, { ...published, status: 'deleted' });
+  assert.equal((await f.detail()).code, 'NOT_FOUND');
+});

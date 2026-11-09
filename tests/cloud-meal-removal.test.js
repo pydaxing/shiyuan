@@ -69,3 +69,17 @@ test('stale revisions, wrong families and nonmembers cannot remove dishes', asyn
   assert.equal(rejected.ok, false);
   assert.equal(rejected.code, 'CONFLICT');
 });
+
+test('removing the final dish preserves published legacy meal recipe snapshots in the same transaction', async () => {
+  const app = await fixture();
+  const order = app.current.snapshot.orders[0];
+  const postId = `meal-${'a'.repeat(64)}`;
+  await app.repository.set('meal_posts', postId, { id: postId, status: 'published', kind: 'plan', spaceId: app.current.familyId, orderId: order.id, date: order.date, meal: order.meal,
+    dishes: order.items.map(({ recipe }) => ({ recipeId: recipe.id, title: recipe.title, image: recipe.image })) });
+  let current = await success(app.command('removeOrderDish', [order.id, app.recipeIds[0]], app.current.revision));
+  current = await success(app.command('removeOrderDish', [order.id, app.recipeIds[1]], current.revision));
+  assert.equal(current.snapshot.orders.length, 0);
+  const post = await app.repository.get('meal_posts', postId);
+  assert.deepEqual(post.recipeSnapshots, order.items.map(item => item.recipe));
+  assert.equal(post.status, 'published');
+});

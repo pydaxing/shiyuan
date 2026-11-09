@@ -1,3 +1,4 @@
+import { mealRecipeSnapshots } from './meal-dish-snapshots.mjs';
 import { familyMealAvatar } from './identity-presentation.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { MEAL_SLOTS } from '../src/domain/meal-social.js';
@@ -93,7 +94,7 @@ export function createMealAutoArchive({ repository, now = Date.now, clock = Date
       const images = dishes.map(dish => dish.image).filter(Boolean).slice(0, 9);
       const post = {
         id, spaceId, authorId, author, kind: 'plan', date: order.date, meal: order.meal,
-        title: `${order.meal}这样搭配`, dishes, images, orderId: order.id, moodIds: [],
+        title: `${order.meal}这样搭配`, dishes, recipeSnapshots: mealRecipeSnapshots(order), images, orderId: order.id, moodIds: [],
         visibility: 'public', status: 'published', createdAt: now(),
         likeCount: 0, reactionCounts: {}, mealSharingVersion: 2,
         mealContext: personal ? 'personal' : 'family', showMealBadge: true,

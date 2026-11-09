@@ -364,3 +364,13 @@ test('all lazy diary spaces share a ten-second budget and the timer completes th
   assert.equal((await f.repository.list('meal_posts')).length, 3);
   assert.equal((await service.archiveForUser(uid('alice'), personalId)).created, 0);
 });
+
+test('automatic archive retains recipe details independently of the arrangement', async () => {
+  const f = await fixture();
+  const order = await f.order({ items: [{ recipe: { id: 'tomato', title: '番茄炒蛋', image: '/static/tomato.png', ingredients: [{ name: '番茄' }], steps: [{ text: '炒熟' }] }, quantity: 1 }] });
+  await f.service.archiveForUser(uid('alice'), familyId);
+  await f.repository.remove('orders', hash(`${familyId}:${order.id}`));
+  const postId = automaticMealId(familyId, order.id);
+  const detail = ok(await f.call('mealDishDetail', { postId, dishIndex: 0 }));
+  assert.equal(detail.recipe.steps[0].text, '炒熟');
+});

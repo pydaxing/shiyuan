@@ -1,3 +1,4 @@
+import { preserveMealRecipes } from './meal-dish-snapshots.mjs';
 import { withOrderRecordStates } from './order-record-state.mjs';
 import { createAccountVisits } from './account-visits.mjs';
 import { createAccountAccess, accountAccessSummary } from './account-access.mjs';
@@ -189,12 +190,16 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
       const previous = new Map(before[field].map(item => [item.id, item]));
       for (const item of after[field]) {
         if (JSON.stringify(item) !== JSON.stringify(previous.get(item.id))) {
+          if (field === 'orders' && previous.has(item.id) && ['items', 'date', 'meal'].some(key => JSON.stringify(item[key]) !== JSON.stringify(previous.get(item.id)[key]))) await preserveMealRecipes(db, after.family.id, previous.get(item.id));
           if (Buffer.byteLength(JSON.stringify(item)) > 700000) fail('内容过大，请减少菜品或步骤', 'CAPACITY');
           await db.set(collection, documentId(after.family.id, item.id), { familyId: after.family.id, value: item });
         }
         previous.delete(item.id);
       }
-      for (const itemId of previous.keys()) await db.remove(collection, documentId(after.family.id, itemId));
+      for (const [itemId, item] of previous) {
+        if (field === 'orders') await preserveMealRecipes(db, after.family.id, item);
+        await db.remove(collection, documentId(after.family.id, itemId));
+      }
     }
     const { _id, ...family } = after.family;
     after.family = { ...family, revision: before.family.revision + 1, updatedAt: now() };
