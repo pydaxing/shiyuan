@@ -39,8 +39,9 @@ function removeOrderDish(orderId, recipeId) {
   const next = clone(state.value);
   const index = next.orders.findIndex(order => order.id === orderId);
   const order = removeDishFromOrder(next.orders[index], recipeId, { today: today(), now: now() });
-  next.orders[index] = order;
-  if (order.status === 'cancelled') next.purchases = (next.purchases || []).map(purchase => ({ ...purchase, orderIds: purchase.orderIds.filter(id => id !== orderId) })).filter(purchase => purchase.orderIds.length);
+  if (!order.items.length) next.orders.splice(index, 1);
+  else next.orders[index] = order;
+  if (!order.items.length) next.purchases = (next.purchases || []).map(purchase => ({ ...purchase, orderIds: purchase.orderIds.filter(id => id !== orderId) })).filter(purchase => purchase.orderIds.length);
   commit(next);
   return order.id;
 }

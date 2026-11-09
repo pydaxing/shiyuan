@@ -34,7 +34,7 @@ test('server removal persists only this dish and returns an orders-only change p
   assert.deepEqual(current.snapshot.inventory, app.current.snapshot.inventory);
 });
 
-test('server final-dish removal cancels instead of deleting and is idempotent after dishes are added back', async () => {
+test('server final-dish removal deletes the meal and preserves idempotency', async () => {
   const app = await fixture();
   const requestId = 'remove-specific-dish-once';
   let current = await success(app.command('removeOrderDish', [app.orderId, app.recipeIds[0]], app.current.revision, { requestId }));
@@ -44,18 +44,11 @@ test('server final-dish removal cancels instead of deleting and is idempotent af
   assert.equal(current.snapshot.orders[0].items.length, 2, 'the replay cannot remove a later addition');
   current = await success(app.command('removeOrderDish', [app.orderId, app.recipeIds[0]], current.revision));
   current = await success(app.command('removeOrderDish', [app.orderId, app.recipeIds[1]], current.revision));
-  const history = current.snapshot.orders.find(order => order.id === app.orderId);
-  assert.equal(history.status, 'cancelled');
-  for (const key of ['items', 'entries', 'selections', 'preparationEdits', 'preparedDishes', 'shoppingDrafts']) assert.deepEqual(history[key] || [], []);
-  assert.ok(history.cancelledAt);
+  assert.deepEqual(current.snapshot.orders, []);
   const reloaded = await success(app.call('bootstrap', { includeFeed: false }));
-  assert.deepEqual(reloaded.snapshot.orders.find(order => order.id === app.orderId), history);
-  const restored = await app.command('updateOrder', [app.orderId, 'accepted'], reloaded.revision);
-  assert.equal(restored.ok, false);
-  assert.equal(restored.code, 'CONFLICT');
-  assert.match(restored.message, /没有菜品.*重新预订/);
+  assert.deepEqual(reloaded.snapshot.orders, []);
   current = await success(app.command('submitOrder', [{ [app.recipeIds[0]]: 1 }, { date: today, meal: '晚餐' }], current.revision));
-  assert.equal(current.snapshot.orders.length, 2);
+  assert.equal(current.snapshot.orders.length, 1);
   assert.equal(current.snapshot.orders.filter(order => order.status === 'accepted').length, 1);
 });
 

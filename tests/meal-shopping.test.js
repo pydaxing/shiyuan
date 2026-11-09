@@ -199,8 +199,7 @@ test('withdrawal of the last selection or removal of one dish clears only affect
   context.actions.removeOrderDish(context.orderId, 'tomato');
   assert.deepEqual(context.order().shoppingDrafts.map(draft => draft.recipeId), ['broccoli']);
   context.actions.removeOrderDish(context.orderId, 'broccoli');
-  assert.equal(context.order().status, 'cancelled');
-  assert.deepEqual(context.order().shoppingDrafts, []);
+  assert.equal(context.order(), undefined);
 });
 
 test('date rollover archives unfinished packages without turning legacy purchase records into new ones', () => {

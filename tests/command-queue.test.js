@@ -88,8 +88,7 @@ test('a definite removal failure restores the dish and preserves a recoverable f
   const app = harness({ initial });
   const task = app.queue.enqueue('removeOrderDish', ['order-1', initial.orders[0].items[0].recipe.id]);
   const rejected = assert.rejects(task, /FORBIDDEN/);
-  assert.equal(app.view.orders[0].status, 'cancelled');
-  assert.deepEqual(app.view.orders[0].items, []);
+  assert.deepEqual(app.view.orders, []);
   app.requests[0].reject(failure('FORBIDDEN'));
   await rejected;
   assert.equal(app.view.orders[0].status, 'accepted');
@@ -104,20 +103,17 @@ test('rapid removals serialize and an older response cannot resurrect the remove
   const [first, last] = initial.orders[0].items.map(item => item.recipe.id);
   const firstTask = app.queue.enqueue('removeOrderDish', ['order-1', first]);
   const lastTask = app.queue.enqueue('removeOrderDish', ['order-1', last]);
-  assert.equal(app.view.orders[0].status, 'cancelled');
-  assert.deepEqual(app.view.orders[0].items, []);
-  assert.deepEqual(app.view.orders[0].selections, []);
+  assert.deepEqual(app.view.orders, []);
   const frame = app.frames.length;
   app.confirm(0);
   await firstTask;
   await tick();
-  assert.ok(app.frames.slice(frame).every(snapshot => snapshot.orders[0].status === 'cancelled' && snapshot.orders[0].items.length === 0 && snapshot.orders[0].selections.length === 0));
+  assert.ok(app.frames.slice(frame).every(snapshot => snapshot.orders.length === 0));
   assert.equal(app.requests.length, 2);
   app.confirm(1);
   await lastTask;
-  assert.equal(app.view.orders[0].status, 'cancelled');
-  assert.deepEqual(app.view.orders[0].items, []);
-  assert.deepEqual(app.server.orders[0].items, []);
+  assert.deepEqual(app.view.orders, []);
+  assert.deepEqual(app.server.orders, []);
   assert.equal(app.status.pendingCount, 0);
 });
 

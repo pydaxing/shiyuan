@@ -7,6 +7,7 @@ import { normalizeSnapshot, validateSnapshot } from '../src/domain/kitchen.js';
 import { preparationMeals } from '../src/domain/meal-preparation.js';
 import { shoppingEditSignature, wholeDishShoppingDraft } from '../src/domain/meal-shopping.js';
 import { useMealDraft } from '../src/composables/useMealDraft.js';
+import { removeDishFromOrder } from '../src/domain/meal-removal.js';
 import { normalizeCommand } from '../server/validation.mjs';
 
 const today = '2026-10-27';
@@ -88,7 +89,7 @@ test('a member with no remaining dishes is removed from this meal without distur
   assert.equal(app.state.orders[0].note, '');
 });
 
-test('removing the final dish retains an empty cancelled meal and frees the reservation', () => {
+test('removing the final dish deletes the meal and frees the reservation', () => {
   const app = fixture();
   app.actions.submitOrder({ tomato: 1 }, slot, '保留记录');
   const dish = preparationMeals(app.state, today)[0].dishes[0];
@@ -99,25 +100,14 @@ test('removing the final dish retains an empty cancelled meal and frees the rese
   const protectedData = structuredClone({ recipes: app.state.recipes, mealSets: app.state.mealSets, inventory: app.state.inventory });
   app.state.purchases = [{ id: 'shared', name: '番茄', quantity: 100, unit: 'g', orderIds: [before.id, 'other-order'] }];
   app.actions.removeOrderDish(before.id, 'tomato');
-  const cancelled = app.state.orders[0];
-  assert.equal(cancelled.id, before.id);
-  assert.equal(cancelled.status, 'cancelled');
-  assert.equal(cancelled.cancelledAt, new Date(timestamp).toISOString());
-  assert.equal(cancelled.date, before.date);
-  assert.equal(cancelled.meal, before.meal);
-  assert.equal(cancelled.createdAt, before.createdAt);
-  for (const key of ['items', 'entries', 'selections', 'preparationEdits', 'preparedDishes', 'shoppingDrafts']) assert.deepEqual(cancelled[key] || [], []);
-  assert.equal(cancelled.note, '');
-  assert.deepEqual(normalizeSnapshot(app.state).orders[0], cancelled);
+  assert.deepEqual(app.state.orders, []);
+  assert.deepEqual(normalizeSnapshot(app.state).orders, []);
   assert.deepEqual({ recipes: app.state.recipes, mealSets: app.state.mealSets, inventory: app.state.inventory }, protectedData);
   assert.deepEqual(app.state.purchases[0].orderIds, ['other-order']);
-  assert.throws(() => app.actions.updateOrder(before.id, 'accepted'), /没有菜品.*重新预订/);
-  assert.deepEqual(app.state.orders[0], cancelled);
   app.actions.submitOrder({ soup: 1 }, slot);
-  assert.equal(app.state.orders.length, 2);
+  assert.equal(app.state.orders.length, 1);
   assert.notEqual(app.state.orders[0].id, before.id);
   assert.equal(app.state.orders[0].status, 'accepted');
-  app.actions.removeOrder(before.id);
   assert.equal(app.state.orders.length, 1);
   assert.equal(app.state.orders[0].status, 'accepted');
 });
@@ -132,20 +122,16 @@ test('the last prepared dish is removed from every member and loses its ready re
   app.actions.setDishPrepared(orderId, 'tomato', true, dish.signature);
   assert.equal(app.state.orders[0].preparedDishes.length, 1);
   app.actions.removeOrderDish(orderId, 'tomato');
-  const order = app.state.orders[0];
-  assert.equal(order.status, 'cancelled');
-  assert.deepEqual(order.items, []);
-  assert.deepEqual(order.selections, []);
-  assert.deepEqual(order.entries, []);
-  assert.deepEqual(order.preparedDishes, []);
+  assert.deepEqual(app.state.orders, []);
 });
 
 test('empty cancelled meals survive storage validation without accepting empty active meals or hidden dish references', () => {
   const app = fixture();
   app.actions.submitOrder({ tomato: 1 }, slot);
   const original = structuredClone(app.state.orders[0]);
-  app.actions.removeOrderDish(original.id, 'tomato');
   const empty = structuredClone(app.state);
+  // Historical empty cancelled records remain readable; new removals delete them.
+  empty.orders = [removeDishFromOrder(original, 'tomato', { today, now: timestamp })];
   assert.doesNotThrow(() => validateSnapshot(empty));
   assert.deepEqual(normalizeSnapshot(empty).orders, empty.orders);
   for (const status of ['pending', 'accepted', 'completed']) {
