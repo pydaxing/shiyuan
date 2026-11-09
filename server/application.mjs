@@ -1,3 +1,4 @@
+import { withOrderRecordStates } from './order-record-state.mjs';
 import { createAccountVisits } from './account-visits.mjs';
 import { createAccountAccess, accountAccessSummary } from './account-access.mjs';
 import { createIdentityPresentation, canReadCurrentIdentityImage } from './identity-presentation.mjs';
@@ -146,6 +147,8 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
         known.includeFeed === false ? [] : repository.list('posts', { status: 'published' }, { limit: 30 }),
         all(repository, 'posts', { familyId: family.id, status: 'published' }, { fields: ['id', 'familyItemId', 'familyKind', 'kind'] }),
       ]);
+      const presentedOrders = await withOrderRecordStates(repository, family.id, snapshot.orders, todayInChina(now()));
+      const orderRecordStates = Object.fromEntries(presentedOrders.filter(order => order.recordState).map(order => [order.id, order.recordState]));
       const [currentUser, current] = await Promise.all([repository.get('users', userId), repository.get('families', family.id)]);
       if (!activeSpaceId(currentUser)) fail('请先创建或加入家庭', 'NO_FAMILY');
       if (activeSpaceId(currentUser) !== family.id) continue;
@@ -154,7 +157,7 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
       const identity = createIdentityPresentation(repository);
       snapshot.posts = await Promise.all(posts.map(post => identity.community(publicPost(post))));
       snapshot.sharedItems = sharedItems.filter(post => post.familyItemId).map(post => ({ kind: post.familyKind || (post.kind === 'menu' ? 'set' : 'dish'), itemId: post.familyItemId, postId: post.id || post._id }));
-      return { mealSharingVersion: 2, snapshot, revision: family.revision, userId, familyId: family.id, profile, ...profileCompatibility, pendingDeletions, media: await sign(snapshot), ...(known.includeImageManifests === true ? { imageManifests: await familyImageManifests(userId, family, profile, snapshot) } : {}) };
+      return { mealSharingVersion: 2, orderRecordStates, snapshot, revision: family.revision, userId, familyId: family.id, profile, ...profileCompatibility, pendingDeletions, media: await sign(snapshot), ...(known.includeImageManifests === true ? { imageManifests: await familyImageManifests(userId, family, profile, snapshot) } : {}) };
     }
     fail('家人正在更新数据，请稍后刷新', 'SYNC_BUSY');
   }

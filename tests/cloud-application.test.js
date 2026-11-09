@@ -683,7 +683,7 @@ test('cloud rejects future serving without changing the meal, shopping or revisi
     const rejected = await server.command('updateOrder', [order.id, 'completed'], current.revision);
     assert.equal(rejected.ok, false);
     assert.equal(rejected.code, 'INVALID');
-    assert.equal(rejected.message, '只能当天开饭');
+    assert.equal(rejected.message, '只能在安排当天记录餐食');
     const restored = await success(server.call('bootstrap', { includeFeed: false }));
     assert.equal(restored.revision, before.revision);
     assert.deepEqual(restored.snapshot.orders, before.snapshot.orders);
@@ -707,14 +707,14 @@ test('serving uses the Shanghai calendar day and keeps successful retries idempo
   const completion = { name: 'updateOrder', args: [dinner.id, 'completed'], revision: current.revision, requestId: 'serve-across-midnight-001' };
   current = await success(server.call('command', completion));
   const completedAt = current.snapshot.orders.find(order => order.id === dinner.id).completedAt;
-  assert.equal((await server.command('updateOrder', [breakfast.id, 'completed'], current.revision)).message, '只能当天开饭');
+  assert.equal((await server.command('updateOrder', [breakfast.id, 'completed'], current.revision)).message, '只能在安排当天记录餐食');
 
   instant += 1000;
   current = await success(server.call('command', completion));
   assert.equal(current.snapshot.orders.find(order => order.id === dinner.id).completedAt, completedAt);
   const rejected = await server.command('updateOrder', [midnightMeal.id, 'completed'], current.revision);
   assert.equal(rejected.code, 'INVALID');
-  assert.equal(rejected.message, '只能当天开饭');
+  assert.equal(rejected.message, '只能在安排当天记录餐食');
   current = await success(server.command('updateOrder', [breakfast.id, 'completed'], current.revision));
   assert.equal(current.snapshot.orders.find(order => order.id === breakfast.id).status, 'completed');
   assert.equal(current.snapshot.orders.find(order => order.id === midnightMeal.id).status, 'accepted');
@@ -1386,4 +1386,26 @@ test('arranged meal rejects stale, changed and empty submissions without replaci
   const replay = await success(server.command('submitOrder', [cart, slot, '保留备注'], initialRevision, 'alice', requestId));
   assert.deepEqual(replay.snapshot.orders, original);
   assert.equal(replay.revision, current.revision);
+});
+
+
+test('record presentation stays outside canonical snapshots and follows real diary deletion', async () => {
+  const server = fixture();
+  let current = await family(server);
+  current = await success(server.command('saveRecipe', [recipe], current.revision));
+  current = await success(server.command('submitOrder', [{ [current.snapshot.recipes[0].id]: 1 }, { date: '2026-09-09', meal: '晚餐' }], current.revision));
+  const id = current.snapshot.orders[0].id;
+  current = await success(server.command('updateOrder', [id, 'completed'], current.revision));
+  const canonical = current.snapshot.orders;
+  let loaded = await success(server.call('bootstrap', { includeFeed: false }));
+  assert.equal(loaded.orderRecordStates[id], 'missing');
+  assert.deepEqual(loaded.snapshot.orders, canonical);
+  await server.repository.set('meal_posts', 'legacy-post', { spaceId: current.familyId, orderId: id, status: 'published' });
+  loaded = await success(server.call('bootstrap', { includeFeed: false }));
+  assert.equal(loaded.orderRecordStates[id], 'recorded');
+  assert.deepEqual(loaded.snapshot.orders, canonical);
+  await server.repository.set('meal_posts', 'legacy-post', { spaceId: current.familyId, orderId: id, status: 'deleted' });
+  loaded = await success(server.call('bootstrap', { includeFeed: false }));
+  assert.equal(loaded.orderRecordStates[id], 'deleted');
+  assert.deepEqual(loaded.snapshot.orders, canonical);
 });

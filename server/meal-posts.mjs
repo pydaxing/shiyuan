@@ -1,3 +1,4 @@
+import { orderDiaryParticipants } from './meal-auto-archive.mjs';
 import { profileWithDefaults } from '../src/domain/default-profile.js';
 import { createIdentityPresentation, familyMealAvatar } from './identity-presentation.mjs';
 import { createHash } from 'node:crypto';
@@ -220,7 +221,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
     if (event.mealSharingVersion !== undefined && !modern) fail('餐食共享版本不兼容，请更新后重试');
     if (!modern && visibility === 'family') fail('请更新后使用家庭日记');
     if (modern && event.showMealBadge !== undefined && typeof event.showMealBadge !== 'boolean') fail('请选择是否展示餐食标识');
-    if (finish && !event.orderId) fail('请从待开饭餐单确认开饭');
+    if (finish && !event.orderId) fail('请从当天的安排记录餐食');
     if ((event.kind === 'plan' || event.orderId !== undefined) && (typeof event.orderId !== 'string' || !event.orderId || event.orderId.length > 100)) fail('请选择餐食安排');
     if (event.kind === 'actual' && (!Array.isArray(event.images) || !event.images.length || event.images.length > 9 || event.images.some(image => typeof image !== 'string' || !image.startsWith('cloud://') || image.length > 1000))) fail('请上传 1～9 张实际餐食照片');
     if (event.moodIds !== undefined && (!Array.isArray(event.moodIds) || event.moodIds.length > 3 || event.moodIds.some(id => !MEAL_MOODS.some(tag => tag.id === id)))) fail('请选择最多三个心情标签');
@@ -254,8 +255,8 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
         sourceOrder = row?.familyId === family.id ? row.value : null;
         if (!sourceOrder || sourceOrder.status === 'cancelled' || !sourceOrder.items?.length) fail('餐食已取消或没有菜品，请重新选择');
         if (finish) {
-          if (!['pending', 'accepted'].includes(sourceOrder.status)) fail('这一餐已经开饭，请到我的查看', 'ALREADY_FINISHED');
-          if (sourceOrder.date !== chinaDate(now())) fail('只能在餐单当天确认开饭', 'MEAL_DATE');
+          if (!['pending', 'accepted'].includes(sourceOrder.status)) fail('这一餐已结束，请查看原安排', 'ALREADY_FINISHED');
+          if (sourceOrder.date !== chinaDate(now())) fail('只能在安排当天记录餐食', 'MEAL_DATE');
           if (input.kind === 'actual' && (input.date !== sourceOrder.date || input.meal !== sourceOrder.meal)) fail('照片须记录到当前餐次');
         }
       }
@@ -274,7 +275,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       const member = family.members.find(member => member.id === userId);
       const author = { name: family.kind === 'personal' ? (user.name || member.name || '我') : family.name, avatar: family.kind === 'personal' ? (user.avatar || '') : familyMealAvatar(family, user, userId), mode: family.kind === 'personal' ? 'personal' : 'family', familyIdentityVersion: 1 };
       const post = { id, spaceId: family.id, authorId: userId, author, kind: input.kind, ...content, moodIds, visibility, status: 'published', createdAt: now(), likeCount: 0, reactionCounts: {} };
-      if (modern) Object.assign(post, { mealSharingVersion: 2, mealContext: family.kind === 'personal' ? 'personal' : 'family', showMealBadge: input.showMealBadge, participantUserIds: family.kind === 'personal' ? [userId] : [...new Set(family.members.map(member => member.id))] });
+      if (modern) Object.assign(post, { mealSharingVersion: 2, mealContext: family.kind === 'personal' ? 'personal' : 'family', showMealBadge: input.showMealBadge, participantUserIds: sourceOrder ? orderDiaryParticipants(sourceOrder, family) : family.kind === 'personal' ? [userId] : [...new Set(family.members.map(member => member.id))] });
       if (finish) post.mealStarted = true;
       post.assetIds = refs(post);
       if (finish) await db.set('orders', hash(`${family.id}:${sourceOrder.id}`), { familyId: family.id, value: { ...sourceOrder, status: 'completed', completedAt: new Date(now()).toISOString(), mealPostId: id } });

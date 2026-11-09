@@ -8,7 +8,7 @@ import { memoryRepository } from './helpers/memory-repository.js';
 const hash = value => createHash('sha256').update(value).digest('hex');
 const ok = result => { assert.equal(result.ok, true, JSON.stringify(result)); return result.data; };
 const mealOrder = (id, image) => ({
-  id, memberId: hash('alice'), memberName: 'Alice', date: '2026-11-05', meal: '晚餐', status: 'accepted',
+  id, diaryParticipantsVersion: 1, diaryParticipantUserIds: [hash('alice'), hash('bob')], memberId: hash('alice'), memberName: 'Alice', date: '2026-11-05', meal: '晚餐', status: 'accepted',
   items: [{ quantity: 1, recipe: { id: 'tomato', title: '番茄炒蛋', image, category: '素菜', servings: 2, minutes: 10, ingredients: [{ name: '番茄', quantity: 2, unit: '个' }], steps: [{ title: '炒熟', text: '将食材炒熟即可' }] } }],
 });
 const sharedImagePost = (number, spaceId, image, participantUserIds = []) => ({
@@ -296,4 +296,17 @@ test('deleting a shared diary reference preserves other members and media access
   assert.equal((await f.diary(bobPersonal, 'bob')).posts[0].id, post.id);
   assert.equal((await f.call('mediaContent', { fileId: post.images[0] }, 'bob')).ok, true);
   assert.equal((await f.call('mediaContent', { fileId: post.images[0] })).ok, true);
+});
+
+
+test('manual recording preserves arranged participants after membership changes', async () => {
+  const f = fixture(), spaceId = await f.family();
+  await f.join('bob');
+  const order = mealOrder('snapshot-dinner', '/static/food.png');
+  await f.repository.set('orders', hash(`${spaceId}:${order.id}`), { familyId: spaceId, value: order });
+  await f.join('carol');
+  const post = ok(await f.call('finishMeal', { spaceId, orderId: order.id, kind: 'plan', requestId: 'snapshot-members-meal', visibility: 'public', mealSharingVersion: 2 })).post;
+  assert.deepEqual((await f.repository.get('meal_posts', post.id)).participantUserIds.sort(), [hash('alice'), hash('bob')].sort());
+  const carolSpace = await f.personal('carol');
+  assert.equal((await f.diary(carolSpace, 'carol')).posts.some(row => row.id === post.id), false);
 });

@@ -64,7 +64,7 @@ test('restoration re-enters chronological preparation and the next ending uses i
   assert.deepEqual(kitchenOrders(kitchen.state().orders, today).map(order => order.id), [kitchen.orderId, tomorrowId]);
   assert.equal(kitchen.state().orders.find(order => order.id === kitchen.orderId).cancelledAt, firstCancellation);
   kitchen.setTime('2026-10-23T04:00:00Z');
-  assert.throws(() => kitchen.actions.updateOrder(tomorrowId, 'completed'), /只能当天开饭/);
+  assert.throws(() => kitchen.actions.updateOrder(tomorrowId, 'completed'), /只能在安排当天记录餐食/);
   kitchen.actions.updateOrder(tomorrowId, 'cancelled');
   kitchen.setTime('2026-10-23T05:00:00Z');
   kitchen.actions.updateOrder(kitchen.orderId, 'cancelled');

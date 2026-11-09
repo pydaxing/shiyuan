@@ -1,4 +1,5 @@
 <script setup>
+import { orderStatusLabel } from '../../domain/order-record-state.js';
 import { isUnchangedCommunityRecipe } from '../../domain/recipe-identity.js';
 import { NATIVE_UI_COLORS } from '../../domain/ui-theme.js';
 import { mainNavigation, mainNavigationTab } from '../../domain/navigation.js';
@@ -73,12 +74,13 @@ const diaryFeed = useMealPosts('mine', computed(() => !momentsPreview && (tab.va
 provide('mealDiaryFeed', diaryFeed);
 const publicFeed = useMealPosts('public', computed(() => !momentsPreview && cloudStatus.value.phase === 'ready'));
 provide('mealPublicFeed', publicFeed);
-function diaryChanged(result) { if (result.deletedId && result.deleteScope !== 'personal') publicFeed.removePost(result.deletedId, true); else if (result.post) publicFeed.acceptPost(result.post); }
+function diaryChanged(result) { if (result.deletedId && result.deleteScope !== 'personal') { deletedMealIds.value = [...new Set([...deletedMealIds.value, ...(result.suppressedOrderIds || [])])]; void refreshCloud().catch(() => {}); } if (result.deletedId && result.deleteScope !== 'personal') publicFeed.removePost(result.deletedId, true); else if (result.post) publicFeed.acceptPost(result.post); }
 function squareChanged(result) { if (result.post?.id) diaryFeed.syncReactions(result.post); }
 function openMealHistory() { dismissFocusedKeyboard(); mealHistoryOpen.value = true; }
 const mealPublishing = ref(false);
 const mealShareOrder = ref(null);
 const completedMealIds = ref([]);
+const deletedMealIds = ref([]);
 function recordMeal(order = null) {
   today.value = localDate();
   if (order && (isPendingRecord(order.id) || orderActionBusy.value)) { notify('餐单正在保存，请稍后记录'); return; }
@@ -176,11 +178,11 @@ const menuEntries = computed(() => [
   }),
   ...state.value.recipes.map((recipe) => ({ ...recipe, key: recipe.id, kind: 'dish', recipes: [recipe], label: recipe.category, originLabel: isUnchangedCommunityRecipe(recipe, state.value.posts) ? '美食' : '自建' })),
 ]);
-const orders = computed(() => kitchenOrders(state.value.orders.map(order => completedMealIds.value.includes(order.id) ? { ...order, status: 'completed' } : order), today.value));
+const orders = computed(() => kitchenOrders(state.value.orders.map(order => completedMealIds.value.includes(order.id) ? { ...order, status: 'completed', recordState: 'recorded' } : order), today.value));
 const kitchenIntro = computed(() => kitchenWelcome(orders.value, today.value));
 watch(orders, (items) => { if (!items.some(order => order.id === openedOrderId.value)) openedOrderId.value = ''; });
 const kitchenFocus = useKitchenFocus(orders, computed(() => tab.value === 'activity'), sheetOpen);
-const checkoutOrders = computed(() => state.value.orders.filter((order) => order.date === date.value && order.meal === meal.value));
+const checkoutOrders = computed(() => orders.value.filter((order) => order.date === date.value && order.meal === meal.value));
 const currentOrder = computed(() => checkoutOrders.value.find((order) => ['pending', 'accepted'].includes(order.status)));
 const pendingOrderCount = computed(() => orders.value.filter((order) => ['pending', 'accepted'].includes(order.status)).length);
 const currentSelection = computed(() => currentOrder.value?.selections?.find((entry) => entry.memberId === state.value.activeMemberId));
@@ -191,9 +193,9 @@ const cartRows = computed(() => mealDishRows(cartItems.value.flatMap((entry) => 
 const dishCount = computed(() => cartRows.value.length);
 const completedOrder = computed(() => checkoutOrders.value.find(order => order.status === 'completed'));
 const mealClosed = computed(() => !currentOrder.value && Boolean(completedOrder.value));
-const checkout = computed(() => checkoutPresentation({ hasMeal: Boolean(meal.value), closed: mealClosed.value, status: currentOrder.value?.status, hasSelection: Boolean(currentSelection.value), hasOrder: Boolean(currentOrder.value), dirty: cartDirty.value, dishCount: dishCount.value }));
+const checkout = computed(() => checkoutPresentation({ hasMeal: Boolean(meal.value), closed: mealClosed.value, recordLabel: completedOrder.value ? statusLabel(completedOrder.value) : '已记录', status: currentOrder.value?.status, hasSelection: Boolean(currentSelection.value), hasOrder: Boolean(currentOrder.value), dirty: cartDirty.value, dishCount: dishCount.value }));
 watch([cart, note, date, meal], () => { submitError.value = ''; });
-const statusNames = { pending: '已安排', accepted: '已安排', completed: '已记录', cancelled: '已取消' };
+const statusLabel = order => deletedMealIds.value.includes(order.id) ? '记录已删除' : orderStatusLabel({ ...order, recordState: order.recordState || cloudStatus.value.orderRecordStates?.[order.id] });
 const pickedBy = (item, order) => item.chosenBy || [{ id: order.memberId, name: order.memberName }];
 const orderRows = (order) => mealDishRows(order.items.map((item) => ({ ...item, chosenBy: pickedBy(item, order) })), order.entries);
 function removeCartDish(recipeId) { cart.value = removeDishSelection(cart.value, state.value.mealSets, recipeId); }
@@ -231,7 +233,7 @@ async function saveAdditions(cartToAdd) {
   } catch (error) { if (request === additionRevision) additionError.value = error.message || '没有保存成功，请重试'; }
   finally { if (request === additionRevision) additionSaving.value = false; }
 }
-function resetOrderAction() { completedMealIds.value = []; mealPublishing.value = false; mealShareOrder.value = null; orderActionRevision += 1; orderSavingId.value = ''; orderFailure.value = null; openedOrderId.value = ''; preparingOrderId.value = ''; }
+function resetOrderAction() { completedMealIds.value = []; deletedMealIds.value = []; mealPublishing.value = false; mealShareOrder.value = null; orderActionRevision += 1; orderSavingId.value = ''; orderFailure.value = null; openedOrderId.value = ''; preparingOrderId.value = ''; }
 watch(() => state.value.activeMemberId, () => { closeAdditions(); kitchenFocus.cancel(); resetOrderAction(); });
 onUnmounted(resetOrderAction);
 function editFamily(initialTab = 'appearance') { dismissFocusedKeyboard(); tapFeedback(); familyEditorTab.value = initialTab; editingFamily.value = true; }
@@ -286,7 +288,7 @@ watch(() => cloudStatus.value.familyId, (next, previous) => {
   resetDraft(); closeAdditions(); kitchenFocus.cancel(); resetOrderAction(); detail.value = null; setDetail.value = null; orderRecipe.value = null;
   editingRecipe.value = false; editingSet.value = false; editingFamily.value = false; sharing.value = null; friendSharing.value = null; swipeSharing.value = null;
   createMenuOpen.value = false; search.value = ''; category.value = ''; homeMenu.value?.reset();
-  mealHistoryOpen.value = false; mealPublishing.value = false; mealShareOrder.value = null; completedMealIds.value = [];
+  mealHistoryOpen.value = false; mealPublishing.value = false; mealShareOrder.value = null; completedMealIds.value = []; deletedMealIds.value = [];
 });
 async function saved(recipe) {
   const target = editingSet.value ? '套餐' : recipe?.category || recipeDraft.value?.category || creationCategory.value;
@@ -444,7 +446,7 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
           <view v-for="(order, orderIndex) in orders" :key="order.id + ':' + order.status" :id="kitchenOrderAnchor(orderIndex)" class="kitchen-order">
           <view :key="order.id + ':' + order.status" class="order-card" :class="{ 'is-finished': ['completed', 'cancelled'].includes(order.status), 'is-cancelled-summary': ['completed', 'cancelled'].includes(order.status) }">
             <view class="section-line compact order-card-heading">
-              <view class="order-schedule"><text class="order-tag order-date-tag">{{ mealDateLabel(order.date, today) }}</text><text class="order-tag order-meal-tag">{{ order.meal }}</text><text class="order-tag order-status" :class="order.status">{{ statusNames[order.status] }}</text></view>
+              <view class="order-schedule"><text class="order-tag order-date-tag">{{ mealDateLabel(order.date, today) }}</text><text class="order-tag order-meal-tag">{{ order.meal }}</text><text class="order-tag order-status" :class="order.status">{{ statusLabel(order) }}</text></view>
               <OrderActionMenu :label="`${mealDateLabel(order.date, today)}${order.meal}`" :status="order.status" :opened="openedOrderId === order.id" :busy="orderActionBusy" :has-dishes="order.items.length > 0" @activate="openedOrderId = order.id" @close="openedOrderId === order.id && (openedOrderId = '')" @cancel="orderAction(order, 'cancelled')" @restore="orderAction(order, 'accepted')" @remove="orderAction(order, 'deleted')" />
             </view>
             <MealDishList :rows="orderRows(order)" :members="state.family.members" :posts="state.posts" :editable="['pending', 'accepted'].includes(order.status)" :busy="orderActionBusy" @open="orderRecipe = $event" @remove="removeMealDish(order, $event)" />
@@ -495,7 +497,7 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
     <AddDishesSheet v-if="addingOrderId" :order="addingOrder" :entries="menuEntries" :member-id="state.activeMemberId" :today="today" :saving="additionSaving" :error="additionError" @close="closeAdditions" @save="saveAdditions" />
     <Sheet v-if="cartOpen" page variant="checkout" title="安排" @close="cartOpen = false">
       <view class="checkout-cards">
-        <view class="checkout-card checkout-schedule"><MealBar :meal-error="mealRequired && !meal" :date="date" :meal="meal" :today="today" @update:date="updateMealSlot('date', $event)" @update:meal="updateMealSlot('meal', $event)" /><view v-if="checkout.tip" class="checkout-tip" :class="{ warning: checkout.warning }" role="status"><template v-if="checkout.action === 'occupied' || checkout.action === 'blocked'"><text>{{ checkout.action === 'blocked' ? '这一餐已记录，' : '这一餐已安排，' }}</text><button role="button" class="checkout-view-link" @click="revealOrder(currentOrder?.id || completedOrder?.id)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="checkout-view-label">去看看</text><view class="checkout-view-arrow" aria-hidden="true" /></button></template><text v-else>{{ checkout.tip }}</text></view></view>
+        <view class="checkout-card checkout-schedule"><MealBar :meal-error="mealRequired && !meal" :date="date" :meal="meal" :today="today" @update:date="updateMealSlot('date', $event)" @update:meal="updateMealSlot('meal', $event)" /><view v-if="checkout.tip" class="checkout-tip" :class="{ warning: checkout.warning }" role="status"><template v-if="checkout.action === 'occupied' || checkout.action === 'blocked'"><text>{{ checkout.action === 'blocked' ? `这一餐${statusLabel(completedOrder)}，` : '这一餐已安排，' }}</text><button role="button" class="checkout-view-link" @click="revealOrder(currentOrder?.id || completedOrder?.id)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="checkout-view-label">去看看</text><view class="checkout-view-arrow" aria-hidden="true" /></button></template><text v-else>{{ checkout.tip }}</text></view></view>
         <view class="checkout-card checkout-dishes"><view class="checkout-card-heading"><text class="subheading">已选 {{ dishCount }} 道菜</text><button role="button" class="text-button" @click="$feedback(); cartOpen = false" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="plus" :size="16" />继续选菜</button></view><MealDishList v-if="dishCount" :rows="cartRows" :posts="state.posts" removable @open="orderRecipe = $event" @remove="removeCartDish" /><text v-else class="checkout-empty">还没有选菜</text></view>
         <view class="checkout-card checkout-note"><FormField multiline v-model="note" field-class="textarea short" placeholder="给大厨的备注" placeholder-style="font-size: 15px; line-height: 22px; font-weight: 400;" maxlength="200" aria-label="安排备注" /></view>
       </view>

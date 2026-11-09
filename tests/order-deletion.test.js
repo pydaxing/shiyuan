@@ -25,7 +25,7 @@ for (const status of ['pending', 'accepted', 'completed', 'cancelled']) {
     order.preparationEdits = [{ recipeId: order.items[0].recipe.id, note: '这一餐少放盐', ingredients: [] }];
     order.preparedDishes = [{ recipeId: order.items[0].recipe.id }];
     const protectedData = structuredClone({ family: kitchen.state().family, recipes: kitchen.state().recipes, mealSets: kitchen.state().mealSets, inventory: kitchen.state().inventory });
-    if (status === 'completed') assert.throws(() => kitchen.actions.submitOrder(kitchen.cart, selection), /已经做好/);
+    if (status === 'completed') assert.throws(() => kitchen.actions.submitOrder(kitchen.cart, selection), /这一餐已结束/);
     assert.equal(kitchen.actions.removeOrder(order.id), order.id);
     assert.deepEqual(kitchen.state().orders, []);
     assert.deepEqual(shoppingMeals(kitchen.state(), today), []);

@@ -411,7 +411,7 @@ export function completeOrder(state, orderId, today = localDate(), completedAt =
   const next = clone(state);
   const order = next.orders.find((entry) => entry.id === orderId);
   if (!order || !['pending', 'accepted'].includes(order.status)) throw new Error('订单状态已变化，已结束的餐单不能重复完成');
-  if (order.date !== today) throw new Error('只能当天开饭');
+  if (order.date !== today) throw new Error('只能在安排当天记录餐食');
   if (next.purchases) {
     next.purchases = next.purchases.map((purchase) => ({ ...purchase, orderIds: purchase.orderIds.filter((id) => id !== order.id) })).filter((purchase) => purchase.orderIds.length);
   }

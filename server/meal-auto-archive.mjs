@@ -34,7 +34,9 @@ async function all(db, collection, where, fields) {
   }
 }
 
-function legacyParticipants(order) {
+export function orderDiaryParticipants(order, family) {
+  if (family.kind === 'personal') return [family.ownerId];
+  if (order.diaryParticipantsVersion === 1) return unique(order.diaryParticipantUserIds || []);
   return unique([order.memberId, ...(order.selections || []).map(selection => selection.memberId), ...(order.items || []).flatMap(item => (item.chosenBy || []).map(member => member.id))]);
 }
 
@@ -79,7 +81,7 @@ export function createMealAutoArchive({ repository, now = Date.now, clock = Date
       if (['private', 'family'].includes(order.visibility) || order.public === false) return { reason: 'legacy_private' };
       const personal = family.kind === 'personal';
       if (personal && family.id !== personalSpaceId(family.ownerId)) return { reason: 'invalid_personal_space' };
-      const candidates = personal ? [family.ownerId] : order.diaryParticipantsVersion === 1 ? unique(order.diaryParticipantUserIds || []) : legacyParticipants(order);
+      const candidates = orderDiaryParticipants(order, family);
       const participants = [];
       for (const userId of candidates) if (await db.get('users', userId)) participants.push(userId);
       const authorId = personal ? family.ownerId : participants.includes(order.memberId) ? order.memberId : participants[0];

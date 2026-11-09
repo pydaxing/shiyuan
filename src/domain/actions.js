@@ -19,8 +19,8 @@ function submitOrder(cart, selection, note = '') {
   validateReservation(selection, today());
   const next = clone(state.value);
   const index = next.orders.findIndex((order) => order.date === selection.date && order.meal === selection.meal && ['pending', 'accepted'].includes(order.status));
-  if (index >= 0) throw Object.assign(new Error('这一餐已安排，请到三餐增减菜品'), { code: 'CONFLICT' });
-  if (next.orders.some((order) => order.date === selection.date && order.meal === selection.meal && order.status === 'completed')) throw new Error('这一餐已经做好了，请选择其他日期或餐次');
+  if (index >= 0) throw Object.assign(new Error('这一餐已安排，请到安排页增减菜品'), { code: 'CONFLICT' });
+  if (next.orders.some((order) => order.date === selection.date && order.meal === selection.meal && order.status === 'completed')) throw new Error('这一餐已结束，请查看原安排或选择其他日期、餐次');
   const order = makeOrder({ id: newId('order'), recipes: next.recipes, mealSets: next.mealSets, cart, member: activeMember.value, ...selection, note });
   next.orders.unshift(order);
   commit(next);
@@ -53,7 +53,7 @@ function updateOrder(orderId, action) {
   if (action === 'accepted' && order?.status === 'cancelled') {
     validateReservation(order, today());
     if (!order.items.length) throw Object.assign(new Error('这餐已没有菜品，请从菜单重新预订'), { code: 'CONFLICT' });
-    if (next.orders.some(entry => entry.id !== orderId && entry.date === order.date && entry.meal === order.meal && ['pending', 'accepted', 'completed'].includes(entry.status))) throw Object.assign(new Error('这个餐次已有餐单，请先查看三餐，不能重复恢复'), { code: 'CONFLICT' });
+    if (next.orders.some(entry => entry.id !== orderId && entry.date === order.date && entry.meal === order.meal && ['pending', 'accepted', 'completed'].includes(entry.status))) throw Object.assign(new Error('这个餐次已有餐单，请先查看安排，不能重复恢复'), { code: 'CONFLICT' });
     order.status = 'accepted';
     return commit(next);
   }

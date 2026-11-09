@@ -1149,3 +1149,21 @@ test('all entry requests go straight to the cloud without requiring a phone', as
     assert.equal(call.token, 'original-entry-token');
   }
 });
+
+
+test('order presentation survives unchanged refresh, rejects old revisions and clears on workspace changes', async () => {
+  let result = { ...snapshot(2), orderRecordStates: { meal: 'deleted' } };
+  const app = await client(async () => ({ ok: true, data: result }));
+  await app.cloudCall('bootstrap');
+  assert.deepEqual(app.cloudStatus.value.orderRecordStates, { meal: 'deleted' });
+  assert.deepEqual(app.state.value.orders, []);
+  result = { unchanged: true, familyId: 'family-1', userId: 'alice', revision: 2 };
+  await app.cloudCall('bootstrap');
+  assert.deepEqual(app.cloudStatus.value.orderRecordStates, { meal: 'deleted' });
+  result = { ...snapshot(1), orderRecordStates: { meal: 'recorded' } };
+  await app.cloudCall('bootstrap');
+  assert.deepEqual(app.cloudStatus.value.orderRecordStates, { meal: 'deleted' });
+  result = { ...snapshot(3), familyId: 'personal' };
+  await app.cloudCall('bootstrap');
+  assert.deepEqual(app.cloudStatus.value.orderRecordStates, {});
+});

@@ -1,3 +1,4 @@
+import { orderStatusLabel } from '../src/domain/order-record-state.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -39,7 +40,7 @@ const indexNodes = allNodes(baseParse(parse(indexSource).descriptor.template.con
 const kitchenNode = indexNodes.find(node => node.props?.some(prop => prop.name === 'class' && prop.value?.content === 'orders-view'));
 const renderKitchen = compile(kitchenNode.loc.source);
 const withClass = (nodes, className) => nodes.filter(node => typeof node.props?.class === 'string' && node.props.class.split(' ').includes(className));
-const meal = (status, id = status, date = today) => ({ id, status, date, meal: '晚餐', items: [] });
+const meal = (status, id = status, date = today) => ({ id, status, date, recordState: status === 'completed' ? 'recorded' : '', meal: '晚餐', items: [] });
 
 function menuContext({ entries = [], search = '', family = {}, currentDay = today } = {}) {
   const groups = groupHomeMenu(entries, search).filter(group => group.entries.length);
@@ -57,7 +58,7 @@ function kitchenContext(familyOrders, currentDay = today) {
   return {
     isPendingRecord: () => false, orders, kitchenIntro: kitchenWelcome(orders, currentDay), todayLabel: homeDateLabel(currentDay), today: currentDay, DEFAULT_FAMILY_COVER,
     state: { orders: familyOrders, family: { cover: 'cloud://family-cover', members: [] } }, features: { fridge: false, shopping: false },
-    statusNames: { pending: '已安排', accepted: '已安排', completed: '已记录', cancelled: '已取消' }, kitchenOrderAnchor, mealDateLabel,
+    statusLabel: orderStatusLabel, statusNames: { pending: '已安排', accepted: '已安排', completed: '已记录', cancelled: '已取消' }, kitchenOrderAnchor, mealDateLabel,
     preparationByOrder: Object.fromEntries(preparationMeals({ orders: familyOrders }, currentDay).map(order => [order.id, order])),
     orderRows: order => order.items, orderAction() {}, openAdditions() {}, openPreparation() {}, openIngredients() {}, orderRecipe: null, tab: 'activity', mealSection: 'orders', showMenu() { this.tab = 'menu'; },
   };

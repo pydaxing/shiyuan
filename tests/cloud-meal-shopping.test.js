@@ -150,7 +150,7 @@ test('unfinished packages are archived after midnight without deleting history o
   const rejected = await server.command('updateOrder', [server.orderId, 'completed'], current.revision);
   assert.equal(rejected.ok, false);
   assert.equal(rejected.code, 'INVALID');
-  assert.equal(rejected.message, '只能当天开饭');
+  assert.equal(rejected.message, '只能在安排当天记录餐食');
   const restored = await server.bootstrap();
   assert.equal(restored.revision, current.revision);
   assert.deepEqual(restored.snapshot.orders, current.snapshot.orders);

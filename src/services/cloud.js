@@ -320,7 +320,7 @@ async function applyCloudResult(input, action, operationId) {
   if (result.needsFamily) { next = emptySnapshot(); clearPrivateCache(); }
   observeFamilyDeletions(result, result.userId || cloudStatus.value.userId);
   const recoveryRequired = Boolean(pendingFamilyRecovery || pendingDeletions.length);
-  cloudStatus.value = { ...cloudStatus.value, phase: result.needsFamily ? (recoveryRequired ? 'error' : 'onboarding') : 'ready', error: recoveryRequired ? familyRecoveryError().message : '', familyRecoveryRequired: recoveryRequired, pendingDeletions: [...pendingDeletions], revision: result.revision ?? cloudStatus.value.revision, userId: result.userId || cloudStatus.value.userId, familyId: result.familyId || '', lastSyncedAt: Date.now() };
+  cloudStatus.value = { ...cloudStatus.value, phase: result.needsFamily ? (recoveryRequired ? 'error' : 'onboarding') : 'ready', error: recoveryRequired ? familyRecoveryError().message : '', familyRecoveryRequired: recoveryRequired, pendingDeletions: [...pendingDeletions], orderRecordStates: result.orderRecordStates || (changedScope || result.needsFamily ? {} : cloudStatus.value.orderRecordStates || {}), revision: result.revision ?? cloudStatus.value.revision, userId: result.userId || cloudStatus.value.userId, familyId: result.familyId || '', lastSyncedAt: Date.now() };
   if (!result.needsFamily) {
     for (const [preview, cache] of [[familyModePreview, familyAppearanceCache], [personalModePreview, personalAppearanceCache]]) {
       const cached = cache.get(cloudStatus.value.userId);

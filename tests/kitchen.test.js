@@ -93,7 +93,7 @@ test('only today can complete and rejected dates retain the meal and shopping re
         purchases: [{ id: 'purchase', orderIds: ['order', 'another'] }],
       };
       const before = structuredClone(state);
-      assert.throws(() => completeOrder(state, 'order', today), /^Error: 只能当天开饭$/);
+      assert.throws(() => completeOrder(state, 'order', today), /^Error: 只能在安排当天记录餐食$/);
       assert.deepEqual(state, before);
     }
   }

@@ -1,3 +1,4 @@
+import { orderStatusLabel } from '../src/domain/order-record-state.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -15,7 +16,6 @@ import { hasIngredientManagement } from '../src/domain/navigation.js';
 import { isPendingRecord, presentMutation } from '../src/services/mutation-feedback.js';
 
 const source = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
-const statusNames = new Function(`return ${source.match(/const statusNames = (.*);/)[1]};`)();
 const templateNodes = [];
 function collect(node) {
   if (node.type !== 1) return;
@@ -51,7 +51,7 @@ function context({ initialStatus = 'pending', fail = false, wait = Promise.resol
     inventory: [{ id: 'stock', name: '胡萝卜', quantity: 2, unit: '根' }],
     purchases: [{ id: 'purchase', name: '胡萝卜', quantity: 1, unit: '根', orderIds: ['dinner'] }],
     orders: [
-      { id: 'lunch', date: mealDate, meal: '午餐', status: initialStatus, items: hasDishes ? [{ recipe: createSeed().recipes[0], quantity: 1 }] : [] },
+      { id: 'lunch', date: mealDate, meal: '午餐', status: initialStatus, recordState: initialStatus === 'completed' ? 'recorded' : '', items: hasDishes ? [{ recipe: createSeed().recipes[0], quantity: 1 }] : [] },
       { id: 'dinner', date: today, meal: '晚餐', status: 'pending', items: [] },
       { id: 'old-cancelled', date: today, meal: '早餐', status: 'cancelled', items: [] },
     ],
@@ -90,7 +90,7 @@ function context({ initialStatus = 'pending', fail = false, wait = Promise.resol
   const perform = new Function(...Object.keys(bindings), `let orderActionRevision = 0;\n${actionSource}\nreturn orderAction;`)(...Object.values(bindings));
   const orderAction = (...args) => { task = perform(...args); return task; };
   function drawNodes() {
-    const data = { isPendingRecord, orders: kitchenOrders(state.value.orders, today), state: state.value, today, features: state.value.family.features, kitchenOrderAnchor, mealDateLabel, statusNames, orderRows: order => order.items, orderAction, orderFailure: orderFailure.value, orderSavingId: orderSavingId.value, orderActionBusy: orderActionBusy.value, openedOrderId: openedOrderId.value, openPreparation: order => redirects.push(['preparation', order.id]), preparationByOrder: Object.fromEntries(preparationMeals(state.value, today).map(order => [order.id, order])), openIngredients: bindings.openIngredients, openAdditions() {}, orderRecipe: null, tab: 'menu' };
+    const data = { isPendingRecord, orders: kitchenOrders(state.value.orders, today), state: state.value, today, features: state.value.family.features, kitchenOrderAnchor, mealDateLabel, statusLabel: orderStatusLabel, orderRows: order => order.items, orderAction, orderFailure: orderFailure.value, orderSavingId: orderSavingId.value, orderActionBusy: orderActionBusy.value, openedOrderId: openedOrderId.value, openPreparation: order => redirects.push(['preparation', order.id]), preparationByOrder: Object.fromEntries(preparationMeals(state.value, today).map(order => [order.id, order])), openIngredients: bindings.openIngredients, openAdditions() {}, orderRecipe: null, tab: 'menu' };
     return nodes(renderTemplate(data, []));
   }
   const draw = () => drawNodes().filter(node => node.props?.class?.split(' ').includes('order-card'));
@@ -214,7 +214,7 @@ for (const [initialStatus, label] of [['pending', '已安排'], ['accepted', '�
   });
 }
 
-test('opening a meal immediately moves its finished card below the remaining preparation without navigation', async () => {
+test('legacy completion moves its card below preparations without falsely claiming a diary exists', async () => {
   const kitchen = context({ initialStatus: 'accepted' });
   const before = kitchen.draw();
   await kitchen.orderAction(kitchen.order(), 'completed');
@@ -226,7 +226,7 @@ test('opening a meal immediately moves its finished card below the remaining pre
   assert.equal(after[1].key, 'lunch:completed');
   assert.equal(after[2].key, before[2].key);
   assert.match(after[1].props.class, /\bis-finished\b/);
-  assert.ok(nodes(after[1]).some(node => node.children === '已记录'));
+  assert.ok(nodes(after[1]).some(node => node.children === '历史已结束'));
 });
 
 for (const initialStatus of ['pending', 'accepted']) {

@@ -394,7 +394,7 @@ test('non-today completion is rejected before optimistic state, journal or netwo
     const app = harness({ initial });
     const task = app.queue.enqueue('updateOrder', ['order-1', 'completed']);
     assert.notEqual(task.accepted, true);
-    await assert.rejects(task, /只能当天开饭/);
+    await assert.rejects(task, /只能在安排当天记录餐食/);
     assert.deepEqual(app.view, initial);
     assert.deepEqual(app.server, initial);
     assert.deepEqual(app.requests, []);

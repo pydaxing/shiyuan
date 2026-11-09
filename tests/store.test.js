@@ -228,7 +228,7 @@ test('meal slots stay separate and completed meals reject new selection', () => 
   store.setFeature('fridge', false);
   store.updateOrder(order.id, 'accepted');
   store.updateOrder(order.id, 'completed');
-  assert.throws(() => store.submitOrder({ soup: 1 }, slot), /已经做好/);
+  assert.throws(() => store.submitOrder({ soup: 1 }, slot), /这一餐已结束/);
 });
 test('deleting dishes repairs sets while retaining submitted recipe snapshots', () => {
   resetFamilyFixture();
