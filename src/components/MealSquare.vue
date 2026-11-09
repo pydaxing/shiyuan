@@ -71,10 +71,10 @@ defineExpose({ refresh: () => load(false, true), loadMore });
 <template>
   <view class="meal-square">
     <PageHeader title="发现" action-side="left"><button class="square-record" aria-label="记下这一餐" @click="$emit('record')" hover-class="touch-feedback"><view class="square-record-icon"><AppIcon name="plus" :size="14" /></view></button></PageHeader>
-    <scroll-view v-if="active" class="square-feed-scroll" :scroll-y="!feedLocked" enhanced :show-scrollbar="false" :enable-back-to-top="true" :scroll-top="feedScrollTop" :scroll-with-animation="false" :lower-threshold="360" :refresher-enabled="refresherEnabled" :refresher-triggered="refreshing" :refresher-threshold="refreshThreshold" refresher-default-style="none" :refresher-background="NATIVE_UI_COLORS.paper" aria-label="大家的餐食，下拉可刷新" @scroll="onFeedScroll" @scrolltolower="loadMore" @refresherpulling="feedViewport.onPull" @refresherrefresh="feedViewport.onRefresh" @refresherrestore="feedViewport.stopPull" @refresherabort="feedViewport.stopPull">
+    <scroll-view v-if="active" class="square-feed-scroll" :scroll-y="!feedLocked" enhanced :show-scrollbar="false" :enable-back-to-top="true" :scroll-top="feedScrollTop" :scroll-with-animation="false" :scroll-anchoring="true" :lower-threshold="360" :refresher-enabled="refresherEnabled" :refresher-triggered="refreshing" :refresher-threshold="refreshThreshold" refresher-default-style="none" :refresher-background="NATIVE_UI_COLORS.paper" aria-label="大家的餐食，下拉可刷新" @scroll="onFeedScroll" @scrolltolower="loadMore" @refresherpulling="feedViewport.onPull" @refresherrefresh="feedViewport.onRefresh" @refresherrestore="feedViewport.stopPull" @refresherabort="feedViewport.stopPull">
     <view slot="refresher" class="community-refresher square-refresher" :style="{ height: `${refreshThreshold}px` }" role="status"><view class="community-refresh-spinner" :class="{ 'is-refreshing': refreshing }" aria-hidden="true" /><text>{{ refreshing ? '正在刷新' : pullReady ? '松开刷新' : '下拉刷新' }}</text></view>
     <view class="square-feed">
-    <view v-if="error" class="meal-state-error" role="alert"><text class="meal-error-copy">{{ error }}</text><button class="text-button" :disabled="loading" @click="retry" hover-class="touch-feedback">重试</button></view>
+    <view v-if="error && !posts.length" class="meal-state-error" role="alert"><text class="meal-error-copy">{{ error }}</text><button class="text-button" :disabled="loading" @click="retry" hover-class="touch-feedback">重试</button></view>
     <view v-if="loaded && !posts.length && !cursor && !error" class="meal-square-empty">
       <view class="meal-empty-art" aria-hidden="true"><view class="meal-empty-plate"><AppIcon name="meal-set" :size="42" /></view><view class="meal-empty-heart">♡</view></view>
       <text class="meal-empty-title">餐桌还空着，等你来添一道</text>
@@ -82,8 +82,11 @@ defineExpose({ refresh: () => load(false, true), loadMore });
       <button class="primary-button meal-empty-record" @click="$emit('record')" hover-class="touch-feedback"><AppIcon name="camera-inverse" :size="18" /><text>记下这一餐</text></button>
     </view>
     <MealPostCard v-for="(post, index) in posts" :key="post.id" :post="post" :now="publicationNow" feed :last="index === posts.length - 1" :manageable="false" :busy="Boolean(busy[post.id])" @like="change('setMealLike', post, { selected: $event })" @react="change('setMealReaction', post, $event)" />
-    <MealListEnd v-if="loading && !refreshing" loading>加载中…</MealListEnd>
-    <MealListEnd v-else-if="posts.length && !loading && !cursor">已经看完啦</MealListEnd>
+    <view v-if="posts.length || loading" class="square-feed-end">
+      <view v-if="error" class="meal-state-error" role="alert"><text class="meal-error-copy">{{ error }}</text><button class="text-button" :disabled="loading" @click="retry" hover-class="touch-feedback">重试</button></view>
+      <MealListEnd v-else-if="loading && !refreshing" loading>加载中…</MealListEnd>
+      <MealListEnd v-else-if="posts.length && !loading && !cursor">已经看完啦</MealListEnd>
+    </view>
     </view>
     </scroll-view>
   </view>
@@ -94,6 +97,7 @@ defineExpose({ refresh: () => load(false, true), loadMore });
 .square-refresher { transform: none; }
 @media (max-width: 760px) { .meal-square { --square-bottom-inset: calc(var(--nav-height) + env(safe-area-inset-bottom)); } }
 .square-record { display: flex; align-items: center; justify-content: flex-start; width: 44px; height: 44px; padding: 0; margin: 0 0 0 calc(16px - var(--page-gutter)); background: transparent; color: var(--muted); }
+.square-feed-end { min-height: 60px; overflow-anchor: none; }
 .square-feed { box-sizing: border-box; min-height: 100%; padding: 0 0 20px; }
 .meal-state-error { display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--danger); font-size: var(--type-meta); padding: 12px; background: var(--danger-light); border-radius: var(--radius-card); }
 .meal-error-copy { flex: 1; }

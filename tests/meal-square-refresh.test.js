@@ -294,3 +294,53 @@ test('opening a discover recipe locks the feed without destroying its owning car
   assert.equal(f.props.active, false, 'actual tab departure still destroys native refresher');
   assert.equal(f.view.refreshing.value, false);
 });
+
+
+test('background head refresh retains older pages and their cursor without reordering existing cards', async context => {
+  let now = 1000;
+  context.mock.method(Date, 'now', () => now);
+  const f = fixture(context);
+  const post = id => ({ id, visibility: 'public' });
+  f.calls[0].resolve({ posts: [post('first'), post('second')], cursor: 'page-2' }); await settle();
+  const more = f.view.loadMore();
+  f.calls[1].resolve({ posts: [post('third')], cursor: 'page-3' }); await more;
+  f.view.feedViewport.onScroll({ detail: { scrollTop: 1400 } });
+  now += 31000;
+  const head = f.feed.refreshIfStale();
+  assert.deepEqual(f.feed.posts.value.map(p => p.id), ['first', 'second', 'third']);
+  f.calls[2].resolve({ posts: [post('new'), { ...post('first'), likeCount: 2 }, post('second')], cursor: 'new-page-2' }); await head;
+  assert.deepEqual(f.feed.posts.value.map(p => p.id), ['new', 'first', 'second', 'third']);
+  assert.equal(f.feed.posts.value[1].likeCount, 2);
+  assert.equal(f.feed.cursor.value, 'page-3');
+  const next = f.view.loadMore();
+  assert.equal(f.calls[3].args.cursor, 'page-3');
+  f.calls[3].resolve({ posts: [post('fourth')], cursor: null }); await next;
+  assert.equal(f.feed.posts.value.length, 5);
+  const pull = f.view.feedViewport.onRefresh(); await settle();
+  f.calls[4].resolve({ posts: [post('new')], cursor: 'fresh-next' }); await pull;
+  assert.deepEqual(f.feed.posts.value.map(p => p.id), ['new']);
+  assert.equal(f.feed.cursor.value, 'fresh-next');
+});
+
+test('failed background head retry preserves the accumulated pages and terminal cursor', async context => {
+  let now = 1000;
+  context.mock.method(Date, 'now', () => now);
+  const f = fixture(context);
+  f.calls[0].resolve({ posts: [{ id: 'first', visibility: 'public' }], cursor: 'next' }); await settle();
+  const more = f.view.loadMore();
+  f.calls[1].resolve({ posts: [{ id: 'last', visibility: 'public' }], cursor: null }); await more;
+  now += 31000;
+  const head = f.feed.refreshIfStale();
+  f.calls[2].reject(new Error('暂时断网')); await head;
+  const retry = f.feed.retry();
+  f.calls[3].resolve({ posts: [{ id: 'first', visibility: 'public' }], cursor: 'next' }); await retry;
+  assert.deepEqual(f.feed.posts.value.map(p => p.id), ['first', 'last']);
+  assert.equal(f.feed.cursor.value, null);
+});
+
+test('discover retains a footer slot and enables native scroll anchoring for late image sizing', () => {
+  const source = read('../src/components/MealSquare.vue');
+  assert.match(source, /:scroll-anchoring="true"/);
+  assert.match(source, /class="square-feed-end">[\s\S]*?<MealListEnd/);
+  assert.match(source, /\.square-feed-end \{ min-height: 60px; overflow-anchor: none;/);
+});

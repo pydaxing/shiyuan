@@ -40,9 +40,9 @@ export function useMealPosts(kind, enabled) {
   const canShow = post => Boolean(post?.id) && !deletions.value.has(post.id) && post.status !== 'deleted' && (kind === 'mine' || post.visibility === 'public');
   const reactionValues = post => ({ liked: post.liked, likeCount: post.likeCount, ...(Array.isArray(post.likeUsers) ? { likeUsers: post.likeUsers } : {}), reactions: post.reactions });
   function invalidatePost(id) { postVersions.set(id, (postVersions.get(id) || 0) + 1); optimistic.delete(id); }
-  async function readPage({ more, refresh, pageCursor }) {
+  async function readPage({ more, refresh, pageCursor, preservePages = false }) {
     if (disposed || (loading.value && !refresh) || (more && !pageCursor)) return;
-    if (!cloudMode || cloudStatus.value.phase !== 'ready') { failedRead = { more, refresh, pageCursor }; error.value = '连接微信云端后即可查看餐食记录'; return; }
+    if (!cloudMode || cloudStatus.value.phase !== 'ready') { failedRead = { more, refresh, pageCursor, preservePages }; error.value = '连接微信云端后即可查看餐食记录'; return; }
     const request = ++revision, context = scope.value;
     loading.value = true; error.value = ''; failedRead = null;
     try {
@@ -52,14 +52,25 @@ export function useMealPosts(kind, enabled) {
       const hiddenIds = new Set(result.posts.filter(post => post?.id && !canShow(post)).map(post => post.id));
       hiddenIds.forEach(invalidatePost);
       const incoming = result.posts.filter(canShow).map(post => optimistic.has(post.id) ? { ...post, ...reactionValues(optimistic.get(post.id)) } : post);
-      posts.value = [...new Map([...(more ? posts.value.filter(post => !hiddenIds.has(post.id)) : []), ...incoming].filter(canShow).map(post => [post.id, post])).values()];
+      // A background head check must not discard later pages while the reader
+      // is scrolling. Existing cards keep their order; only genuinely new posts
+      // are prepended. Explicit pull-to-refresh still replaces the whole feed.
+      const retained = posts.value.filter(post => !hiddenIds.has(post.id) && canShow(post));
+      if (preservePages) {
+        const updates = new Map(incoming.map(post => [post.id, post]));
+        const known = new Set(retained.map(post => post.id));
+        posts.value = [...incoming.filter(post => !known.has(post.id)), ...retained.map(post => updates.get(post.id) || post)];
+      } else {
+        posts.value = [...new Map([...(more ? retained : []), ...incoming].map(post => [post.id, post])).values()];
+      }
       diaryManagementVersion.value = result.diaryManagementVersion === 1 ? 1 : 0;
       diaryArchiveComplete.value = result.diaryArchiveComplete === true;
       suppressedOrderIds.value = [...new Set([...(more ? suppressedOrderIds.value : []), ...(result.suppressedOrderIds || [])])];
-      cursor.value = result.cursor; loaded.value = true; lastLoadedAt = Date.now();
+      if (!preservePages) cursor.value = result.cursor;
+      loaded.value = true; lastLoadedAt = Date.now();
     } catch (failure) {
       if (!disposed && request === revision && context === scope.value) {
-        failedRead = { more, refresh, pageCursor };
+        failedRead = { more, refresh, pageCursor, preservePages };
         error.value = mealError(failure, '餐食加载失败，请重试');
       }
     }
@@ -67,7 +78,11 @@ export function useMealPosts(kind, enabled) {
   }
   function load(more = false, refresh = false) { return readPage({ more, refresh, pageCursor: more ? cursor.value : null }); }
   function retry() { if (!loading.value) return failedRead ? readPage(failedRead) : load(false, true); }
-  function refreshIfStale() { if (!loading.value && (!loaded.value || Date.now() - lastLoadedAt > 30000)) return load(); }
+  function refreshIfStale() {
+    if (!loading.value && (!loaded.value || Date.now() - lastLoadedAt > 30000)) {
+      return readPage({ more: false, refresh: false, pageCursor: null, preservePages: kind === 'public' && loaded.value });
+    }
+  }
   function likeValue(post, selected) {
     const others = (post.likeUsers || []).filter(user => !user.self);
     return { ...post, liked: selected,
