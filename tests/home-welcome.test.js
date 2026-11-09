@@ -195,6 +195,8 @@ test('completed meals remain visible beside cancelled records so occupied slots 
   assert.equal(nodes.some(node => node.type === 'HomeWelcome'), false);
   assert.equal(withClass(nodes, 'kitchen-continue').length, 0);
   assert.equal(withClass(nodes, 'order-card').length, 2);
+  assert.equal(withClass(nodes, 'kitchen-record-title').length, 0);
+  assert.equal(withClass(nodes, 'is-cancelled-summary').length, 2);
   const history = nodes.find(node => node.type === 'MealTimeline');
   assert.equal(history, undefined, 'history only renders in its separate popup');
   assert.deepEqual(nodes.filter(node => node.type === 'OrderActionMenu').map(node => node.props.status).sort(), ['cancelled', 'completed']);

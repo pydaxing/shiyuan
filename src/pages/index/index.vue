@@ -441,9 +441,8 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
             <HomeWelcome :title="kitchenIntro.title" primary-label="看看菜单" primary-icon="menu-inverse" @primary="showMenu" />
           </view>
           <view v-else-if="kitchenIntro.mode === 'idle' && !kitchenIntro.recordTitle" class="kitchen-continue"><text class="kitchen-idle-title">没有安排</text></view>
-          <text v-if="kitchenIntro.recordTitle" class="kitchen-record-title" role="heading" aria-level="2">{{ kitchenIntro.recordTitle }}</text>
           <view v-for="(order, orderIndex) in orders" :key="order.id + ':' + order.status" :id="kitchenOrderAnchor(orderIndex)" class="kitchen-order">
-          <view :key="order.id + ':' + order.status" class="order-card" :class="{ 'is-finished': ['completed', 'cancelled'].includes(order.status), 'is-cancelled-summary': order.status === 'cancelled' }">
+          <view :key="order.id + ':' + order.status" class="order-card" :class="{ 'is-finished': ['completed', 'cancelled'].includes(order.status), 'is-cancelled-summary': ['completed', 'cancelled'].includes(order.status) }">
             <view class="section-line compact order-card-heading">
               <view class="order-schedule"><text class="order-tag order-date-tag">{{ mealDateLabel(order.date, today) }}</text><text class="order-tag order-meal-tag">{{ order.meal }}</text><text class="order-tag order-status" :class="order.status">{{ statusNames[order.status] }}</text></view>
               <OrderActionMenu :label="`${mealDateLabel(order.date, today)}${order.meal}`" :status="order.status" :opened="openedOrderId === order.id" :busy="orderActionBusy" :has-dishes="order.items.length > 0" @activate="openedOrderId = order.id" @close="openedOrderId === order.id && (openedOrderId = '')" @cancel="orderAction(order, 'cancelled')" @restore="orderAction(order, 'accepted')" @remove="orderAction(order, 'deleted')" />

@@ -1761,7 +1761,7 @@ button.nav-item.touch-feedback, button.nav-item:active:not([disabled]), .content
 /* Cancelled meals remain readable, compact records with their existing actions. */
 .kitchen-order .order-card.is-cancelled-summary { --ink: #858c90; --green: #858e93; --muted: #858d91; --meal: #908b95; --danger: #858d91; background: var(--white); }
 .kitchen-order .order-card.is-cancelled-summary::after { display: none; }
-.is-cancelled-summary .order-status.cancelled { background: var(--paper); color: var(--muted); }
+.is-cancelled-summary .order-status.cancelled, .is-cancelled-summary .order-status.completed { background: var(--paper); color: var(--muted); }
 .is-cancelled-summary .meal-dish-row { --food-thumbnail-width: 56px; }
 .is-cancelled-summary .meal-dish-photo { filter: saturate(.55); opacity: .85; }
 .is-cancelled-summary .meal-dish-open { min-height: 44px; }
