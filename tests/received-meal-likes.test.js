@@ -2,11 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import * as Vue from 'vue';
+import { createPersistentCache } from '../src/services/persistent-cache.js';
 const source = readFileSync(new URL('../src/composables/useReceivedMealLikes.js', import.meta.url), 'utf8');
 const settle = async () => { await Vue.nextTick(); await Promise.resolve(); await Vue.nextTick(); };
-function harness(t) {
+function harness(t, storage = new Map()) {
   const calls = [], stopped = [], space = Vue.ref('family');
-  const modules = { ...Vue, cloudMode: true, cloudStatus: Vue.ref({ userId: 'alice', familyId: 'family', phase: 'ready' }), mealStatsVersion: Vue.ref(0), onUnmounted: f => stopped.push(f), invokeCloud: (action, args) => new Promise((resolve, reject) => calls.push({ action, args, resolve, reject })) };
+  const modules = { ...Vue, cloudMode: true, cloudEnvironment: 'test-env', cloudFunction: 'test-function', createPersistentCache: (key, options) => createPersistentCache(key, { ...options, platform: () => ({ getStorageSync: k => storage.get(k), setStorageSync: (k, v) => storage.set(k, v), removeStorageSync: k => storage.delete(k) }) }), cloudStatus: Vue.ref({ userId: 'alice', familyId: 'family', phase: 'ready' }), mealStatsVersion: Vue.ref(0), onUnmounted: f => stopped.push(f), invokeCloud: (action, args) => new Promise((resolve, reject) => calls.push({ action, args, resolve, reject })) };
   const code = source.replace(/import \{([^}]+)\} from '[^']+';/g, 'const {$1} = modules;').replace('export function', 'function');
   const scope = Vue.effectScope();
   const use = new Function('modules', `${code}\nreturn useReceivedMealLikes;`)(modules);
@@ -48,4 +49,27 @@ test('unavailable statistics never masquerade as zero', async t => {
   assert.equal(f.api.count.value, null);
   assert.equal(f.api.mealCount.value, null);
   assert.ok(f.api.error.value);
+});
+
+test('confirmed totals survive a new runtime and stay visible while refreshing or offline', async t => {
+  const storage = new Map();
+  const first = harness(t, storage);
+  first.calls[0].resolve({ spaceId: 'family', receivedLikes: 17, mealCount: 9 }); await settle();
+  const restarted = harness(t, storage);
+  assert.equal(restarted.api.count.value, 17);
+  assert.equal(restarted.api.mealCount.value, 9);
+  assert.equal(restarted.calls.length, 1, 'cached totals still revalidate');
+  restarted.calls[0].reject(new Error('offline')); await settle();
+  assert.equal(restarted.api.count.value, 17);
+  assert.equal(restarted.api.mealCount.value, 9);
+  restarted.modules.cloudStatus.value.userId = 'bob'; await settle();
+  assert.equal(restarted.api.count.value, null, 'another user never sees cached totals');
+  assert.equal(restarted.api.mealCount.value, null);
+  restarted.calls[1].resolve({ spaceId: 'family', receivedLikes: 2, mealCount: 1 }); await settle();
+  restarted.modules.cloudStatus.value.userId = 'alice'; await settle();
+  assert.equal(restarted.api.count.value, 17);
+  assert.equal(restarted.api.mealCount.value, 9);
+  restarted.calls[2].resolve({ spaceId: 'family', receivedLikes: 18, mealCount: 10 }); await settle();
+  assert.equal(restarted.api.count.value, 18);
+  assert.equal(restarted.api.mealCount.value, 10);
 });

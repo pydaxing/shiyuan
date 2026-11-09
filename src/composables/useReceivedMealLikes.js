@@ -1,9 +1,15 @@
 import { computed, onUnmounted, ref, watch } from 'vue';
-import { cloudMode, cloudStatus, invokeCloud, mealStatsVersion } from '../services/cloud.js';
+import { cloudMode, cloudStatus, cloudEnvironment, cloudFunction, invokeCloud, mealStatsVersion } from '../services/cloud.js';
 
-// Memory only and isolated by account. Both modes display the same total;
-// confirmed workspace still authorizes each request.
-const cache = new Map();
+import { createPersistentCache } from '../services/persistent-cache.js';
+
+// Display the last server-confirmed totals immediately after a restart.
+// Account and cloud environment isolate the cache; each visit still revalidates.
+const cache = createPersistentCache(`shiyuan-user-meal-stats-v1-${cloudEnvironment}-${cloudFunction}`, {
+  maxEntries: 12, maxChars: 6000, maxAge: Number.MAX_SAFE_INTEGER,
+  validate: value => Number.isSafeInteger(value?.receivedLikes) && value.receivedLikes >= 0
+    && (value.mealCount === null || (Number.isSafeInteger(value.mealCount) && value.mealCount >= 0)),
+});
 export function useReceivedMealLikes(spaceId) {
   const count = ref(null), mealCount = ref(null), error = ref('');
   let request = 0, disposed = false;
@@ -14,7 +20,7 @@ export function useReceivedMealLikes(spaceId) {
     count.value = cached?.receivedLikes ?? null;
     mealCount.value = cached?.mealCount ?? null;
     error.value = '';
-    if (!cloudMode || cloudStatus.value.phase !== 'ready' || !id || id !== cloudStatus.value.familyId) return;
+    if (!cloudMode || !cloudStatus.value.userId || cloudStatus.value.phase !== 'ready' || !id) return;
     try {
       const result = await invokeCloud('mealReceivedLikes', { spaceId: id, userSummaryVersion: 1 });
       if (disposed || token !== request || key !== scope.value) return;
