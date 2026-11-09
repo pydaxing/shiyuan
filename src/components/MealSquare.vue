@@ -43,6 +43,15 @@ const feedViewport = useCommunityFeedViewport({
   onError: failure => notify(failure.message || '刷新暂时没成功，请再试试'),
 });
 const { scrollTop: feedScrollTop, refreshing, pullReady, refreshThreshold, refresherEnabled } = feedViewport;
+// A hidden native scroll-view can retain its refresher offset even after
+// triggered becomes false. Recreate only an interrupted pull, keeping feed data.
+const feedViewportKey = ref(0);
+watch(() => props.active, active => {
+  if (!active && (refreshing.value || pullReady.value)) {
+    void feedViewport.reset();
+    feedViewportKey.value += 1;
+  }
+}, { flush: 'sync' });
 let pendingScopeReset = false, scopeResetSequence = 0;
 async function resetScopeViewport() {
   const token = ++scopeResetSequence;
@@ -65,7 +74,7 @@ defineExpose({ refresh: () => load(false, true), loadMore });
 <template>
   <view class="meal-square">
     <PageHeader title="发现" action-side="left"><button class="square-record" aria-label="记下这一餐" @click="$emit('record')" hover-class="touch-feedback"><view class="square-record-icon"><AppIcon name="plus" :size="14" /></view></button></PageHeader>
-    <scroll-view class="square-feed-scroll" :scroll-y="!feedLocked" enhanced :show-scrollbar="false" :enable-back-to-top="true" :scroll-top="feedScrollTop" :scroll-with-animation="false" :lower-threshold="360" :refresher-enabled="refresherEnabled" :refresher-triggered="refreshing" :refresher-threshold="refreshThreshold" refresher-default-style="none" :refresher-background="NATIVE_UI_COLORS.paper" aria-label="大家的餐食，下拉可刷新" @scroll="onFeedScroll" @scrolltolower="loadMore" @refresherpulling="feedViewport.onPull" @refresherrefresh="feedViewport.onRefresh" @refresherrestore="feedViewport.stopPull" @refresherabort="feedViewport.stopPull">
+    <scroll-view :key="feedViewportKey" class="square-feed-scroll" :scroll-y="!feedLocked" enhanced :show-scrollbar="false" :enable-back-to-top="true" :scroll-top="feedScrollTop" :scroll-with-animation="false" :lower-threshold="360" :refresher-enabled="refresherEnabled" :refresher-triggered="refreshing" :refresher-threshold="refreshThreshold" refresher-default-style="none" :refresher-background="NATIVE_UI_COLORS.paper" aria-label="大家的餐食，下拉可刷新" @scroll="onFeedScroll" @scrolltolower="loadMore" @refresherpulling="feedViewport.onPull" @refresherrefresh="feedViewport.onRefresh" @refresherrestore="feedViewport.stopPull" @refresherabort="feedViewport.stopPull">
     <view slot="refresher" class="community-refresher square-refresher" :style="{ height: `${refreshThreshold}px` }" role="status"><view class="community-refresh-spinner" :class="{ 'is-refreshing': refreshing }" aria-hidden="true" /><text>{{ refreshing ? '正在刷新' : pullReady ? '松开刷新' : '下拉刷新' }}</text></view>
     <view class="square-feed">
     <view v-if="error" class="meal-state-error" role="alert"><text class="meal-error-copy">{{ error }}</text><button class="text-button" :disabled="loading" @click="retry" hover-class="touch-feedback">重试</button></view>

@@ -231,3 +231,23 @@ test('pull supersedes background loading without waiting and late background dat
   assert.equal(f.feed.cursor.value, null);
   assert.equal(f.feed.loading.value, false);
 });
+
+
+test('leaving during refresh drops the native pull offset and late completion cannot stop a new pull', async context => {
+  const f = fixture(context);
+  f.calls[0].resolve({ posts: [{ id: 'visible', visibility: 'public' }], cursor: null }); await settle();
+  const oldRefresh = f.view.feedViewport.onRefresh(); await settle();
+  f.props.active = false;
+  assert.equal(f.view.refreshing.value, false);
+  assert.equal(f.view.pullReady.value, false);
+  assert.equal(f.view.feedViewportKey.value, 1);
+  assert.equal(f.feed.posts.value[0].id, 'visible');
+  f.props.active = true; await settle();
+  const newRefresh = f.view.feedViewport.onRefresh(); await settle();
+  f.calls[1].resolve({ posts: [{ id: 'old-result', visibility: 'public' }], cursor: null }); await oldRefresh;
+  assert.equal(f.view.refreshing.value, true);
+  f.calls.at(-1).resolve({ posts: [{ id: 'fresh', visibility: 'public' }], cursor: null }); await newRefresh;
+  assert.equal(f.view.refreshing.value, false);
+  f.props.active = false;
+  assert.equal(f.view.feedViewportKey.value, 1, 'normal navigation keeps the scroll view and position');
+});
