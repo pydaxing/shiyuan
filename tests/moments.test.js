@@ -5,7 +5,7 @@ import { isMomentsPreview, momentsCard, enableMomentsMenu } from '../src/service
 
 test('timeline payload never forwards private or invitation query parameters', () => {
   assert.deepEqual(momentsCard({ token: 'secret', familyId: 'family' }), {
-    title: '食愿小灶 · 把每一餐过成喜欢的日常', query: '', imageUrl: '/static/tomato.png',
+    title: '食愿小灶 · 把每一餐过成喜欢的日常', query: '', imageUrl: '/static/brand-shiyuan.png',
   });
 });
 test('only actual single-page scene suppresses the authenticated app lifecycle', () => {

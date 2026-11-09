@@ -10,7 +10,7 @@ export function isMomentsPreview(options) {
 
 export function momentsCard() {
   // Do not inherit account, invitation or private workspace query parameters.
-  return { title: '食愿小灶 · 把每一餐过成喜欢的日常', query: '', imageUrl: '/static/tomato.png' };
+  return { title: '食愿小灶 · 把每一餐过成喜欢的日常', query: '', imageUrl: '/static/brand-shiyuan.png' };
 }
 
 export function enableMomentsMenu() {
