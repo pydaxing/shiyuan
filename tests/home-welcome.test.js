@@ -52,7 +52,8 @@ function menuContext({ entries = [], search = '', family = {}, currentDay = toda
 }
 
 function kitchenContext(familyOrders, currentDay = today) {
-  const orders = kitchenOrders(familyOrders, currentDay).filter(order => order.status !== 'completed');
+  const declaration = indexSource.match(/const orders = computed\(.*\);/)[0];
+  const orders = new Function('computed', 'state', 'today', 'completedMealIds', 'kitchenOrders', `${declaration}; return orders.value;`)(Vue.computed, Vue.ref({ orders: familyOrders }), Vue.ref(currentDay), Vue.ref([]), kitchenOrders);
   return {
     isPendingRecord: () => false, orders, kitchenIntro: kitchenWelcome(orders, currentDay), todayLabel: homeDateLabel(currentDay), today: currentDay, DEFAULT_FAMILY_COVER,
     state: { orders: familyOrders, family: { cover: 'cloud://family-cover', members: [] } }, features: { fridge: false, shopping: false },
@@ -187,16 +188,16 @@ test('a kitchen with only out-of-window records displays the full empty state fo
   assert.equal(kitchenContext([]).kitchenIntro.mode, 'empty');
 });
 
-test('cancelled meal cards remain restorable while completed meals leave the meal list', () => {
+test('completed meals remain visible beside cancelled records so occupied slots have a destination', () => {
   const source = Object.freeze([Object.freeze(meal('completed')), Object.freeze(meal('cancelled'))]);
   const context = kitchenContext(source);
   const nodes = allNodes(renderKitchen(context, []));
   assert.equal(nodes.some(node => node.type === 'HomeWelcome'), false);
-  assert.equal(withClass(nodes, 'kitchen-continue').length, 1);
-  assert.equal(withClass(nodes, 'order-card').length, 1);
+  assert.equal(withClass(nodes, 'kitchen-continue').length, 0);
+  assert.equal(withClass(nodes, 'order-card').length, 2);
   const history = nodes.find(node => node.type === 'MealTimeline');
   assert.equal(history, undefined, 'history only renders in its separate popup');
-  assert.equal(nodes.find(node => node.type === 'OrderActionMenu').props.status, 'cancelled');
+  assert.deepEqual(nodes.filter(node => node.type === 'OrderActionMenu').map(node => node.props.status).sort(), ['cancelled', 'completed']);
   assert.equal(source.length, 2);
 });
 

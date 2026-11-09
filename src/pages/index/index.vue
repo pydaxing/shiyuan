@@ -176,7 +176,7 @@ const menuEntries = computed(() => [
   }),
   ...state.value.recipes.map((recipe) => ({ ...recipe, key: recipe.id, kind: 'dish', recipes: [recipe], label: recipe.category, originLabel: isUnchangedCommunityRecipe(recipe, state.value.posts) ? '美食' : '自建' })),
 ]);
-const orders = computed(() => kitchenOrders(state.value.orders, today.value).filter(order => order.status !== 'completed' && !completedMealIds.value.includes(order.id)));
+const orders = computed(() => kitchenOrders(state.value.orders.map(order => completedMealIds.value.includes(order.id) ? { ...order, status: 'completed' } : order), today.value));
 const kitchenIntro = computed(() => kitchenWelcome(orders.value, today.value));
 watch(orders, (items) => { if (!items.some(order => order.id === openedOrderId.value)) openedOrderId.value = ''; });
 const kitchenFocus = useKitchenFocus(orders, computed(() => tab.value === 'activity'), sheetOpen);
@@ -189,7 +189,8 @@ const { cart, note, dirty: cartDirty } = mealDraft;
 const cartItems = computed(() => Object.keys(cart.value).map((key) => menuEntries.value.find((entry) => entry.key === key)).filter(Boolean));
 const cartRows = computed(() => mealDishRows(cartItems.value.flatMap((entry) => entry.recipes.map((recipe) => ({ recipe }))), cartItems.value.map((entry) => ({ ...entry, recipeIds: entry.recipes.map((recipe) => recipe.id) }))));
 const dishCount = computed(() => cartRows.value.length);
-const mealClosed = computed(() => !currentOrder.value && checkoutOrders.value.some((order) => order.status === 'completed'));
+const completedOrder = computed(() => checkoutOrders.value.find(order => order.status === 'completed'));
+const mealClosed = computed(() => !currentOrder.value && Boolean(completedOrder.value));
 const checkout = computed(() => checkoutPresentation({ hasMeal: Boolean(meal.value), closed: mealClosed.value, status: currentOrder.value?.status, hasSelection: Boolean(currentSelection.value), hasOrder: Boolean(currentOrder.value), dirty: cartDirty.value, dishCount: dishCount.value }));
 watch([cart, note, date, meal], () => { submitError.value = ''; });
 const statusNames = { pending: '已安排', accepted: '已安排', completed: '已开饭', cancelled: '已取消' };
@@ -439,7 +440,7 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
           <view v-if="kitchenIntro.mode === 'empty'" class="kitchen-intro is-empty">
             <HomeWelcome :title="kitchenIntro.title" primary-label="看看菜单" primary-icon="menu-inverse" @primary="showMenu" />
           </view>
-          <view v-else-if="kitchenIntro.mode === 'idle'" class="kitchen-continue"><text class="kitchen-idle-title">没有安排</text></view>
+          <view v-else-if="kitchenIntro.mode === 'idle' && !kitchenIntro.recordTitle" class="kitchen-continue"><text class="kitchen-idle-title">没有安排</text></view>
           <text v-if="kitchenIntro.recordTitle" class="kitchen-record-title" role="heading" aria-level="2">{{ kitchenIntro.recordTitle }}</text>
           <view v-for="(order, orderIndex) in orders" :key="order.id + ':' + order.status" :id="kitchenOrderAnchor(orderIndex)" class="kitchen-order">
           <view :key="order.id + ':' + order.status" class="order-card" :class="{ 'is-finished': ['completed', 'cancelled'].includes(order.status), 'is-cancelled-summary': order.status === 'cancelled' }">
@@ -495,7 +496,7 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
     <AddDishesSheet v-if="addingOrderId" :order="addingOrder" :entries="menuEntries" :member-id="state.activeMemberId" :today="today" :saving="additionSaving" :error="additionError" @close="closeAdditions" @save="saveAdditions" />
     <Sheet v-if="cartOpen" page variant="checkout" title="安排" @close="cartOpen = false">
       <view class="checkout-cards">
-        <view class="checkout-card checkout-schedule"><MealBar :meal-error="mealRequired && !meal" :date="date" :meal="meal" :today="today" @update:date="updateMealSlot('date', $event)" @update:meal="updateMealSlot('meal', $event)" /><view v-if="checkout.tip" class="checkout-tip" :class="{ warning: checkout.warning }" role="status"><template v-if="checkout.action === 'occupied'"><text>这一餐已安排，</text><button role="button" class="checkout-view-link" @click="revealOrder(currentOrder?.id)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="checkout-view-label">去看看</text><view class="checkout-view-arrow" aria-hidden="true" /></button></template><text v-else>{{ checkout.tip }}</text></view></view>
+        <view class="checkout-card checkout-schedule"><MealBar :meal-error="mealRequired && !meal" :date="date" :meal="meal" :today="today" @update:date="updateMealSlot('date', $event)" @update:meal="updateMealSlot('meal', $event)" /><view v-if="checkout.tip" class="checkout-tip" :class="{ warning: checkout.warning }" role="status"><template v-if="checkout.action === 'occupied' || checkout.action === 'blocked'"><text>{{ checkout.action === 'blocked' ? '这一餐已开饭，' : '这一餐已安排，' }}</text><button role="button" class="checkout-view-link" @click="revealOrder(currentOrder?.id || completedOrder?.id)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><text class="checkout-view-label">去看看</text><view class="checkout-view-arrow" aria-hidden="true" /></button></template><text v-else>{{ checkout.tip }}</text></view></view>
         <view class="checkout-card checkout-dishes"><view class="checkout-card-heading"><text class="subheading">已选 {{ dishCount }} 道菜</text><button role="button" class="text-button" @click="$feedback(); cartOpen = false" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="plus" :size="16" />继续选菜</button></view><MealDishList v-if="dishCount" :rows="cartRows" :posts="state.posts" removable @open="orderRecipe = $event" @remove="removeCartDish" /><text v-else class="checkout-empty">还没有选菜</text></view>
         <view class="checkout-card checkout-note"><FormField multiline v-model="note" field-class="textarea short" placeholder="给大厨的备注" placeholder-style="font-size: 15px; line-height: 22px; font-weight: 400;" maxlength="200" aria-label="安排备注" /></view>
       </view>

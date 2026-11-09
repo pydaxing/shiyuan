@@ -196,3 +196,16 @@ test('checkout uses three spaced cards without detached hints or silent no-chang
   }
   assert.equal(checkoutPresentation({ hasMeal: true, dishCount: 1 }).action, 'submit');
 });
+
+
+test('completed slot warning links to its retained arrangement without restoring a diary', () => {
+  const source = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
+  assert.match(source, /checkout.action === 'occupied' \|\| checkout.action === 'blocked'/);
+  assert.match(source, /revealOrder\(currentOrder\?\.id \|\| completedOrder\?\.id\)/);
+  const action = source.slice(source.indexOf('function revealOrder('), source.indexOf('function closeAdditions('));
+  const calls = [], cartOpen = ref(true), tab = ref('menu');
+  new Function('dismissFocusedKeyboard', 'cartOpen', 'tab', 'kitchenFocus', `${action}; revealOrder('completed-breakfast');`)(() => {}, cartOpen, tab, { focus: id => calls.push(id) });
+  assert.equal(cartOpen.value, false);
+  assert.equal(tab.value, 'activity');
+  assert.deepEqual(calls, ['completed-breakfast']);
+});
