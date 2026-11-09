@@ -5,7 +5,7 @@ import { imageVersion } from '../domain/image-variants.js';
 import { imageFrameStyle } from '../domain/image-crop.js';
 import { useSheetContentResize } from '../composables/useSheetSizing.js';
 import { afterNativeRender } from '../composables/nativeRender.js';
-const props = defineProps({ src: String, mode: { type: String, default: 'aspectFill' }, variant: { type: String, default: 'card' }, round: Boolean, thumbnail: Boolean, avatar: Boolean, fallback: String });
+const props = defineProps({ src: String, mode: { type: String, default: 'aspectFill' }, variant: { type: String, default: 'card' }, aspectRatio: Number, round: Boolean, thumbnail: Boolean, avatar: Boolean, fallback: String });
 const emit = defineEmits(['natural-size']);
 const resizeSheet = useSheetContentResize(() => props.mode === 'widthFix');
 const sheetReady = inject('sheetReady', null);
@@ -16,7 +16,8 @@ const retrying = ref(false);
 const lastImage = ref('');
 const displayedImage = ref('');
 const naturalRatio = ref(0);
-const frameStyle = computed(() => props.mode === 'widthFix' ? imageFrameStyle(naturalRatio.value) : {});
+const frameRatio = computed(() => naturalRatio.value || props.aspectRatio || 0);
+const frameStyle = computed(() => props.mode === 'widthFix' ? imageFrameStyle(frameRatio.value) : {});
 let sequence = 0;
 let automaticRetries = 0;
 let brokenFile = false;
@@ -126,7 +127,7 @@ onUnmounted(() => { disposed = true; sequence += 1; observer?.disconnect(); });
 </script>
 
 <template>
-  <view class="lazy-photo" :class="{ 'natural-photo': mode === 'widthFix', 'sized-photo': mode === 'widthFix' && naturalRatio, 'round-photo': round, 'thumbnail-photo': thumbnail, 'has-fallback': fallback || avatar }" :style="frameStyle">
+  <view class="lazy-photo" :class="{ 'natural-photo': mode === 'widthFix', 'sized-photo': mode === 'widthFix' && frameRatio, 'round-photo': round, 'thumbnail-photo': thumbnail, 'has-fallback': fallback || avatar }" :style="frameStyle">
     <template v-if="coverLayers.length">
       <image v-for="layer in coverLayers" :key="layer" class="lazy-photo-image" :src="layer" :mode="mode" :lazy-load="false" :style="{ opacity: displayedImage && layer !== displayedImage ? 0 : 1 }" @load="layer === image && imageLoaded($event)" @error="layer === image && imageError($event)" />
     </template>

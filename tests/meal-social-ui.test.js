@@ -573,11 +573,15 @@ test('successful sharing closes the draft and refreshes both owner history and p
   const calls = [], tab = Vue.ref('menu'), mealPublishing = Vue.ref(true), mealShareOrder = Vue.ref({id:'order'}), mealSection = Vue.ref('orders');
   const mealSquare = Vue.ref({ refresh: () => calls.push('square') });
   const mealTimeline = Vue.ref({ refresh: () => calls.push('diary') });
-  const save = new Function('publicFeed', 'diaryFeed', 'tab', 'mealPublishing', 'mealShareOrder', 'mealSection', 'mealSquare', 'mealTimeline', 'nextTick', 'notify', 'openMealHistory', 'deletedMealIds', `${source}; return mealSaved;`)({ acceptPost: () => calls.push('public-accept'), load: () => calls.push('square') }, { acceptPost: post => calls.push('accept'), load: () => calls.push('diary') }, tab, mealPublishing, mealShareOrder, mealSection, mealSquare, mealTimeline, Vue.nextTick, () => {}, () => calls.push('open-history'));
+  const save = new Function('publicFeed', 'diaryFeed', 'tab', 'mealPublishing', 'mealShareOrder', 'mealSection', 'mealSquare', 'mealTimeline', 'nextTick', 'notify', 'openMealHistory', 'deletedMealIds', 'mealHistoryOpen', `${source}; return mealSaved;`)({ acceptPost: () => calls.push('public-accept'), load: () => calls.push('square') }, { acceptPost: post => calls.push('accept'), load: () => calls.push('diary') }, tab, mealPublishing, mealShareOrder, mealSection, mealSquare, mealTimeline, Vue.nextTick, () => {}, () => calls.push('open-history'), Vue.ref([]), Vue.ref(true));
   save({visibility:'public'}); await settle();
-  assert.equal(tab.value, 'family'); assert.equal(mealPublishing.value, false); assert.equal(mealShareOrder.value, null);
-  assert.equal(mealSection.value, 'orders'); assert.deepEqual(calls, ['accept', 'public-accept', 'open-history', 'square', 'diary']);
-  save({ visibility: 'private' }); await settle();
+  assert.equal(tab.value, 'square'); assert.equal(mealPublishing.value, false); assert.equal(mealShareOrder.value, null);
+  assert.equal(mealSection.value, 'orders'); assert.deepEqual(calls, ['accept', 'public-accept', 'square', 'diary']);
+  for (const visibility of ['private', 'family']) {
+    save({ visibility }); await settle();
+    assert.equal(tab.value, 'family');
+    assert.equal(calls.at(-3), 'open-history');
+  }
   assert.equal(mealSection.value, 'orders', 'records open personal history without changing the underlying tab');
 });
 
@@ -586,19 +590,19 @@ test('confirmed meal hides immediately without mutating the snapshot, even if re
   const source = page.slice(page.indexOf('function mealSaved('), page.indexOf('\n}', page.indexOf('function mealSaved(')) + 2);
   const order = Object.freeze({ id: 'dinner', status: 'accepted' });
   const calls = [], tab = Vue.ref('menu'), completedMealIds = Vue.ref([]), mealPublishing = Vue.ref(true), mealShareOrder = Vue.shallowRef(order), mealSection = Vue.ref('table');
-  const save = new Function('publicFeed', 'diaryFeed', 'tab', 'completedMealIds', 'mealPublishing', 'mealShareOrder', 'mealSection', 'mealSquare', 'mealTimeline', 'nextTick', 'refreshCloud', 'notify', 'openMealHistory', 'deletedMealIds', `${source}; return mealSaved;`)(
+  const save = new Function('publicFeed', 'diaryFeed', 'tab', 'completedMealIds', 'mealPublishing', 'mealShareOrder', 'mealSection', 'mealSquare', 'mealTimeline', 'nextTick', 'refreshCloud', 'notify', 'openMealHistory', 'deletedMealIds', 'mealHistoryOpen', `${source}; return mealSaved;`)(
     { acceptPost: () => calls.push('public-accept'), load: () => calls.push('square') },
     { acceptPost: post => calls.push('accept'), load: () => calls.push('mine') }, tab, completedMealIds, mealPublishing, mealShareOrder, mealSection,
     Vue.ref({ refresh: () => calls.push('square') }), Vue.ref({ refresh: () => calls.push('mine') }), Vue.nextTick,
-    async () => { calls.push('refresh'); throw new Error('offline'); }, text => calls.push(text), () => calls.push('open-history'), Vue.ref(['dinner']),
+    async () => { calls.push('refresh'); throw new Error('offline'); }, text => calls.push(text), () => calls.push('open-history'), Vue.ref(['dinner']), Vue.ref(true),
   );
   save({ mealStarted: true, visibility: 'public' });
   assert.deepEqual(completedMealIds.value, ['dinner']);
   assert.equal(order.status, 'accepted');
-  assert.equal(tab.value, 'family'); assert.equal(mealPublishing.value, false);
+  assert.equal(tab.value, 'square'); assert.equal(mealPublishing.value, false);
   assert.equal(mealSection.value, 'table');
   await settle();
-  assert.deepEqual(calls, ['accept', 'public-accept', 'refresh', 'open-history', '已记下这餐，餐单稍后刷新', 'square', 'mine']);
+  assert.deepEqual(calls, ['accept', 'public-accept', 'refresh', '已记下这餐，餐单稍后刷新', 'square', 'mine']);
 });
 
 test('a day rollover reveals unconfirmed plans without writing or publishing them', async context => {
@@ -886,4 +890,23 @@ test('global family delete is immediate, rolls back on failure and protects the 
   f.calls[2].resolve({ posts: [post] }); await loading;
   f.api.acceptPost(post);
   assert.deepEqual(f.api.posts.value, []);
+});
+
+test('single feed photo keeps its measured geometry after the card remounts', context => {
+  const sizes = new Map();
+  const overrides = {
+    inject: key => key === 'feedImageSizes' ? sizes : null,
+    mealPostMedia: post => post.images.map(image => ({ image })),
+    singleFeedImageWidth: (width, height) => width && height ? Math.min(200, width / height * 200) : 160,
+  };
+  const props = { feed: true, post: { id: 'photo-post', images: ['photo'], visibility: 'public' } };
+  const first = harness(context, 'MealPostCard', overrides, props);
+  first.api.rememberImageSize('photo', { width: 100, height: 200 });
+  first.unmount();
+  const restored = harness(context, 'MealPostCard', overrides, props);
+  assert.equal(restored.api.singleImageRatio.value, .5);
+  assert.equal(restored.api.singleImageStyle.value.width, '100px');
+  const multiple = harness(context, 'MealPostCard', overrides, { ...props, post: { ...props.post, images: ['photo', 'other'] } });
+  assert.equal(multiple.api.singleImageRatio.value, 0);
+  assert.deepEqual(multiple.api.singleImageStyle.value, {});
 });

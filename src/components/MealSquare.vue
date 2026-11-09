@@ -15,6 +15,9 @@ const emit = defineEmits(['record', 'changed']);
 const publicationNow = ref(Date.now());
 const openLikeMenu = ref('');
 provide('mealLikeMenu', openLikeMenu);
+// Keep measured single-photo geometry across native scroll-view remounts.
+const feedImageSizes = new Map();
+provide('feedImageSizes', feedImageSizes);
 watch(() => props.active, () => { openLikeMenu.value = ''; });
 function onFeedScroll(event) { openLikeMenu.value = ''; feedViewport.onScroll(event); }
 let publicationTimer;
@@ -56,6 +59,7 @@ async function resetScopeViewport() {
   if (token === scopeResetSequence && !feedLocked.value) pendingScopeReset = false;
 }
 watch(() => `${cloudStatus.value.userId}:${cloudStatus.value.familyId}`, () => {
+  feedImageSizes.clear();
   pendingScopeReset = true;
   void resetScopeViewport();
 }, { flush: 'sync' });

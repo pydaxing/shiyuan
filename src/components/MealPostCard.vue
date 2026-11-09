@@ -20,13 +20,27 @@ const origin = computed(() => mealOrigin(props.post));
 const dishMedia = computed(() => mealPostMedia(props.post));
 const media = computed(() => dishMedia.value.filter(item => !item.defaultCover));
 const dishesWithoutCover = computed(() => dishMedia.value.filter(item => item.defaultCover));
+const retainedImageSizes = inject('feedImageSizes', null);
 const singleImageSizes = ref({});
+const singleImageSize = computed(() => {
+  const image = media.value.length === 1 ? media.value[0].image : '';
+  return singleImageSizes.value[image] || retainedImageSizes?.get(image) || {};
+});
+const singleImageRatio = computed(() => {
+  const { width, height } = singleImageSize.value;
+  return props.feed && width > 0 && height > 0 ? width / height : 0;
+});
 const singleImageStyle = computed(() => {
   if (!props.feed || media.value.length !== 1) return {};
-  const size = singleImageSizes.value[media.value[0].image] || {};
+  const size = singleImageSize.value;
   return { width: `${singleFeedImageWidth(size.width, size.height)}px` };
 });
-function rememberImageSize(image, size) { if (props.feed && media.value.length === 1) singleImageSizes.value = { [image]: size }; }
+function rememberImageSize(image, size) {
+  if (!props.feed || media.value.length !== 1) return;
+  singleImageSizes.value = { [image]: size };
+  retainedImageSizes?.set(image, size);
+  if (retainedImageSizes?.size > 1000) retainedImageSizes.delete(retainedImageSizes.keys().next().value);
+}
 const recipeDetail = ref(null);
 const openingDish = ref(false);
 let detailRequest = 0;
@@ -108,7 +122,7 @@ function chooseMenu(action) {
       <OrderActionMenu v-if="canManage" elevated :label="post.meal || '这条餐食'" :opened="menuOpened" :busy="busy" :actions="menuActions" @activate="more" @close="closeMenu" @visibility="chooseMenu('visibility')" @remove="chooseMenu('remove')" @remove-family="chooseMenu('removeFamily')" />
     </view>
     <view v-if="media.length" class="meal-post-images" :style="singleImageStyle" :class="{ single: media.length === 1, paired: media.length === 2 || media.length === 4, 'has-dishes': post.kind === 'plan' }">
-      <button v-for="(item, index) in media" :key="`${index}:${item.image}`" class="meal-post-image" :aria-label="item.canOpenRecipe ? `查看${item.title}菜品详情` : item.isDish ? `查看${item.title}大图` : `查看${post.meal}第${index + 1}张照片`" @click="openMedia(item)" hover-class="touch-feedback"><view class="meal-post-image-frame"><LazyImage :src="item.image" @natural-size="rememberImageSize(item.image, $event)" :variant="feed ? 'feed' : 'card'" :mode="feed && media.length === 1 ? 'widthFix' : 'aspectFill'" /><text v-if="feed && item.sourceLabel" class="meal-post-image-source source-badge source-badge-compact" :class="item.sourceLabel === '美食' ? 'source-badge-community' : item.sourceLabel === '自建' ? 'source-badge-custom' : 'source-badge-photo'">{{ feed && ['美食', '自建'].includes(item.sourceLabel) ? `${item.sourceLabel}菜` : item.sourceLabel }}</text><view v-if="item.isDish" class="meal-post-dish-caption"><text class="meal-post-dish-title">{{ item.title }}</text></view></view></button>
+      <button v-for="(item, index) in media" :key="`${index}:${item.image}`" class="meal-post-image" :aria-label="item.canOpenRecipe ? `查看${item.title}菜品详情` : item.isDish ? `查看${item.title}大图` : `查看${post.meal}第${index + 1}张照片`" @click="openMedia(item)" hover-class="touch-feedback"><view class="meal-post-image-frame"><LazyImage :src="item.image" @natural-size="rememberImageSize(item.image, $event)" :aspect-ratio="singleImageRatio" :variant="feed ? 'feed' : 'card'" :mode="feed && media.length === 1 ? 'widthFix' : 'aspectFill'" /><text v-if="feed && item.sourceLabel" class="meal-post-image-source source-badge source-badge-compact" :class="item.sourceLabel === '美食' ? 'source-badge-community' : item.sourceLabel === '自建' ? 'source-badge-custom' : 'source-badge-photo'">{{ feed && ['美食', '自建'].includes(item.sourceLabel) ? `${item.sourceLabel}菜` : item.sourceLabel }}</text><view v-if="item.isDish" class="meal-post-dish-caption"><text class="meal-post-dish-title">{{ item.title }}</text></view></view></button>
     </view>
     <view v-if="dishesWithoutCover.length" class="meal-post-text-dishes" :class="{ 'after-images': media.length }">
       <view v-for="item in dishesWithoutCover" :key="item.dishIndex" class="meal-post-text-dish"><text class="meal-post-text-dish-name">{{ item.title }}</text><text v-if="item.sourceLabel" class="meal-post-text-dish-source source-badge source-badge-compact" :class="item.sourceLabel === '美食' ? 'source-badge-community' : 'source-badge-custom'">{{ feed && ['美食', '自建'].includes(item.sourceLabel) ? `${item.sourceLabel}菜` : item.sourceLabel }}</text></view>

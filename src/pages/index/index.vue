@@ -97,8 +97,13 @@ function mealSaved(post) {
   }
   mealPublishing.value = false; mealShareOrder.value = null;
   if (post.mealStarted) void refreshCloud().catch(() => notify('已记下这餐，餐单稍后刷新'));
-  tab.value = 'family';
-  openMealHistory();
+  if (post.visibility === 'public') {
+    mealHistoryOpen.value = false;
+    tab.value = 'square';
+  } else {
+    tab.value = 'family';
+    openMealHistory();
+  }
   void nextTick(() => { void publicFeed.load(false, true); void diaryFeed.load(false, true); });
 }
 const preparingOrderId = ref('');

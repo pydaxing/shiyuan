@@ -505,3 +505,15 @@ test('detail covers retain the decoded image until its replacement loads, and cl
     assert.equal(photo.displayedImage.value, '');
   } finally { photo.stop(); }
 });
+
+test('restored widthFix geometry reserves space before an offscreen image loads', () => {
+  const cache = createMediaCache({ urls: ref({}), fetchImage: async () => 'photo', writeImage: async () => '/photo', removeImage() {} });
+  const photo = mount('photo', cache, { aspectRatio: 2 });
+  try {
+    assert.equal(photo.frameStyle.value.paddingTop, '50%');
+    photo.failed.value = true;
+    assert.equal(photo.frameStyle.value.paddingTop, '50%');
+    photo.props.mode = 'aspectFill';
+    assert.deepEqual(Object.keys(photo.frameStyle.value), []);
+  } finally { photo.stop(); }
+});
