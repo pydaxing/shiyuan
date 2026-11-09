@@ -19,8 +19,8 @@ function phone(event) { return accountEntry.bind(event.detail, consent.value); }
     <view class="account-entry-actions">
       <text v-if="entry.phase === 'checking'" class="account-entry-caption" role="status">正在进入你的小灶</text>
       <template v-else-if="entry.phase === 'phone'">
-        <button v-if="consent" class="primary-button full account-entry-button" open-type="getPhoneNumber" :class="{ 'is-disabled': entry.busy }" :disabled="entry.busy" @getphonenumber="phone" hover-class="none">{{ entry.busy ? '正在登录…' : '手机号快捷登录' }}</button>
-        <button v-else class="primary-button full account-entry-button" @click="remindConsent" hover-class="none">手机号快捷登录</button>
+        <button v-if="consent" class="primary-button full account-entry-button" open-type="getPhoneNumber" :class="{ 'is-disabled': entry.busy }" :disabled="entry.busy" @getphonenumber="phone" hover-class="none">{{ entry.busy ? '正在登录…' : '微信登录' }}</button>
+        <button v-else class="primary-button full account-entry-button" @click="remindConsent" hover-class="none">微信登录</button>
         <view :key="consentReminder" :class="{ 'account-entry-consent-reminder': consentReminder > 0 && !consent }"><PrivacyConsent v-model="consent" :disabled="entry.busy" /></view>
       </template>
       <template v-else-if="entry.phase === 'error'">
