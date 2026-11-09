@@ -1,0 +1,50 @@
+{
+  "version": "2.0.2",
+  "versionCode": 20002,
+  "tag": "v2.0.2",
+  "sourceCommit": "716e27caf945e6c340d51f2887860688d6a480de",
+  "stage": "development_uploaded",
+  "taskId": "confirmation_upload_25c96f35-32ca-436e-adde-e8abf217f121",
+  "status": "success",
+  "detail": "execution_success",
+  "uploaded": true,
+  "uploadedAt": "2026-11-09T12:18:06.140000+00:00",
+  "uploadBytes": 2024946,
+  "reviewSubmitted": false,
+  "evidence": "Official final polling_task_result; result.success=true",
+  "productionPublished": false,
+  "backendDeployed": true,
+  "platformBeforeUpload": {
+    "source": "User confirmation in current session",
+    "production": "1.0.4",
+    "reviewPending": false
+  },
+  "experienceSelectionVerified": false,
+  "artifact": {
+    "sha256": "311a79223bd6985cd7fe8cd303fb7779d192d6fd399991a1ad997fb855c51602",
+    "files": 541,
+    "hashMethod": "SHA256 of sorted relative-path + NUL + file SHA256 + newline; miniprogram tree excluding private IDE config",
+    "identicalToRealPreview": true
+  },
+  "backend": {
+    "function": "kitchen-v2",
+    "sha256": "5ebfeb4e84d8c36b60223033e1d35817af1d8caaf3c4e3c96ae99499ecbac150",
+    "verifiedAt": "2026-11-09T12:14:16.299Z",
+    "receipt": "artifacts/lifecycle-20261109/backend/backend-deployed.json"
+  },
+  "validation": {
+    "testsPassed": 2667,
+    "testsFailed": 0,
+    "weixinBuild": true,
+    "cloudTargetVerified": true,
+    "realCloudPreview": "Arrangement displays 已记录 and 记录已删除 instead of 已开饭; About displays 2.0.2; no console errors.",
+    "screenshot": "artifacts/lifecycle-20261109/arrangement-final.jpg",
+    "limitations": [
+      "Read-only real cloud verification; lifecycle mutation combinations covered by automated tests, not newly created real records.",
+      "Public platform experience selection not independently verified."
+    ]
+  },
+  "scope": "Reconcile arrangement record state with actual diary existence; unify deleted/missing labels and closed-slot confirmation; preserve order member snapshots; keep projection outside canonical snapshots.",
+  "backup": "artifacts/lifecycle-20261109/release-before",
+  "excludedWork": "Unfinished SMS wiring/dependencies and unrelated main-workspace changes excluded using isolated source checkout."
+}
