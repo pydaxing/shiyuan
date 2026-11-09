@@ -41,14 +41,14 @@ async function enter() {
 </script>
 
 <template>
-  <view v-if="entering" class="entry-cover" role="status" aria-label="正在进入你的小灶">
+  <view v-if="entering" class="entry-cover" role="status" aria-label="正在连接你的小灶">
     <image class="entry-backdrop" :src="$image('/static/entry-window.jpg')" mode="aspectFill" aria-hidden="true" />
     <view class="entry-shade" aria-hidden="true" />
     <view class="entry-brand">
       <image class="entry-logo" :src="$image('/static/entry-window-logo.png')" mode="aspectFit" aria-hidden="true" />
       <image class="entry-brand-name" :src="$image('/static/entry-window-wordmark.png')" mode="aspectFit" aria-label="食愿小灶" />
     </view>
-    <text class="entry-message">正在进入你的小灶</text>
+    <text class="entry-message">正在连接你的小灶</text>
   </view>
   <view v-else class="cloud-welcome welcome-page">
     <image class="welcome-cover" :src="$image('/static/personal-home-default.jpg')" mode="aspectFill" aria-hidden="true" />

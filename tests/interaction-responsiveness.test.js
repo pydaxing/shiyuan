@@ -282,12 +282,11 @@ test('a revision conflict retries a boolean preference once after the cloud refr
 });
 
 test('real cloud store keeps navigation optimistic while commands use confirmed revisions', async () => {
-  const built = await build({ stdin: { contents: "export * from './src/store.js'; export { accountEntry } from './src/services/account-entry.js';", resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only' }) } });
+  const built = await build({ stdin: { contents: "export * from './src/store.js';", resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only' }) } });
   const requests = [];
   const storage = new Map();
   globalThis.wx = { getStorageSync: key => storage.get(key), setStorageSync: (key, value) => storage.set(key, value), cloud: { init() {}, callFunction({ data }) { if (data.action === 'accountAccess') return Promise.resolve({ result: { ok: true, data: { accountLoginVersion: 1, phoneBound: true } } }); const result = deferred(); requests.push({ ...result, data }); return result.promise; } } };
   const store = await import(`data:text/javascript;base64,${Buffer.from(built.outputFiles[0].text).toString('base64')}`);
-  await store.accountEntry.ensureReady();
   store.cloudStatus.value = { phase: 'ready', familyId: 'family', revision: 1, busy: false };
   const saving = store.setFeature('fridge', true);
   const chef = store.setChef(true);

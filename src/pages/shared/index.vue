@@ -1,6 +1,4 @@
 <script setup>
-import AccountEntry from '../../components/AccountEntry.vue';
-import { accountEntryStatus } from '../../services/account-entry.js';
 import { NATIVE_UI_COLORS } from '../../domain/ui-theme.js';
 import AppIcon from '../../components/AppIcon.vue';
 import { ref, computed, watch } from 'vue';
@@ -95,8 +93,7 @@ function home() { uni.reLaunch({ url: '/pages/index/index' }); }
 </script>
 
 <template>
-  <AccountEntry v-if="cloudMode && accountEntryStatus.phase !== 'ready'" />
-  <view v-else class="app-shell" @click="dismissFocusedKeyboard" @touchmove="cancelRecipeScroll"><view class="entry-page shared-page">
+  <view class="app-shell" @click="dismissFocusedKeyboard" @touchmove="cancelRecipeScroll"><view class="entry-page shared-page">
     <text v-if="loading && !post" class="hint">正在打开做法…</text><view v-if="error"><text class="error-message">{{ error }}</text><button class="secondary-button full" @click="read">重新加载</button></view>
     <view v-if="post"><text class="entry-eyebrow">{{ post.kind === 'menu' ? '分享的套餐' : '分享的菜品' }}</text><text class="entry-title">{{ post.title }}</text>
       <RecipeContent v-if="post.kind === 'dish'" :recipe="post.recipes[0]" />

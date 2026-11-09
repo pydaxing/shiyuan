@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { build } from 'esbuild';
 import { emptySnapshot } from '../src/domain/empty.js';
 
-const bundle = await build({ stdin: { contents: "export * from './src/services/cloud.js'; export { accountEntry } from './src/services/account-entry.js';", resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only' }) } });
+const bundle = await build({ stdin: { contents: "export * from './src/services/cloud.js';", resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only' }) } });
 let sequence = 0;
 const deletion = (familyId = 'family-1', status = 'pending') => ({ familyId, status, phase: status === 'complete' ? 'complete' : 'private' });
 const detached = (pendingDeletions = [], extra = {}) => ({ needsFamily: true, userId: 'alice', pendingDeletions, ...extra });
@@ -13,7 +13,6 @@ async function client(handler) {
   const calls = [];
   globalThis.wx = { cloud: { init() {}, async callFunction({ data }) { if (data.action === 'accountAccess') return { result: { ok: true, data: { accountLoginVersion: 1, phoneBound: true } } }; calls.push(data); return { result: await handler(data) }; } } };
   const app = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString('base64')}#deletion-${++sequence}`);
-  await app.accountEntry.ensureReady();
   app.bindCloudState({ value: emptySnapshot() });
   app.cloudStatus.value = { phase: 'ready', familyId: 'family-1', userId: 'alice', revision: 1, busy: false, error: '' };
   return { ...app, calls };

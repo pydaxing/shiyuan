@@ -1,6 +1,4 @@
 <script setup>
-import AccountEntry from '../../components/AccountEntry.vue';
-import { accountEntryStatus } from '../../services/account-entry.js';
 import { computed, nextTick, ref } from 'vue';
 import { onLoad, onUnload } from '@dcloudio/uni-app';
 import { invokeCloud, manageFamily, accountProfile, setInviteMediaToken } from '../../services/cloud.js';
@@ -67,8 +65,7 @@ function home() { uni.reLaunch({ url: '/pages/index/index' }); }
 </script>
 
 <template>
-  <AccountEntry v-if="cloudMode && accountEntryStatus.phase !== 'ready'" />
-  <view v-else class="app-shell" @click="dismissFocusedKeyboard"><view class="entry-page invite-page welcome-invite">
+  <view class="app-shell" @click="dismissFocusedKeyboard"><view class="entry-page invite-page welcome-invite">
     <view class="invitation-paper" :aria-busy="loading || busy">
       <view class="invitation-cover" :style="coverFrameStyle('family')" aria-hidden="true"><FamilyCoverImage :src="invite?.familyCover" variant="detail" /></view>
       <view v-if="loading" class="invitation-body invitation-loading" role="status" aria-live="polite">

@@ -1,4 +1,3 @@
-import { accountEntry, configureAccountEntryRequest } from './account-entry.js';
 import { cloudTransportError } from './cloud-errors.js';
 import { sameSnapshotField } from './snapshot-equality.js';
 import { computed, ref, watch } from 'vue';
@@ -19,7 +18,6 @@ import { profileNameError } from '../domain/family.js';
 import { DEFAULT_PROFILE_VERSION, profileWithDefaults, compatibleDefaultProfilePayload, isDefaultAvatar } from '../domain/default-profile.js';
 
 export const cloudMode = import.meta.env?.VITE_DATA_MODE === 'cloud';
-configureAccountEntryRequest(invokeCloud);
 export const cloudEnvironment = import.meta.env?.VITE_CLOUD_ENV || '';
 export const cloudFunction = import.meta.env?.VITE_CLOUD_FUNCTION || 'kitchen';
 export const cloudStatus = ref({ phase: cloudMode ? 'connecting' : 'local', mealSharingVersion: 0, error: '', revision: 0, busy: false, syncing: false, pending: 0, userId: '', familyId: '', familyRecoveryRequired: false });
@@ -221,7 +219,6 @@ export function loadImage(value, variant = 'card', options) {
 
 export const mealStatsVersion = ref(0);
 export async function invokeCloud(action, payload = {}) {
-  if (cloudMode && accountEntry.getState().phase !== 'ready' && !['accountAccess', 'bindAccountPhone'].includes(action)) await accountEntry.ensureReady();
   payload = compatibleSpoonCommand(action, payload);
   if (['updateProfile', 'createFamily', 'createFamilyWithAppearance', 'createFamilyWithSubtitle', 'joinFamily', 'joinFamilyWithProfile'].includes(action)) payload = compatibleDefaultProfilePayload(payload, profileBaseline?.userId === cloudStatus.value.userId ? profileBaseline : undefined);
   if (!cloudEnvironment) throw new Error('尚未配置云开发环境，请联系管理员');
@@ -232,7 +229,7 @@ export async function invokeCloud(action, payload = {}) {
   const includesManifests = ['feed', 'readPost'].includes(action);
   const imageAccess = ['mediaContent', 'mediaBatch'].includes(action) ? { ...(shareMediaToken ? { shareToken: shareMediaToken } : {}), ...(inviteMediaToken ? { inviteToken: inviteMediaToken } : {}) } : {};
   let response;
-  try { response = await wx.cloud.callFunction({ name: cloudFunction, data: { action, ...imageAccess, ...(includesManifests ? { includeImageManifests: true } : {}), ...payload, ...(['mealFeed', 'myMealPosts', 'publishMeal', 'finishMeal', 'setMealLike', 'setMealReaction', 'setMealVisibility'].includes(action) ? { identityPresentationVersion: 1 } : {}), accountLoginVersion: 1, defaultProfileVersion: DEFAULT_PROFILE_VERSION, ingredientUnitsVersion: INGREDIENT_UNITS_VERSION } }); }
+  try { response = await wx.cloud.callFunction({ name: cloudFunction, data: { action, ...imageAccess, ...(includesManifests ? { includeImageManifests: true } : {}), ...payload, ...(['mealFeed', 'myMealPosts', 'publishMeal', 'finishMeal', 'setMealLike', 'setMealReaction', 'setMealVisibility'].includes(action) ? { identityPresentationVersion: 1 } : {}), defaultProfileVersion: DEFAULT_PROFILE_VERSION, ingredientUnitsVersion: INGREDIENT_UNITS_VERSION } }); }
   catch (failure) { throw cloudTransportError(failure); }
   if (!response.result?.ok) {
     const error = new Error(response.result?.message || '服务暂不可用，请稍后重试');
