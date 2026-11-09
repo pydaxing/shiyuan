@@ -315,3 +315,68 @@ test('personal cooking and likes totals include eaten family meals once and resp
   ok(await f.remove(familyId, own.id, 'bob'));
   assert.deepEqual(await stats(), { spaceId: personalId, mealCount: 1, receivedLikes: 1 }, 'shared deletion removes personal totals too');
 });
+
+test('unified diary and totals are identical in both modes, with independent personal meals and shared family likes', async () => {
+  const f = fixture(), familyId = await f.family();
+  await f.join('bob');
+  const shared = await f.publish(familyId, { visibility: 'public' });
+  assert.equal(shared.author.mode, 'family');
+  const personalIds = {}, own = {};
+  for (const who of ['alice', 'bob']) {
+    personalIds[who] = await f.personal(who);
+    own[who] = await f.publish(personalIds[who], { visibility: 'public' }, who);
+    assert.equal(own[who].author.mode, 'personal');
+  }
+  const summary = (spaceId, who) => f.call('mealReceivedLikes', { spaceId, userSummaryVersion: 1 }, who).then(ok);
+  const diary = (spaceId, who) => f.diary(spaceId, who, { userSummaryVersion: 1 });
+  ok(await f.call('setMealLike', { spaceId: personalIds.bob, postId: shared.id, selected: true }, 'bob'));
+  ok(await f.call('setMealLike', { spaceId: personalIds.bob, postId: own.alice.id, selected: true }, 'bob'));
+  for (const who of ['alice', 'bob']) {
+    const before = await summary(personalIds[who], who);
+    assert.equal(before.mealCount, 2);
+    assert.equal(before.receivedLikes, who === 'alice' ? 2 : 1);
+    assert.deepEqual(new Set((await diary(personalIds[who], who)).posts.map(p => p.id)), new Set([shared.id, own[who].id]));
+    ok(await f.call('switchWorkspace', { mode: 'family' }, who));
+    const after = await summary(familyId, who);
+    assert.deepEqual({ ...after, spaceId: before.spaceId }, before);
+    const rows = (await diary(familyId, who)).posts;
+    assert.deepEqual(new Set(rows.map(p => p.id)), new Set([shared.id, own[who].id]));
+    assert.equal(rows.find(p => p.id === own[who].id).deleteScope, 'own');
+    assert.equal(rows.find(p => p.id === shared.id).deleteScope, 'shared');
+  }
+  ok(await f.call('setMealLike', { spaceId: familyId, postId: shared.id, selected: false }, 'bob'));
+  assert.equal((await summary(familyId, 'alice')).receivedLikes, 1);
+  assert.equal((await summary(familyId, 'bob')).receivedLikes, 0);
+  // A personal record stays personal even when managed from the family mode.
+  ok(await f.visibility(familyId, own.alice.id, 'private'));
+  assert.equal((await f.repository.get('meal_posts', own.alice.id)).visibility, 'private');
+  assert.equal((await f.remove(familyId, own.alice.id, 'bob')).code, 'NOT_FOUND');
+  ok(await f.remove(familyId, own.alice.id));
+  assert.equal((await summary(familyId, 'alice')).mealCount, 1);
+  assert.equal((await summary(familyId, 'bob')).mealCount, 2);
+  ok(await f.remove(familyId, shared.id, 'bob'));
+  assert.equal((await summary(familyId, 'alice')).mealCount, 0);
+  assert.equal((await summary(familyId, 'bob')).mealCount, 1);
+});
+
+test('personal hide remains hidden in the unified family diary without removing another member reference', async () => {
+  const f = fixture(), familyId = await f.family(); await f.join('bob');
+  const post = await f.publish(familyId);
+  const personalId = await f.personal('alice');
+  ok(await f.remove(personalId, post.id));
+  ok(await f.call('switchWorkspace', { mode: 'family' }));
+  assert.equal((await f.diary(familyId, 'alice', { userSummaryVersion: 1 })).posts.length, 0);
+  assert.equal((await f.diary(familyId, 'bob', { userSummaryVersion: 1 })).posts[0].id, post.id);
+});
+
+test('unified family diary reconciles personal arrangements too, preserving source identity', async () => {
+  const f = fixture(), familyId = await f.family(); await f.join('bob');
+  const personalId = await f.personal('alice');
+  await previousArrangement(f, personalId);
+  ok(await f.call('switchWorkspace', { mode: 'family' }));
+  const rows = (await f.diary(familyId, 'alice', { userSummaryVersion: 1 })).posts;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].mealContext, 'personal');
+  assert.equal(rows[0].author.mode, 'personal');
+  assert.equal((await f.diary(familyId, 'bob', { userSummaryVersion: 1 })).posts.length, 0);
+});

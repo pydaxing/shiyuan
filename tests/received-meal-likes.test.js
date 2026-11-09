@@ -14,7 +14,7 @@ function harness(t) {
   t.after(() => { stopped.forEach(f => f()); scope.stop(); });
   return { api, modules, calls, space };
 }
-test('received likes preserve cached count on refresh failure and reject late responses from another space', async t => {
+test('unified likes retain the same cached count across modes and reject stale responses', async t => {
   const f = harness(t);
   assert.equal(f.api.count.value, null);
   assert.equal(f.api.mealCount.value, null);
@@ -29,8 +29,8 @@ test('received likes preserve cached count on refresh failure and reject late re
   assert.equal(f.api.mealCount.value, 8);
   const late = f.api.refresh();
   f.space.value = 'personal'; await settle();
-  assert.equal(f.api.count.value, null);
-  assert.equal(f.api.mealCount.value, null);
+  assert.equal(f.api.count.value, 12);
+  assert.equal(f.api.mealCount.value, 8);
   assert.equal(f.calls.length, 3, 'optimistic switch does not query unconfirmed membership');
   f.modules.cloudStatus.value.familyId = 'personal'; await settle();
   f.calls[3].resolve({ spaceId: 'personal', receivedLikes: 3, mealCount: 2 }); await settle();

@@ -87,7 +87,7 @@ test('visible midnight increments and device clock error cannot inflate persiste
   await f.tracker.tick(); assert.equal(f.shown(), 8); assert.equal(f.calls(), 2);
 });
 
-test('personal-only dates do not count for families, each user/family is separate, same-day union stays unique', async () => {
+test('every mode uses the personal union and another member cannot accrue this user visits', async () => {
   const f = fixture();
   const created = await f.call('createFamily', { name: 'Alice', familyName: 'Home' });
   const familyId = created.data.familyId;
@@ -99,7 +99,7 @@ test('personal-only dates do not count for families, each user/family is separat
   assert.equal((await f.call('recordAccountVisit')).data.days, 2);
   await f.call('switchWorkspace', { mode: 'family' });
   let result = (await f.call('recordAccountVisit')).data;
-  assert.equal(result.days, 1); assert.equal(result.personalDays, 2);
+  assert.equal(result.days, 2); assert.equal(result.personalDays, 2);
   await f.call('switchWorkspace', { mode: 'personal' });
   assert.equal((await f.call('recordAccountVisit')).data.days, 2);
   // Stale requests for a previously active family must not mark the new mode.
@@ -110,24 +110,24 @@ test('personal-only dates do not count for families, each user/family is separat
   assert.equal((await f.call('recordAccountVisit', {}, 'bob')).data.days, 1);
   f.time('2026-11-11T10:00:00Z');
   result = (await f.call('recordAccountVisit')).data;
-  assert.equal(result.days, 2); assert.equal(result.personalDays, 3);
+  assert.equal(result.days, 3); assert.equal(result.personalDays, 3);
   assert.equal((await f.repository.get('users', hash('bob'))).companionVisit.days, 1);
   // Different family entered by this account has its own first day.
   const other = await f.call('createFamily', { name: 'Alice', familyName: 'Second', requestId: 'second-family-visit-test' });
   assert.equal(other.ok, true);
   result = (await f.call('recordAccountVisit')).data;
-  assert.equal(result.days, 1); assert.equal(result.personalDays, 3);
+  assert.equal(result.days, 3); assert.equal(result.personalDays, 3);
   user = await f.repository.get('users', hash('alice'));
-  assert.equal(user.companionFamilyVisits[familyId].days, 2);
+  assert.equal(user.companionFamilyVisits, undefined);
 });
-test('switches reuse the cached personal union, while an unvisited family still records its own day', async () => {
+test('mode switches instantly reuse the one per-user count without a duplicate visit request', async () => {
   const f = trackerFixture();
-  f.handle(() => ({ userId: 'alice', days: 2, lastDay: '2026-11-09', personalDays: 7, personalLastDay: '2026-11-09', personalSpaceId: 'personal', serverTime: Date.parse('2026-11-09T10:00:00Z') }));
+  f.handle(() => ({ userId: 'alice', days: 7, lastDay: '2026-11-09', personalDays: 7, personalLastDay: '2026-11-09', personalSpaceId: 'personal', serverTime: Date.parse('2026-11-09T10:00:00Z') }));
   await f.tracker.identity('alice', 'home', true); await f.tracker.setVisible(true);
-  assert.equal(f.shown(), 2);
+  assert.equal(f.shown(), 7);
   await f.tracker.identity('alice', 'personal', true);
   assert.equal(f.shown(), 7); assert.equal(f.calls(), 1);
   await f.tracker.identity('alice', 'home', true);
-  assert.equal(f.shown(), 2); assert.equal(f.calls(), 1);
-  await f.tracker.identity('alice', 'second', true); assert.equal(f.calls(), 2);
+  assert.equal(f.shown(), 7); assert.equal(f.calls(), 1);
+  await f.tracker.identity('alice', 'second', true); assert.equal(f.calls(), 1);
 });

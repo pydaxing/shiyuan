@@ -177,15 +177,16 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
     if (event.spaceId !== family.id) fail('使用空间已变更，请刷新后重试', 'CONFLICT');
     const modern = event.mealSharingVersion === 2;
     const managed = own && modern && event.diaryManagementVersion === 1;
+    const unified = modern && event.userSummaryVersion === 1;
     // Only opted-in diary clients trigger the compatibility backfill. Read it
     // before querying posts, so old arrangements and their deletion markers
     // are resolved once and the UI need not synthesize local diary entries.
-    const archive = managed && archiveForUser ? await archiveForUser(userId, family.id) : null;
+    const archive = managed && archiveForUser ? await archiveForUser(userId, family.id, unified) : null;
     // Each union branch uses the same stable cursor. Fetching 21 per branch is
     // enough for the first 20 unique rows; dedupe before cutting the page.
     const filters = !own ? [{ visibility: 'public' }]
       : !modern ? [{ authorId: userId, spaceId: family.id }]
-      : family.kind === 'personal'
+      : (unified || family.kind === 'personal')
         ? [{ authorId: userId }, { mealSharingVersion: 2, participantUserIds: { contains: userId }, visibility: 'public' }, { mealSharingVersion: 2, participantUserIds: { contains: userId }, visibility: 'family' }]
         : [{ spaceId: family.id, visibility: 'public' }, { spaceId: family.id, mealSharingVersion: 2, visibility: 'family' }, { spaceId: family.id, authorId: userId, visibility: 'private' }];
     const rows = [];
@@ -199,7 +200,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       const batch = merged.slice(0, 21);
       more = merged.length > 21 || branches.some(branch => branch.length === 21);
       if (!batch.length) { more = false; break; }
-      const hidden = own && modern && family.kind === 'personal'
+      const hidden = own && modern && (unified || family.kind === 'personal')
         ? await readDocuments(repository, 'meal_reactions', batch.map(post => mealDiaryRelationId(post.id, userId)), { fields: ['diaryHiddenAt'] }) : new Map();
       rows.push(...batch.filter(post => !hidden.get(mealDiaryRelationId(post.id, userId))?.diaryHiddenAt));
       after = { id: batch.at(-1).id || batch.at(-1)._id, createdAt: batch.at(-1).createdAt };
@@ -288,9 +289,10 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       const { family } = await workspaceMembership(repository, userId);
       if (event.spaceId !== family.id) fail('使用空间已变更，请刷新后重试', 'CONFLICT');
       await throttle(userId, 'mealReceivedLikes', 120);
+      const unified = event.userSummaryVersion === 1;
       // Personal totals use the same deduplicated, visible diary union.
       // Only scalar fields and hidden-reference markers are read.
-      const personalMeals = family.kind === 'personal' ? (async () => {
+      const personalMeals = unified || family.kind === 'personal' ? (async () => {
         const filters = [{ authorId: userId },
           { mealSharingVersion: 2, participantUserIds: { contains: userId }, visibility: 'public' },
           { mealSharingVersion: 2, participantUserIds: { contains: userId }, visibility: 'family' }];
@@ -314,7 +316,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
           return totals;
         }, { mealCount: 0, receivedLikes: 0 });
       })() : Promise.resolve(null);
-      const ownStats = family.kind === 'personal' ? Promise.resolve(null) : (async () => {
+      const ownStats = unified || family.kind === 'personal' ? Promise.resolve(null) : (async () => {
       let after, count = 0, mealCount = 0;
       // Canonical posts only: diary participant references are not extra likes.
       // Stable ID pagination includes legacy posts without creation timestamps.

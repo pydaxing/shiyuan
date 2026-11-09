@@ -128,7 +128,7 @@ for (const personal of [false, true]) for (const photo of [false, true]) {
   const member = seed.family.members.find(item => item.id === seed.activeMemberId) || seed.family.members[0];
   const cloudStatus = Vue.ref({ phase: 'ready', busy: false, userId: 'native-entry-user' });
   const cloud = {
-    cloudMode: true, cloudStatus, familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null),
+    cloudMode: true, cloudStatus, companionDays: Vue.ref(1), familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null),
     accountProfile: Vue.ref({ name: member.name, avatar: member.avatar || '' }), accountProfilePreview: Vue.ref(null),
     manageFamily() { assert.fail('entry checks must not change a family'); },
     saveAccountProfile() { assert.fail('entry checks must not save a profile'); },

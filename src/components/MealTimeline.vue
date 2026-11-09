@@ -61,7 +61,7 @@ defineExpose({ refresh: () => load(false, true), loadMore: more, showRecords: ()
       <view class="meal-history-date" :aria-label="day.date"><text v-if="day.date.slice(0, 4) !== today.slice(0, 4)" class="meal-history-year">{{ day.date.slice(0, 4) }}</text><view class="meal-history-date-line"><text class="meal-history-day-number">{{ day.date.slice(8) }}</text><text class="meal-history-month">{{ Number(day.date.slice(5, 7)) }}月</text></view></view>
       <view class="meal-history-day-content">
         <view v-for="entry in day.entries" :key="entry.id" class="meal-history-entry">
-          <MealPostCard v-if="entry.post" timeline :personal-diary="currentIdentity?.family?.kind === 'personal'" :post="entry.post" :busy="Boolean(busy[entry.post.id])" @like="change('setMealLike', entry.post, { selected: $event })" @visibility="visibility(entry.post, $event)" @remove="remove(entry.post)" />
+          <MealPostCard v-if="entry.post" timeline :personal-diary="true" :post="entry.post" :busy="Boolean(busy[entry.post.id])" @like="change('setMealLike', entry.post, { selected: $event })" @visibility="visibility(entry.post, $event)" @remove="remove(entry.post)" />
           <view v-else class="meal-history-order">
             <view class="meal-history-meal"><AppIcon :name="MEAL_ICONS[entry.meal] || 'menu'" :size="14" /><text>{{ entry.meal }}</text></view>
             <view class="meal-history-dishes"><button v-for="item in entry.order.items" :key="item.recipe.id" class="meal-history-dish" :aria-label="`查看${item.recipe.title}`" @click="$emit('open', item.recipe)" hover-class="touch-feedback"><LazyImage :src="foodCover(item.recipe.image)" variant="card" mode="aspectFill" thumbnail /></button></view>

@@ -7,7 +7,7 @@ const increment = (visit, day) => counted(visit, day) ? visit : { days: valid(vi
 export function createAccountVisits({ repository, now = Date.now }) {
   function summarize(userId, user, timestamp) {
     const spaceId = activeSpaceId(user), personal = user.companionVisit;
-    const scoped = user.activeMode === 'personal' ? personal : user.companionFamilyVisits?.[spaceId];
+    const scoped = personal;
     return { userId, spaceId, days: scoped.days, lastDay: scoped.lastDay, personalSpaceId: personalSpaceId(userId), personalDays: personal.days, personalLastDay: personal.lastDay, serverTime: timestamp };
   }
   function requireSpace(user, expectedSpaceId) {
@@ -18,7 +18,7 @@ export function createAccountVisits({ repository, now = Date.now }) {
   }
   function isCurrent(user, timestamp) {
     const day = beijingDay(timestamp);
-    return counted(user.companionVisit, day) && (user.activeMode === 'personal' || counted(user.companionFamilyVisits?.[activeSpaceId(user)], day));
+    return counted(user.companionVisit, day);
   }
   return async function record(userId, expectedSpaceId) {
     // Dates and totals come only from the server. Old clients and background
@@ -29,11 +29,10 @@ export function createAccountVisits({ repository, now = Date.now }) {
     if (isCurrent(user, timestamp)) return summarize(userId, user, timestamp);
     return repository.transaction(async db => {
       const current = await db.get('users', userId);
-      const spaceId = requireSpace(current, expectedSpaceId);
+      requireSpace(current, expectedSpaceId);
       const timestamp = now(), day = beijingDay(timestamp);
       if (isCurrent(current, timestamp)) return summarize(userId, current, timestamp);
       const updated = { ...current, companionVisit: increment(current.companionVisit, day) };
-      if (current.activeMode !== 'personal') updated.companionFamilyVisits = { ...current.companionFamilyVisits, [spaceId]: increment(current.companionFamilyVisits?.[spaceId], day) };
       await db.set('users', userId, updated);
       return summarize(userId, updated, timestamp);
     });

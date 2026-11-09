@@ -26,7 +26,7 @@ function mount(context, name, overrides = {}, props = {}) {
     APP_VERSION: JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version, ...Vue, ...familyHelpers, presentMutation, NATIVE_UI_COLORS, coverFrameStyle, onMounted: callback => mounted.push(callback), onUnmounted: callback => unmounted.push(callback),
     state: Vue.ref({ family: { name: '我们的小家', cover: '', coverTitle: '', ownerId: 'me', members }, activeMemberId: 'me' }),
     cloudMode: true, cloudStatus: Vue.ref({ userId: 'me', familyId: 'current' }), preferencePending: Vue.ref(false),
-    familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null), useReceivedMealLikes: () => ({ count: Vue.ref(0), mealCount: Vue.ref(0), error: Vue.ref(''), refresh: async () => {} }),
+    companionDays: Vue.ref(null), familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null), useReceivedMealLikes: () => ({ count: Vue.ref(0), mealCount: Vue.ref(0), error: Vue.ref(''), refresh: async () => {} }),
     familyFeatures: Vue.ref({ fridge: false, shopping: false }),
     activeMember: Vue.ref(members[0]), sheetOpen: Vue.ref(false), useNavigationAppearance() {}, dismissFocusedKeyboard() {}, notify: message => notices.push(message), useSheetContentResize: () => () => {},
     ...overrides,

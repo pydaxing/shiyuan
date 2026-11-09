@@ -637,9 +637,9 @@ export async function uploadCloudImage(path, previews = {}, purpose = '') {
   return confirmed.fileId;
 }
 
-// Personal union and per-user family attendance. Never put it in family snapshots.
+// One personal arrival total across modes. Never put it in family snapshots.
 export const companionDays = ref(null);
-const accountVisitCache = createPersistentCache(`shiyuan-account-visits-v1-${cloudEnvironment}-${cloudFunction}`, { maxEntries: 12, maxChars: 6000, writeDelay: 150 });
+const accountVisitCache = createPersistentCache(`shiyuan-account-visits-v2-${cloudEnvironment}-${cloudFunction}`, { maxEntries: 12, maxChars: 6000, writeDelay: 150 });
 const accountVisits = createAccountVisitTracker({ invoke: spaceId => invokeCloud('recordAccountVisit', { spaceId }), cache: accountVisitCache, publish: days => { companionDays.value = days; } });
 export function setAccountVisitVisible(visible) { return cloudMode ? accountVisits.setVisible(visible) : Promise.resolve(); }
 export function refreshAccountVisit() { return cloudMode ? accountVisits.tick() : Promise.resolve(); }

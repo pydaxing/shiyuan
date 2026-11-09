@@ -46,7 +46,7 @@ export function useMealPosts(kind, enabled) {
     const request = ++revision, context = scope.value;
     loading.value = true; error.value = ''; failedRead = null;
     try {
-      const result = await invokeCloud(kind === 'mine' ? 'myMealPosts' : 'mealFeed', { spaceId: cloudStatus.value.familyId, mealLikesVersion: 1, ...(kind === 'mine' ? { diaryManagementVersion: 1 } : {}), ...(cloudStatus.value.mealSharingVersion === 2 ? { mealSharingVersion: 2 } : {}), ...(more && pageCursor ? { cursor: pageCursor } : {}) });
+      const result = await invokeCloud(kind === 'mine' ? 'myMealPosts' : 'mealFeed', { spaceId: cloudStatus.value.familyId, mealLikesVersion: 1, ...(kind === 'mine' ? { diaryManagementVersion: 1, userSummaryVersion: 1 } : {}), ...(cloudStatus.value.mealSharingVersion === 2 ? { mealSharingVersion: 2 } : {}), ...(more && pageCursor ? { cursor: pageCursor } : {}) });
       if (disposed || request !== revision || context !== scope.value) return;
       // A reaction in flight never grants visibility or replaces fresh content.
       const hiddenIds = new Set(result.posts.filter(post => post?.id && !canShow(post)).map(post => post.id));
@@ -146,7 +146,7 @@ export function useMealPosts(kind, enabled) {
     }
     busy.value = { ...busy.value, [post.id]: true }; error.value = ''; failedRead = null;
     try {
-      const result = await invokeCloud(action, { spaceId: cloudStatus.value.familyId, mealLikesVersion: 1, postId: post.id, ...(diaryManagementVersion.value === 1 ? { diaryManagementVersion: 1 } : {}), ...changes });
+      const result = await invokeCloud(action, { spaceId: cloudStatus.value.familyId, mealLikesVersion: 1, postId: post.id, ...(diaryManagementVersion.value === 1 ? { diaryManagementVersion: 1, userSummaryVersion: 1 } : {}), ...changes });
       if (disposed || epoch !== generation || context !== scope.value) return;
       if (reaction && postVersion !== (postVersions.get(post.id) || 0)) return;
       if (deleting && result?.deletedId !== post.id) throw new Error('删除状态尚未确认，请重试');

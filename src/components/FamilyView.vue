@@ -46,7 +46,7 @@ const displayedPersonal = computed(() => personal.value ? state.value.family
 const familyDisplay = computed(() => familyAppearance((displayedFamilyMode.value ? displayedFamily.value : displayedPersonal.value) || {}));
 const displayedSpaceId = computed(() => (displayedFamilyMode.value ? displayedFamily.value : displayedPersonal.value)?.id || '');
 const { count: receivedLikes, mealCount: cookedMeals, error: likesError, refresh: refreshLikes } = useReceivedMealLikes(displayedSpaceId);
-const displayedCompanionDays = computed(() => displayedSpaceId.value === cloudStatus.value.familyId ? companionDays.value : null);
+const displayedCompanionDays = computed(() => companionDays.value);
 const receivedLikesLabel = computed(() => receivedLikes.value === null ? '—' : receivedLikes.value >= 10000 ? `${Math.floor(receivedLikes.value / 1000) / 10}万` : String(receivedLikes.value));
 const cookedMealsLabel = computed(() => cookedMeals.value === null ? '—' : cookedMeals.value >= 10000 ? `${Math.floor(cookedMeals.value / 1000) / 10}万` : String(cookedMeals.value));
 async function refreshAccount() { await Promise.all([props.refreshAction?.(), refreshLikes()]); }
@@ -113,7 +113,7 @@ function familyChanged() {
         <view class="account-summary-row" :aria-busy="modeBusy">
           <view class="account-stat" :aria-label="displayedCompanionDays === null ? '相伴天数加载中' : `已相伴${displayedCompanionDays}天`"><text class="account-stat-number">{{ displayedCompanionDays === null ? '—' : displayedCompanionDays }}</text><text class="account-stat-label">天相伴</text></view>
           <view class="account-stat" :aria-label="cookedMeals === null ? '开火次数加载中' : `已记录${cookedMeals}餐`"><text class="account-stat-number">{{ cookedMealsLabel }}</text><text class="account-stat-label">开火</text></view>
-          <view class="account-stat" :aria-label="receivedLikes === null ? (likesError || '获赞数加载中') : `${displayedFamilyMode ? '家庭' : '个人'}获赞${receivedLikes}次`"><text class="account-stat-number">{{ receivedLikesLabel }}</text><text class="account-stat-label">获赞</text></view>
+          <view class="account-stat" :aria-label="receivedLikes === null ? (likesError || '获赞数加载中') : `累计获赞${receivedLikes}次`"><text class="account-stat-number">{{ receivedLikesLabel }}</text><text class="account-stat-label">获赞</text></view>
         </view>
       </button>
       <template #content>

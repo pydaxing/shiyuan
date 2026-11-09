@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { personalSpaceId } from './workspaces.mjs';
 import { canReadMealPost, isSharedFamilyMeal } from './meal-access.mjs';
 
 const hash = value => createHash('sha256').update(value).digest('hex');
@@ -21,7 +22,11 @@ export async function mealDiaryCapabilities(db, post, userId, family) {
     const member = aliveFamily(source) && source.members?.some(item => item.id === userId);
     return { canDelete: true, canChangeVisibility: Boolean(member && (post.visibility !== 'private' || owns)), deleteScope: 'personal' };
   }
-  if (post.spaceId !== family.id) return none;
+  if (post.spaceId !== family.id) {
+    // A mixed diary can contain this user's personal meals or archived meals
+    // from a former family. Resolve rights as a personal reference there.
+    return mealDiaryCapabilities(db, post, userId, { id: personalSpaceId(userId), kind: 'personal' });
+  }
   const canManage = owns || post.visibility === 'public' || isSharedFamilyMeal(post) && post.visibility === 'family';
   return { canDelete: canManage, canChangeVisibility: canManage, deleteScope: 'shared' };
 }

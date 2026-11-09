@@ -137,14 +137,18 @@ export function createMealAutoArchive({ repository, now = Date.now, clock = Date
     return result;
   }
 
-  async function archiveForUser(userId, expectedSpaceId) {
+  async function archiveForUser(userId, expectedSpaceId, unified = false) {
     // The entire personal/family reconciliation shares one budget. Remaining
     // meals are picked up by the scheduled worker, never invented by the UI.
     const deadline = clock() + 10000;
     const { user, family } = await workspaceMembership(repository, userId);
     if (expectedSpaceId && expectedSpaceId !== family.id) throw Object.assign(new Error('使用空间已变更，请刷新后重试'), { code: 'CONFLICT' });
     const spaces = new Set([family.id]);
-    if (family.kind === 'personal') {
+    if (unified && family.kind !== 'personal') {
+      const personal = await repository.get('families', personalSpaceId(userId));
+      if (alive(personal) && personal.kind === 'personal' && personal.ownerId === userId) spaces.add(personal.id);
+    }
+    if (unified || family.kind === 'personal') {
       for (const id of unique([user.familyId, ...(user.familyIds || [])]).slice(0, 10)) {
         const source = await repository.get('families', id);
         if (alive(source) && source.kind !== 'personal' && source.members?.some(member => member.id === userId)) spaces.add(id);
