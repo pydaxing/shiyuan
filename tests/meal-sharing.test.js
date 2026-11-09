@@ -310,3 +310,42 @@ test('manual recording preserves arranged participants after membership changes'
   const carolSpace = await f.personal('carol');
   assert.equal((await f.diary(carolSpace, 'carol')).posts.some(row => row.id === post.id), false);
 });
+
+test('independent photos complete only the matching active arrangement in the current space', async () => {
+  const f = fixture(), spaceId = await f.family();
+  const order = mealOrder('photo-match', '');
+  await f.repository.set('orders', hash(`${spaceId}:${order.id}`), { familyId: spaceId, value: order });
+  await f.repository.set('orders', hash(`other:${order.id}`), { familyId: 'other', value: order });
+  const post = ok(await f.publish(spaceId)).post;
+  assert.equal(post.mealStarted, true);
+  assert.equal(post.sourceOrderId, order.id);
+  const saved = (await f.repository.get('orders', hash(`${spaceId}:${order.id}`))).value;
+  assert.equal(saved.status, 'completed');
+  assert.equal(saved.mealPostId, post.id);
+  assert.equal((await f.repository.get('orders', hash(`other:${order.id}`))).value.status, 'accepted');
+  assert.deepEqual((await f.repository.get('meal_posts', post.id)).participantUserIds, order.diaryParticipantUserIds);
+});
+
+test('nonmatching or cancelled arrangements remain unchanged after independent photos', async () => {
+  for (const patch of [{ meal: '早餐' }, { date: '2026-11-04' }, { status: 'cancelled' }]) {
+    const f = fixture(), spaceId = await f.family(), order = { ...mealOrder('no-match', ''), ...patch };
+    await f.repository.set('orders', hash(`${spaceId}:${order.id}`), { familyId: spaceId, value: order });
+    const post = ok(await f.publish(spaceId)).post;
+    assert.equal(post.mealStarted, undefined);
+    assert.deepEqual((await f.repository.get('orders', hash(`${spaceId}:${order.id}`))).value, order);
+  }
+});
+
+test('deleted family diary can be recorded again without reviving its deleted post', async () => {
+  const f = fixture(), spaceId = await f.family(), order = mealOrder('record-again', '');
+  await f.repository.set('orders', hash(`${spaceId}:${order.id}`), { familyId: spaceId, value: order });
+  const first = ok(await f.publish(spaceId)).post;
+  ok(await f.call('deleteFamilyMealPost', { spaceId, postId: first.id, diaryManagementVersion: 1 }));
+  const second = ok(await f.call('finishMeal', { spaceId, orderId: order.id, requestId: 'record-again-test', kind: 'plan', visibility: 'public', mealSharingVersion: 2 })).post;
+  assert.notEqual(second.id, first.id);
+  const saved = (await f.repository.get('orders', hash(`${spaceId}:${order.id}`))).value;
+  assert.equal(saved.mealPostId, second.id);
+  assert.equal(saved.diaryDeletedAt, undefined);
+  assert.equal((await f.repository.get('meal_posts', first.id)).status, 'deleted');
+  assert.equal((await f.call('finishMeal', { spaceId, orderId: order.id, requestId: 'record-again-duplicate', kind: 'plan', visibility: 'public', mealSharingVersion: 2 })).ok, false);
+});

@@ -357,3 +357,9 @@ test('action menu icons are packaged with transparent backgrounds and semantic n
     assert.ok(opaquePixels > 150, `${name} has a visible stroke`);
   }
 });
+
+test('deleted diary arrangements offer record again before deletion', () => {
+  assert.deepEqual(orderMenuActions('completed', true, true), [{ action: 'record', label: '再次记录' }, { action: 'remove', label: '删除' }]);
+  assert.equal(orderMenuActions('completed', true).some(item => item.action === 'record'), false);
+  assert.equal(orderMenuActions('completed', false, true).some(item => item.action === 'record'), false);
+});

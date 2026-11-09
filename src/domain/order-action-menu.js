@@ -1,11 +1,12 @@
-const actionIcons = new Map([['cancel', 'cancel'], ['restore', 'restore'], ['edit', 'edit'], ['remove', 'trash-danger'], ['removeFamily', 'trash-danger'], ['visibility', 'lock']]);
+const actionIcons = new Map([['record', 'edit'], ['cancel', 'cancel'], ['restore', 'restore'], ['edit', 'edit'], ['remove', 'trash-danger'], ['removeFamily', 'trash-danger'], ['visibility', 'lock']]);
 
 export function orderMenuIcon(action) {
   return actionIcons.get(action) || '';
 }
 
-export function orderMenuActions(status, hasDishes = true) {
+export function orderMenuActions(status, hasDishes = true, canRecordAgain = false) {
   const actions = [];
+  if (canRecordAgain && hasDishes) actions.push({ action: 'record', label: '再次记录' });
   if (['pending', 'accepted'].includes(status)) actions.push({ action: 'cancel', label: '取消' });
   if (status === 'cancelled' && hasDishes) actions.push({ action: 'restore', label: '恢复' });
   actions.push({ action: 'remove', label: '删除' });

@@ -18,7 +18,7 @@ test('canonical records determine display without changing stored order status',
   const input = [order('a', { mealPostId: 'alive' }), order('b', { mealPostId: 'deleted' }), order('c'), order('d'), order('e', { diaryDeletedAt: 1 }), order('f', { mealPostId: 'foreign' }), order('g')];
   const before = JSON.stringify(input);
   const output = await withOrderRecordStates(db, spaceId, input, today);
-  assert.deepEqual(output.map(orderStatusLabel), ['已记录', '记录已删除', '已记录', '历史已结束', '记录已删除', '历史已结束', '已记录']);
+  assert.deepEqual(output.map(orderStatusLabel), ['已记录', '日记已删除', '已记录', '历史已结束', '日记已删除', '历史已结束', '已记录']);
   assert.equal(JSON.stringify(input), before);
   assert.ok(output.every(row => row.status === 'completed'));
 });
@@ -30,7 +30,7 @@ test('active arrangements do not query diary data and cancelled meals stay cance
 });
 
 test('all closed-slot explanations keep confirmation label and block duplicate creation', () => {
-  for (const recordLabel of ['已记录', '记录已删除', '历史已结束']) {
+  for (const recordLabel of ['已记录', '日记已删除', '历史已结束']) {
     const result = checkoutPresentation({ closed: true, dishCount: 1, recordLabel });
     assert.equal(result.label, '确认安排');
     assert.equal(result.action, 'blocked');

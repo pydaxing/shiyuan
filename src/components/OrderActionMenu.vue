@@ -4,14 +4,14 @@ import AppIcon from './AppIcon.vue';
 import { afterNativeRender } from '../composables/nativeRender.js';
 import { orderMenuActions, orderMenuGeometry, orderMenuIcon } from '../domain/order-action-menu.js';
 
-const props = defineProps({ label: String, status: String, opened: Boolean, busy: Boolean, actions: Array, floating: Boolean, elevated: Boolean, hasDishes: { type: Boolean, default: true } });
-const emit = defineEmits(['activate', 'close', 'cancel', 'restore', 'remove', 'edit', 'visibility', 'removeFamily']);
+const props = defineProps({ label: String, status: String, canRecordAgain: Boolean, opened: Boolean, busy: Boolean, actions: Array, floating: Boolean, elevated: Boolean, hasDishes: { type: Boolean, default: true } });
+const emit = defineEmits(['activate', 'close', 'cancel', 'restore', 'remove', 'edit', 'visibility', 'removeFamily', 'record']);
 const instance = getCurrentInstance();
 const triggerRef = ref(null);
 const menuRef = ref(null);
 const layout = ref(null);
 const highlighted = ref(0);
-const options = computed(() => props.actions || orderMenuActions(props.status, props.hasDishes));
+const options = computed(() => props.actions || orderMenuActions(props.status, props.hasDishes, props.canRecordAgain));
 const menuId = `order-action-menu-${instance?.uid ?? 0}`;
 const menuStyle = computed(() => layout.value ? Object.fromEntries(['top', 'left', 'width', 'height'].map(key => [key, `${layout.value[key]}px`])) : {});
 let layoutRequest = 0;

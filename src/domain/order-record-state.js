@@ -7,7 +7,7 @@ export function orderRecordState(order) {
 }
 export function orderStatusLabel(order) {
   const record = orderRecordState(order);
-  if (record === 'deleted') return '记录已删除';
+  if (record === 'deleted') return '日记已删除';
   if (order.status === 'completed') return record === 'recorded' ? '已记录' : '历史已结束';
   return order.status === 'cancelled' ? '已取消' : '已安排';
 }

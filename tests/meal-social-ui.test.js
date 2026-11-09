@@ -573,7 +573,7 @@ test('successful sharing closes the draft and refreshes both owner history and p
   const calls = [], tab = Vue.ref('menu'), mealPublishing = Vue.ref(true), mealShareOrder = Vue.ref({id:'order'}), mealSection = Vue.ref('orders');
   const mealSquare = Vue.ref({ refresh: () => calls.push('square') });
   const mealTimeline = Vue.ref({ refresh: () => calls.push('diary') });
-  const save = new Function('publicFeed', 'diaryFeed', 'tab', 'mealPublishing', 'mealShareOrder', 'mealSection', 'mealSquare', 'mealTimeline', 'nextTick', 'notify', 'openMealHistory', `${source}; return mealSaved;`)({ acceptPost: () => calls.push('public-accept'), load: () => calls.push('square') }, { acceptPost: post => calls.push('accept'), load: () => calls.push('diary') }, tab, mealPublishing, mealShareOrder, mealSection, mealSquare, mealTimeline, Vue.nextTick, () => {}, () => calls.push('open-history'));
+  const save = new Function('publicFeed', 'diaryFeed', 'tab', 'mealPublishing', 'mealShareOrder', 'mealSection', 'mealSquare', 'mealTimeline', 'nextTick', 'notify', 'openMealHistory', 'deletedMealIds', `${source}; return mealSaved;`)({ acceptPost: () => calls.push('public-accept'), load: () => calls.push('square') }, { acceptPost: post => calls.push('accept'), load: () => calls.push('diary') }, tab, mealPublishing, mealShareOrder, mealSection, mealSquare, mealTimeline, Vue.nextTick, () => {}, () => calls.push('open-history'));
   save({visibility:'public'}); await settle();
   assert.equal(tab.value, 'family'); assert.equal(mealPublishing.value, false); assert.equal(mealShareOrder.value, null);
   assert.equal(mealSection.value, 'orders'); assert.deepEqual(calls, ['accept', 'public-accept', 'open-history', 'square', 'diary']);
@@ -586,11 +586,11 @@ test('confirmed meal hides immediately without mutating the snapshot, even if re
   const source = page.slice(page.indexOf('function mealSaved('), page.indexOf('\n}', page.indexOf('function mealSaved(')) + 2);
   const order = Object.freeze({ id: 'dinner', status: 'accepted' });
   const calls = [], tab = Vue.ref('menu'), completedMealIds = Vue.ref([]), mealPublishing = Vue.ref(true), mealShareOrder = Vue.shallowRef(order), mealSection = Vue.ref('table');
-  const save = new Function('publicFeed', 'diaryFeed', 'tab', 'completedMealIds', 'mealPublishing', 'mealShareOrder', 'mealSection', 'mealSquare', 'mealTimeline', 'nextTick', 'refreshCloud', 'notify', 'openMealHistory', `${source}; return mealSaved;`)(
+  const save = new Function('publicFeed', 'diaryFeed', 'tab', 'completedMealIds', 'mealPublishing', 'mealShareOrder', 'mealSection', 'mealSquare', 'mealTimeline', 'nextTick', 'refreshCloud', 'notify', 'openMealHistory', 'deletedMealIds', `${source}; return mealSaved;`)(
     { acceptPost: () => calls.push('public-accept'), load: () => calls.push('square') },
     { acceptPost: post => calls.push('accept'), load: () => calls.push('mine') }, tab, completedMealIds, mealPublishing, mealShareOrder, mealSection,
     Vue.ref({ refresh: () => calls.push('square') }), Vue.ref({ refresh: () => calls.push('mine') }), Vue.nextTick,
-    async () => { calls.push('refresh'); throw new Error('offline'); }, text => calls.push(text), () => calls.push('open-history'),
+    async () => { calls.push('refresh'); throw new Error('offline'); }, text => calls.push(text), () => calls.push('open-history'), Vue.ref(['dinner']),
   );
   save({ mealStarted: true, visibility: 'public' });
   assert.deepEqual(completedMealIds.value, ['dinner']);

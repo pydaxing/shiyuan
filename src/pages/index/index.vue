@@ -84,13 +84,17 @@ const deletedMealIds = ref([]);
 function recordMeal(order = null) {
   today.value = localDate();
   if (order && (isPendingRecord(order.id) || orderActionBusy.value)) { notify('餐单正在保存，请稍后记录'); return; }
-  if (order && order.date !== today.value) { notify('只能在餐单当天记录'); return; }
+  if (order && order.date !== today.value && !(statusLabel(order) === '日记已删除' && order.date < today.value)) { notify('只能在餐单当天记录'); return; }
   dismissFocusedKeyboard(); mealShareOrder.value = order; mealPublishing.value = true;
 }
 function mealSaved(post) {
   diaryFeed.acceptPost(post);
   publicFeed.acceptPost(post);
-  if (post.mealStarted && (post.orderId || mealShareOrder.value?.id)) completedMealIds.value = [...completedMealIds.value, post.orderId || mealShareOrder.value.id];
+  if (post.mealStarted && (post.sourceOrderId || post.orderId || mealShareOrder.value?.id)) {
+    const orderId = post.sourceOrderId || post.orderId || mealShareOrder.value.id;
+    completedMealIds.value = [...new Set([...completedMealIds.value, orderId])];
+    deletedMealIds.value = deletedMealIds.value.filter(id => id !== orderId);
+  }
   mealPublishing.value = false; mealShareOrder.value = null;
   if (post.mealStarted) void refreshCloud().catch(() => notify('已记下这餐，餐单稍后刷新'));
   tab.value = 'family';
@@ -195,7 +199,7 @@ const completedOrder = computed(() => checkoutOrders.value.find(order => order.s
 const mealClosed = computed(() => !currentOrder.value && Boolean(completedOrder.value));
 const checkout = computed(() => checkoutPresentation({ hasMeal: Boolean(meal.value), closed: mealClosed.value, recordLabel: completedOrder.value ? statusLabel(completedOrder.value) : '已记录', status: currentOrder.value?.status, hasSelection: Boolean(currentSelection.value), hasOrder: Boolean(currentOrder.value), dirty: cartDirty.value, dishCount: dishCount.value }));
 watch([cart, note, date, meal], () => { submitError.value = ''; });
-const statusLabel = order => deletedMealIds.value.includes(order.id) ? '记录已删除' : orderStatusLabel({ ...order, recordState: order.recordState || cloudStatus.value.orderRecordStates?.[order.id] });
+const statusLabel = order => completedMealIds.value.includes(order.id) && !deletedMealIds.value.includes(order.id) ? '已记录' : deletedMealIds.value.includes(order.id) ? '日记已删除' : orderStatusLabel({ ...order, recordState: order.recordState || cloudStatus.value.orderRecordStates?.[order.id] });
 const pickedBy = (item, order) => item.chosenBy || [{ id: order.memberId, name: order.memberName }];
 const orderRows = (order) => mealDishRows(order.items.map((item) => ({ ...item, chosenBy: pickedBy(item, order) })), order.entries);
 function removeCartDish(recipeId) { cart.value = removeDishSelection(cart.value, state.value.mealSets, recipeId); }
@@ -447,7 +451,7 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
           <view :key="order.id + ':' + order.status" class="order-card" :class="{ 'is-finished': ['completed', 'cancelled'].includes(order.status), 'is-cancelled-summary': ['completed', 'cancelled'].includes(order.status) }">
             <view class="section-line compact order-card-heading">
               <view class="order-schedule"><text class="order-tag order-date-tag">{{ mealDateLabel(order.date, today) }}</text><text class="order-tag order-meal-tag">{{ order.meal }}</text><text class="order-tag order-status" :class="order.status">{{ statusLabel(order) }}</text></view>
-              <OrderActionMenu :label="`${mealDateLabel(order.date, today)}${order.meal}`" :status="order.status" :opened="openedOrderId === order.id" :busy="orderActionBusy" :has-dishes="order.items.length > 0" @activate="openedOrderId = order.id" @close="openedOrderId === order.id && (openedOrderId = '')" @cancel="orderAction(order, 'cancelled')" @restore="orderAction(order, 'accepted')" @remove="orderAction(order, 'deleted')" />
+              <OrderActionMenu :label="`${mealDateLabel(order.date, today)}${order.meal}`" :status="order.status" :opened="openedOrderId === order.id" :busy="orderActionBusy" :can-record-again="statusLabel(order) === '日记已删除' && order.date <= today" @record="recordMeal(order)" :has-dishes="order.items.length > 0" @activate="openedOrderId = order.id" @close="openedOrderId === order.id && (openedOrderId = '')" @cancel="orderAction(order, 'cancelled')" @restore="orderAction(order, 'accepted')" @remove="orderAction(order, 'deleted')" />
             </view>
             <MealDishList :rows="orderRows(order)" :members="state.family.members" :posts="state.posts" :editable="['pending', 'accepted'].includes(order.status)" :busy="orderActionBusy" @open="orderRecipe = $event" @remove="removeMealDish(order, $event)" />
             <text v-if="!order.items.length" class="muted">本餐暂无菜品</text>

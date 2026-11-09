@@ -250,13 +250,20 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       if (previous?.status === 'published') fail('这餐已经记录过，可以在我的中查看', 'ALREADY_PUBLISHED');
       let content;
       let sourceOrder;
-      if (input.orderId) {
-        const row = await db.get('orders', hash(`${family.id}:${input.orderId}`));
+      let matchedOrderId = input.orderId;
+      if (!matchedOrderId && input.kind === 'actual') {
+        const rows = await db.list('orders', { familyId: family.id, 'value.date': input.date, 'value.meal': input.meal });
+        const matches = rows.map(row => row.value).filter(order => order && order.date === input.date && order.meal === input.meal && order.items?.length && (['pending', 'accepted'].includes(order.status) || order.status === 'completed' && order.diaryDeletedAt));
+        // Never guess between inconsistent duplicate slots.
+        if (matches.length === 1) matchedOrderId = matches[0].id;
+      }
+      if (matchedOrderId) {
+        const row = await db.get('orders', hash(`${family.id}:${matchedOrderId}`));
         sourceOrder = row?.familyId === family.id ? row.value : null;
         if (!sourceOrder || sourceOrder.status === 'cancelled' || !sourceOrder.items?.length) fail('餐食已取消或没有菜品，请重新选择');
         if (finish) {
-          if (!['pending', 'accepted'].includes(sourceOrder.status)) fail('这一餐已结束，请查看原安排', 'ALREADY_FINISHED');
-          if (sourceOrder.date !== chinaDate(now())) fail('只能在安排当天记录餐食', 'MEAL_DATE');
+          if (!['pending', 'accepted'].includes(sourceOrder.status) && !(sourceOrder.status === 'completed' && sourceOrder.diaryDeletedAt)) fail('这一餐已结束，请查看原安排', 'ALREADY_FINISHED');
+          if (sourceOrder.date !== chinaDate(now()) && !(sourceOrder.diaryDeletedAt && sourceOrder.date < chinaDate(now()))) fail('只能在安排当天记录餐食', 'MEAL_DATE');
           if (input.kind === 'actual' && (input.date !== sourceOrder.date || input.meal !== sourceOrder.meal)) fail('照片须记录到当前餐次');
         }
       }
@@ -276,10 +283,14 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       const author = { name: family.kind === 'personal' ? (user.name || member.name || '我') : family.name, avatar: family.kind === 'personal' ? (user.avatar || '') : familyMealAvatar(family, user, userId), mode: family.kind === 'personal' ? 'personal' : 'family', familyIdentityVersion: 1 };
       const post = { id, spaceId: family.id, authorId: userId, author, kind: input.kind, ...content, moodIds, visibility, status: 'published', createdAt: now(), likeCount: 0, reactionCounts: {} };
       if (modern) Object.assign(post, { mealSharingVersion: 2, mealContext: family.kind === 'personal' ? 'personal' : 'family', showMealBadge: input.showMealBadge, participantUserIds: sourceOrder ? orderDiaryParticipants(sourceOrder, family) : family.kind === 'personal' ? [userId] : [...new Set(family.members.map(member => member.id))] });
-      if (finish) post.mealStarted = true;
+      const completesOrder = Boolean(sourceOrder && (finish || !input.orderId));
+      if (completesOrder) post.mealStarted = true;
       post.assetIds = refs(post);
-      if (finish) await db.set('orders', hash(`${family.id}:${sourceOrder.id}`), { familyId: family.id, value: { ...sourceOrder, status: 'completed', completedAt: new Date(now()).toISOString(), mealPostId: id } });
-      await db.set('families', family.id, { ...family, socialWriteVersion: (family.socialWriteVersion || 0) + 1, ...(finish ? { revision: (family.revision || 0) + 1, updatedAt: now() } : {}) });
+      if (completesOrder) {
+        const { diaryDeletedAt, ...recordedOrder } = sourceOrder;
+        await db.set('orders', hash(`${family.id}:${sourceOrder.id}`), { familyId: family.id, value: { ...recordedOrder, status: 'completed', completedAt: new Date(now()).toISOString(), mealPostId: id } });
+      }
+      await db.set('families', family.id, { ...family, socialWriteVersion: (family.socialWriteVersion || 0) + 1, ...(completesOrder ? { revision: (family.revision || 0) + 1, updatedAt: now() } : {}) });
       await db.set('meal_posts', id, post);
       await db.set('requests', receiptId, { kind: 'meal_post_v1', postId: id, fingerprint, createdAt: now() });
       return { post, currentSpaceId: family.id };
