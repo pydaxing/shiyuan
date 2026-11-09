@@ -83,3 +83,28 @@ test('removing the final dish preserves published legacy meal recipe snapshots i
   assert.deepEqual(post.recipeSnapshots, order.items.map(item => item.recipe));
   assert.equal(post.status, 'published');
 });
+
+test('queued rapid removals reconcile actual server patches through the final dish', async () => {
+  const { createCommandQueue } = await import('../src/services/command-queue.js');
+  const app = await fixture();
+  let current = app.current;
+  let sequence = 0;
+  let queue;
+  queue = createCommandQueue({
+    snapshot: current.snapshot, journal: { read: () => [], write: () => {} },
+    now: () => Date.parse(`${today}T05:00:00Z`), newId: () => `queued-removal-${++sequence}`,
+    send: async payload => {
+      const response = await app.call('command', payload);
+      if (!response.ok) throw Object.assign(new Error(response.message), { code: response.code });
+      return response.data;
+    },
+    reconcile: async (result, id) => {
+      current = { ...current, ...result, snapshot: result.snapshot || { ...current.snapshot, ...result.changes } };
+      queue.receive(current.snapshot, current.revision, id);
+    },
+    refresh: async () => { current = await success(app.call('bootstrap', { includeFeed: false })); queue.receive(current.snapshot, current.revision); },
+  });
+  queue.activate(current.snapshot, { scope: 'test-scope', familyId: current.familyId, userId: current.userId, revision: current.revision });
+  await Promise.all(app.recipeIds.map(id => queue.enqueue('removeOrderDish', [app.orderId, id])));
+  assert.deepEqual((await success(app.call('bootstrap', { includeFeed: false }))).snapshot.orders, []);
+});

@@ -152,6 +152,31 @@ export function commandWireArgs(snapshot, operation) {
   return args;
 }
 
+// Removing one dish does not overwrite the rest of the meal. Compare the
+// affected dish only, including who selected it and its preparation edits.
+// Read the existing full-order journal shape so old blocked removals can retry
+// without replaying them automatically or discarding the user's intent.
+function removalDependency(value, recipeId) {
+  const order = value?.order;
+  if (!order) return null;
+  return semantic({
+    order: pick(order, ['id', 'date', 'meal', 'status']),
+    selections: (order.selections || []).filter(selection => selection.items?.some(item => item.recipe.id === recipeId))
+      .map(selection => ({ memberId: selection.memberId, items: selection.items.filter(item => item.recipe.id === recipeId).map(item => pick(item, ['recipe', 'quantity'])) }))
+      .sort((left, right) => String(left.memberId).localeCompare(String(right.memberId))),
+    item: pick(order.items?.find(item => item.recipe.id === recipeId), ['recipe', 'quantity']),
+    preparationEdits: (order.preparationEdits || []).filter(item => item.recipeId === recipeId),
+    preparedDishes: (order.preparedDishes || []).filter(item => item.recipeId === recipeId),
+    shoppingDrafts: (order.shoppingDrafts || []).filter(item => item.recipeId === recipeId),
+  });
+}
+
 export function dependenciesMatch(snapshot, operation) {
-  return commandDependencies(snapshot, operation.name, operation.args) === operation.dependencies;
+  const current = commandDependencies(snapshot, operation.name, operation.args);
+  if (operation.name === 'removeOrderDish') {
+    try {
+      return JSON.stringify(removalDependency(JSON.parse(current), operation.args[1])) === JSON.stringify(removalDependency(JSON.parse(operation.dependencies), operation.args[1]));
+    } catch { return false; }
+  }
+  return current === operation.dependencies;
 }

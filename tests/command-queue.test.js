@@ -481,3 +481,64 @@ test('failed fork restores the original public recipe and menu references', asyn
   assert.equal(app.view.mealSets[0].recipeIds[0], dish.id);
   assert.equal(app.view.recipes.some(item => item.id.startsWith('pending-')), false);
 });
+
+test('removal rebases after another dish changes, preserving that change and deleting only its target', async () => {
+  let initial = withOrder();
+  const target = initial.orders[0].items[0].recipe.id;
+  const other = initial.recipes[1].id;
+  const app = harness({ initial, refresh: async ({ queue, server }) => {
+    createKitchenActions({ getState: () => server, commit: next => Object.assign(server, next), today: () => today }).addOrderDishes('order-1', { [other]: 1 });
+    server.orders[0].diaryParticipantIds = ['me', 'family-member'];
+    queue.receive(clone(server), 2);
+  } });
+  const removal = app.queue.enqueue('removeOrderDish', ['order-1', target]);
+  app.requests[0].reject(failure('CONFLICT'));
+  await tick();
+  assert.equal(app.requests.length, 2);
+  assert.equal(app.requests[1].payload.revision, 2);
+  app.confirm(1);
+  await removal;
+  assert.deepEqual(app.server.orders[0].items.map(item => item.recipe.id), [other]);
+  assert.equal(app.status.failures.length, 0);
+});
+
+test('removal still blocks after the selected dish or meal status changes', async () => {
+  for (const change of ['recipe', 'status', 'selection']) {
+    const initial = withOrder();
+    const target = initial.orders[0].items[0].recipe.id;
+    const app = harness({ initial, refresh: async ({ queue, server }) => {
+      const order = server.orders[0];
+      if (change === 'recipe') order.items[0].recipe.title = 'Changed target';
+      if (change === 'status') order.status = 'completed';
+      if (change === 'selection') order.selections[0].memberId = 'another-member';
+      queue.receive(clone(server), 2);
+    } });
+    const removal = app.queue.enqueue('removeOrderDish', ['order-1', target]);
+    const rejected = assert.rejects(removal, /CONFLICT/);
+    app.requests[0].reject(failure('CONFLICT'));
+    await rejected;
+    assert.equal(app.requests.length, 1);
+    assert.equal(app.status.failures.length, 1);
+  }
+});
+
+test('legacy blocked removal can be retried after harmless whole-meal metadata changes', async () => {
+  const initial = withOrder();
+  const target = initial.orders[0].items[0].recipe.id;
+  const storage = new Map();
+  const first = harness({ initial, storage });
+  const task = first.queue.enqueue('removeOrderDish', ['order-1', target]);
+  const rejected = assert.rejects(task, /FORBIDDEN/);
+  first.requests[0].reject(failure('FORBIDDEN'));
+  await rejected;
+  const refreshed = clone(initial);
+  refreshed.orders[0].diaryParticipantIds = ['me'];
+  refreshed.orders[0].memberName = 'Renamed member';
+  const restored = harness({ initial: refreshed, storage });
+  assert.equal(restored.requests.length, 0, 'never auto-replay a previously failed removal');
+  assert.equal(restored.status.failures[0].canRetry, true);
+  const retried = restored.queue.retry(restored.status.failures[0].id);
+  restored.confirm(0);
+  await retried;
+  assert.deepEqual(restored.view.orders, []);
+});
