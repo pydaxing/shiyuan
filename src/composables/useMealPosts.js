@@ -133,7 +133,7 @@ export function useMealPosts(kind, enabled) {
     const postVersion = postVersions.get(post.id) || 0;
     const reaction = action === 'setMealLike' || action === 'setMealReaction';
     const before = posts.value.find(item => item.id === post.id);
-    const deleting = action === 'deleteMealPost';
+    const deleting = action === 'deleteMealPost' || action === 'deleteFamilyMealPost';
     const beforeIndex = posts.value.findIndex(item => item.id === post.id);
     let next;
     if (before && action === 'setMealReaction') next = { ...before, reactions: (before.reactions || []).map(tag => tag.id === changes.tagId ? { ...tag, selected: changes.selected, count: Math.max(0, (tag.count || 0) + Number(changes.selected) - Number(Boolean(tag.selected))) } : tag) };
@@ -189,7 +189,7 @@ export function useMealPosts(kind, enabled) {
     // A late like acknowledgement from another view cannot restore old visibility.
     posts.value = posts.value.map(item => item.id === post.id ? { ...item, liked: post.liked, likeCount: post.likeCount, ...(Array.isArray(post.likeUsers) ? { likeUsers: post.likeUsers } : {}), reactions: post.reactions } : item);
   }
-  function removePost(id) { if (disposed || !id) return; invalidatePost(id); revision += 1; loading.value = false; posts.value = posts.value.filter(post => post.id !== id); }
+  function removePost(id, permanently = false) { if (disposed || !id) return; if (permanently) deletions.value.set(id, {}); invalidatePost(id); revision += 1; loading.value = false; posts.value = posts.value.filter(post => post.id !== id); }
   function acceptPost(post) {
     if (disposed || !post?.id || deletions.value.has(post.id)) return;
     if (!canShow(post)) { removePost(post.id); return; }

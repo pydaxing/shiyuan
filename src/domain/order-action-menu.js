@@ -1,4 +1,4 @@
-const actionIcons = new Map([['cancel', 'cancel'], ['restore', 'restore'], ['edit', 'edit'], ['remove', 'trash-danger'], ['visibility', 'lock']]);
+const actionIcons = new Map([['cancel', 'cancel'], ['restore', 'restore'], ['edit', 'edit'], ['remove', 'trash-danger'], ['removeFamily', 'trash-danger'], ['visibility', 'lock']]);
 
 export function orderMenuIcon(action) {
   return actionIcons.get(action) || '';

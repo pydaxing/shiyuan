@@ -73,7 +73,7 @@ const diaryFeed = useMealPosts('mine', computed(() => !momentsPreview && (tab.va
 provide('mealDiaryFeed', diaryFeed);
 const publicFeed = useMealPosts('public', computed(() => !momentsPreview && cloudStatus.value.phase === 'ready'));
 provide('mealPublicFeed', publicFeed);
-function diaryChanged(result) { if (result.deletedId && result.deleteScope !== 'personal') publicFeed.removePost(result.deletedId); else if (result.post) publicFeed.acceptPost(result.post); }
+function diaryChanged(result) { if (result.deletedId && result.deleteScope !== 'personal') publicFeed.removePost(result.deletedId, true); else if (result.post) publicFeed.acceptPost(result.post); }
 function squareChanged(result) { if (result.post?.id) diaryFeed.syncReactions(result.post); }
 function openMealHistory() { dismissFocusedKeyboard(); mealHistoryOpen.value = true; }
 const mealPublishing = ref(false);

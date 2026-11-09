@@ -848,3 +848,20 @@ test('family default cover preserves publisher avatar instead of replacing it wi
   identity.value.family.cover = '';
   assert.equal(f.api.posts.value[0].author.avatar, 'publisher');
 });
+
+
+test('global family delete is immediate, rolls back on failure and protects the public cache', async context => {
+  const f = harness(context), post = { id: 'family-post', sourceOrderId: 'order', visibility: 'public' };
+  f.calls[0].resolve({ posts: [post], diaryManagementVersion: 1 }); await settle();
+  const pending = f.api.mutate('deleteFamilyMealPost', post);
+  assert.deepEqual(f.api.posts.value, []);
+  assert.equal(f.calls[1].action, 'deleteFamilyMealPost');
+  f.calls[1].reject(new Error('没有权限')); await pending;
+  assert.deepEqual(f.api.posts.value, [post]);
+  assert.deepEqual(f.api.suppressedOrderIds.value, []);
+  f.api.removePost(post.id, true);
+  const loading = f.api.load(false, true);
+  f.calls[2].resolve({ posts: [post] }); await loading;
+  f.api.acceptPost(post);
+  assert.deepEqual(f.api.posts.value, []);
+});

@@ -7,10 +7,10 @@ import { canReadMealPost, isSharedFamilyMeal } from './meal-access.mjs';
 import { readDocuments } from './repository-reads.mjs';
 import { stepImages } from '../src/domain/presentation.js';
 import { createMealDishOrigins } from './meal-dish-origin.mjs';
-import { mealDiaryCapabilities, mealDiaryRelationId, hidePersonalMeal, deleteCanonicalMeal } from './meal-diary-management.mjs';
+import { mealDiaryCapabilities, authoredFamilyMeal, mealDiaryRelationId, hidePersonalMeal, deleteCanonicalMeal } from './meal-diary-management.mjs';
 
 export const MEAL_POST_COLLECTIONS = ['meal_posts', 'meal_reactions'];
-export const mealPostActions = ['mealReceivedLikes', 'mealFeed', 'myMealPosts', 'mealDishDetail', 'publishMeal', 'finishMeal', 'setMealLike', 'setMealReaction', 'setMealVisibility', 'deleteMealPost'];
+export const mealPostActions = ['mealReceivedLikes', 'mealFeed', 'myMealPosts', 'mealDishDetail', 'publishMeal', 'finishMeal', 'setMealLike', 'setMealReaction', 'setMealVisibility', 'deleteMealPost', 'deleteFamilyMealPost'];
 const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = (message, code = 'INVALID') => { throw Object.assign(new Error(message), { code }); };
 const recordId = (postId, userId) => hash(`${postId}:${userId}`);
@@ -376,6 +376,14 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       const owns = post?.authorId === userId;
       const managed = event.diaryManagementVersion === 1;
       if (event.diaryManagementVersion !== undefined && !managed) fail('日记操作版本不兼容，请更新后重试');
+      if (action === 'deleteFamilyMealPost') {
+        if (!managed || !authoredFamilyMeal(post, userId)) fail('只有发布人可以删除家庭餐食', 'FORBIDDEN');
+        if (post.status === 'deleted') return { deletedId: postId, deleteScope: 'shared', ...(post.spaceId === family.id && post.orderId ? { suppressedOrderIds: [post.orderId] } : {}) };
+        if (!await canReadMealPost(db, post, userId, family)) fail('这条餐食已不可见', 'NOT_FOUND');
+        const result = await deleteCanonicalMeal(db, { ...post, mealContext: 'family' }, userId, now, 'shared');
+        if (post.spaceId !== family.id) delete result.suppressedOrderIds;
+        return result;
+      }
       if (action === 'deleteMealPost' && post?.status === 'deleted') {
         const canReplay = owns || managed && (family.id === post.spaceId || family.kind === 'personal' && post.participantUserIds?.includes(userId));
         if (canReplay) return { deletedId: postId, ...(managed ? { deleteScope: family.kind === 'personal' && post.spaceId !== family.id ? 'personal' : family.kind === 'personal' ? 'own' : 'shared' } : {}), ...(post.spaceId === family.id && post.orderId ? { suppressedOrderIds: [post.orderId] } : {}) };

@@ -238,7 +238,7 @@ export async function invokeCloud(action, payload = {}) {
     error.serverRejected = response.result?.ok === false;
     throw error;
   }
-  if (['setMealLike', 'deleteMealPost', 'setMealVisibility', 'publishMeal', 'finishMeal'].includes(action) && identityScope === currentScope()) mealStatsVersion.value += 1;
+  if (['setMealLike', 'deleteMealPost', 'deleteFamilyMealPost', 'setMealVisibility', 'publishMeal', 'finishMeal'].includes(action) && identityScope === currentScope()) mealStatsVersion.value += 1;
   if (response.result.data?.profile) {
     const data = response.result.data;
     const raw = data.profileBaseline || { name: data.profile.name || '', avatar: isDefaultAvatar(data.profile.avatar) ? '' : data.profile.avatar || '' };

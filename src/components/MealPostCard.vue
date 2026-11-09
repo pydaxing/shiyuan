@@ -14,7 +14,7 @@ import CommunityView from './CommunityView.vue';
 import OrderActionMenu from './OrderActionMenu.vue';
 const editCommunityEntry = inject('editCommunityEntry', () => {});
 const props = defineProps({ post: Object, now: { type: Number, default: () => Date.now() }, busy: Boolean, timeline: Boolean, personalDiary: Boolean, feed: Boolean, last: Boolean, manageable: { type: Boolean, default: true } });
-const emit = defineEmits(['like', 'react', 'visibility', 'remove']);
+const emit = defineEmits(['like', 'react', 'visibility', 'remove', 'removeFamily']);
 const mealIcons = MEAL_ICONS;
 const origin = computed(() => mealOrigin(props.post));
 const dishMedia = computed(() => mealPostMedia(props.post));
@@ -83,10 +83,11 @@ watch(() => [props.post.id, props.post.visibility, props.busy], () => { likeMenu
 
 const menuActions = computed(() => [
   ...(props.post.canChangeVisibility === false ? [] : [{ action: 'visibility', label: visibilityActions.value[0].label }]),
-  ...(props.post.canDelete === false ? [] : [{ action: 'remove', label: '删除' }]),
+  ...(props.post.canDelete === false ? [] : [{ action: 'remove', label: props.post.deleteScope === 'personal' || familyMeal.value || props.post.author?.mode === 'family' ? '从我的日记移除' : '删除' }]),
+  ...(props.post.canDeleteFamily === true ? [{ action: 'removeFamily', label: '删除家庭餐食' }] : []),
 ]);
 watch(() => JSON.stringify([props.post.id, props.post.visibility, props.busy, props.manageable,
-  props.post.canDelete, props.post.canChangeVisibility, cloudStatus?.value?.userId, cloudStatus?.value?.familyId]),
+  props.post.canDelete, props.post.canDeleteFamily, props.post.canChangeVisibility, cloudStatus?.value?.userId, cloudStatus?.value?.familyId]),
   () => { menuOpened.value = false; }, { flush: 'sync' });
 function closeMenu(selectedAction) { if (!selectedAction) menuOpened.value = false; }
 function more() { if (!props.busy && canManage.value) menuOpened.value = true; }
@@ -96,6 +97,7 @@ function chooseMenu(action) {
   if (!menuActions.value.some(option => option.action === action)) return;
   if (action === 'visibility') emit('visibility', visibilityActions.value[0].value);
   if (action === 'remove') emit('remove');
+  if (action === 'removeFamily') emit('removeFamily');
 }
 </script>
 <template>
@@ -103,7 +105,7 @@ function chooseMenu(action) {
     <view class="meal-post-heading">
       <view v-if="timeline" class="meal-post-meal"><view class="meal-post-slot"><text v-if="personalDiary && origin" class="meal-origin-badge source-badge source-badge-compact" :class="origin === 'family' ? 'source-badge-community' : 'source-badge-custom'">{{ origin === 'family' ? '家庭' : '独享' }}</text><AppIcon :name="mealIcons[post.meal] || 'menu'" :size="14" /><text>{{ post.meal }}</text></view><view v-if="audienceLabel" class="meal-post-state"><AppIcon :name="audienceIcon" :size="13" /><text>{{ audienceLabel }}</text></view></view>
       <view v-else class="meal-post-author"><view class="meal-post-avatar"><LazyImage :src="post.author.avatar" variant="avatar" avatar round /></view><view class="meal-post-author-copy"><view class="meal-post-author-name"><text class="meal-post-name">{{ post.author.name }}</text></view><text v-if="!feed" class="meal-post-meta">{{ post.date }} · {{ post.meal }}</text></view></view>
-      <OrderActionMenu v-if="canManage" elevated :label="post.meal || '这条餐食'" :opened="menuOpened" :busy="busy" :actions="menuActions" @activate="more" @close="closeMenu" @visibility="chooseMenu('visibility')" @remove="chooseMenu('remove')" />
+      <OrderActionMenu v-if="canManage" elevated :label="post.meal || '这条餐食'" :opened="menuOpened" :busy="busy" :actions="menuActions" @activate="more" @close="closeMenu" @visibility="chooseMenu('visibility')" @remove="chooseMenu('remove')" @remove-family="chooseMenu('removeFamily')" />
     </view>
     <view v-if="media.length" class="meal-post-images" :style="singleImageStyle" :class="{ single: media.length === 1, paired: media.length === 2 || media.length === 4, 'has-dishes': post.kind === 'plan' }">
       <button v-for="(item, index) in media" :key="`${index}:${item.image}`" class="meal-post-image" :aria-label="item.canOpenRecipe ? `查看${item.title}菜品详情` : item.isDish ? `查看${item.title}大图` : `查看${post.meal}第${index + 1}张照片`" @click="openMedia(item)" hover-class="touch-feedback"><view class="meal-post-image-frame"><LazyImage :src="item.image" @natural-size="rememberImageSize(item.image, $event)" :variant="feed ? 'original' : 'card'" :mode="feed && media.length === 1 ? 'widthFix' : 'aspectFill'" /><text v-if="feed && item.sourceLabel" class="meal-post-image-source source-badge source-badge-compact" :class="item.sourceLabel === '美食' ? 'source-badge-community' : item.sourceLabel === '自建' ? 'source-badge-custom' : 'source-badge-photo'">{{ feed && ['美食', '自建'].includes(item.sourceLabel) ? `${item.sourceLabel}菜` : item.sourceLabel }}</text><view v-if="item.isDish" class="meal-post-dish-caption"><text class="meal-post-dish-title">{{ item.title }}</text></view></view></button>

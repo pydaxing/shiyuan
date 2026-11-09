@@ -186,7 +186,7 @@ test('meal bubbles offer one direct audience toggle followed by delete without n
     const f = harness(context, 'MealPostCard', {}, { post });
     f.api.more();
     assert.equal(f.api.menuOpened.value, true);
-    assert.deepEqual(f.api.menuActions.value.map(action => action.label), [label, '删除']);
+    assert.deepEqual(f.api.menuActions.value.map(action => action.label), [label, post.mealContext === 'family' || post.author?.mode === 'family' ? '从我的日记移除' : '删除']);
     f.api.chooseMenu('visibility');
     assert.deepEqual(f.events, [['visibility', target]]);
     assert.equal(f.api.menuOpened.value, false);
@@ -206,7 +206,7 @@ test('bubble selection cannot mutate a replaced, closed, saving or unauthorized 
   f.api.chooseMenu('remove'); assert.deepEqual(f.events, []);
   props.post.canChangeVisibility = false;
   f.api.more(); f.api.chooseMenu('visibility'); assert.deepEqual(f.events, []);
-  assert.deepEqual(f.api.menuActions.value, [{ action: 'remove', label: '删除' }]);
+  assert.deepEqual(f.api.menuActions.value, [{ action: 'remove', label: '从我的日记移除' }]);
   f.api.more(); f.api.menuOpened.value = false; f.api.chooseMenu('remove');
   assert.deepEqual(f.events, []);
 });
@@ -348,7 +348,7 @@ test('shared diary participants use the same direct two-action bubble', context 
   const f = harness(context, 'MealPostCard', {}, { timeline: true, manageable: true, post: familyPost({ isOwner: false, canDelete: true, canChangeVisibility: true }) });
   assert.equal(f.api.canManage.value, true);
   f.api.more();
-  assert.deepEqual(f.api.menuActions.value.map(action => action.label), ['设为公开', '删除']);
+  assert.deepEqual(f.api.menuActions.value.map(action => action.label), ['设为公开', '从我的日记移除']);
   f.api.chooseMenu('visibility');
   assert.deepEqual(f.events, [['visibility', 'public']]);
   f.api.more(); f.api.chooseMenu('remove');
@@ -490,4 +490,14 @@ test('meal publication waits for every selected photo, including failed uploads'
   await api.save();
   assert.equal(calls.length, 0);
   assert.match(api.error.value, /还有照片未上传成功/);
+});
+
+
+test('only server-authorized family authors get the explicit global delete action', context => {
+  for (const authorized of [false, true, undefined]) {
+    const f = harness(context, 'MealPostCard', {}, { post: familyPost({ canDelete: true, canDeleteFamily: authorized, isOwner: true }) });
+    assert.equal(f.api.menuActions.value.some(item => item.action === 'removeFamily'), authorized === true);
+    f.api.more(); f.api.chooseMenu('removeFamily');
+    assert.deepEqual(f.events, authorized === true ? [['removeFamily']] : []);
+  }
 });

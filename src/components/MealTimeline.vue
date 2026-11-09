@@ -39,11 +39,18 @@ async function visibility(post, value) {
   if (result?.post?.id === post.id && result.post.visibility === value) notify(value === 'family' ? '已设为仅饮食日记' : value === 'private' ? '已设为仅饮食日记' : '已设为公开');
   else if (error.value) notify(`未保存成功：${error.value}`);
 }
-async function remove(post) {
-  const yes = await new Promise(resolve => uni.showModal({ title: '删除这条餐食记录？', content: post.deleteScope === 'personal' || post.mealContext === 'family' || post.author?.mode === 'family' ? '仅从你的饮食日记中移除，其他家人的记录和发现页展示会保留。' : '这条动态会移除，原餐单状态保留。', confirmText: '删除', cancelText: '保留', confirmColor: NATIVE_UI_COLORS.danger, cancelColor: NATIVE_UI_COLORS.muted, success: result => resolve(result.confirm), fail: () => resolve(false) }));
+async function remove(post, wholeFamily = false) {
+  if (busy.value[post.id] || wholeFamily && post.canDeleteFamily !== true) return;
+  const personalOnly = !wholeFamily && (post.deleteScope === 'personal' || post.mealContext === 'family' || post.author?.mode === 'family');
+  const yes = await new Promise(resolve => uni.showModal({
+    title: wholeFamily ? '删除家庭餐食？' : personalOnly ? '从我的日记移除？' : '删除这条餐食记录？',
+    content: wholeFamily ? '将从发现页和所有家人的饮食日记中删除这条餐食，无法恢复。原餐单状态保留。' : personalOnly ? '仅从你的饮食日记中移除，其他家人的记录和发现页展示会保留。' : '这条动态会移除，原餐单状态保留。',
+    confirmText: personalOnly ? '移除' : '删除', cancelText: '保留', confirmColor: NATIVE_UI_COLORS.danger, cancelColor: NATIVE_UI_COLORS.muted,
+    success: result => resolve(result.confirm), fail: () => resolve(false),
+  }));
   if (yes) {
-    const result = await change('deleteMealPost', post);
-    if (!result && error.value) notify(`删除未成功：${error.value}`);
+    const result = await change(wholeFamily ? 'deleteFamilyMealPost' : 'deleteMealPost', post);
+    if (!result && error.value) notify(`未成功：${error.value}`);
   }
 }
 async function more() {
@@ -61,7 +68,7 @@ defineExpose({ refresh: () => load(false, true), loadMore: more, showRecords: ()
       <view class="meal-history-date" :aria-label="day.date"><text v-if="day.date.slice(0, 4) !== today.slice(0, 4)" class="meal-history-year">{{ day.date.slice(0, 4) }}</text><view class="meal-history-date-line"><text class="meal-history-day-number">{{ day.date.slice(8) }}</text><text class="meal-history-month">{{ Number(day.date.slice(5, 7)) }}月</text></view></view>
       <view class="meal-history-day-content">
         <view v-for="entry in day.entries" :key="entry.id" class="meal-history-entry">
-          <MealPostCard v-if="entry.post" timeline :personal-diary="true" :post="entry.post" :busy="Boolean(busy[entry.post.id])" @like="change('setMealLike', entry.post, { selected: $event })" @visibility="visibility(entry.post, $event)" @remove="remove(entry.post)" />
+          <MealPostCard v-if="entry.post" timeline :personal-diary="true" :post="entry.post" :busy="Boolean(busy[entry.post.id])" @like="change('setMealLike', entry.post, { selected: $event })" @visibility="visibility(entry.post, $event)" @remove="remove(entry.post)" @remove-family="remove(entry.post, true)" />
           <view v-else class="meal-history-order">
             <view class="meal-history-meal"><AppIcon :name="MEAL_ICONS[entry.meal] || 'menu'" :size="14" /><text>{{ entry.meal }}</text></view>
             <view class="meal-history-dishes"><button v-for="item in entry.order.items" :key="item.recipe.id" class="meal-history-dish" :aria-label="`查看${item.recipe.title}`" @click="$emit('open', item.recipe)" hover-class="touch-feedback"><LazyImage :src="foodCover(item.recipe.image)" variant="card" mode="aspectFill" thumbnail /></button></view>

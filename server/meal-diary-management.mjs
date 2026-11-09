@@ -8,7 +8,7 @@ const aliveFamily = family => family && !family.deletedAt && family.status !== '
 
 // Scope is always derived from the authenticated workspace and canonical meal;
 // accepting a client-supplied scope would let a personal delete erase a family.
-export async function mealDiaryCapabilities(db, post, userId, family) {
+async function diaryReferenceCapabilities(db, post, userId, family) {
   const none = { canDelete: false, canChangeVisibility: false, deleteScope: 'own' };
   if (!post || !await canReadMealPost(db, post, userId, family)) return none;
   const owns = post.authorId === userId;
@@ -25,10 +25,18 @@ export async function mealDiaryCapabilities(db, post, userId, family) {
   if (post.spaceId !== family.id) {
     // A mixed diary can contain this user's personal meals or archived meals
     // from a former family. Resolve rights as a personal reference there.
-    return mealDiaryCapabilities(db, post, userId, { id: personalSpaceId(userId), kind: 'personal' });
+    return diaryReferenceCapabilities(db, post, userId, { id: personalSpaceId(userId), kind: 'personal' });
   }
   const canManage = owns || post.visibility === 'public' || isSharedFamilyMeal(post) && post.visibility === 'family';
   return { canDelete: canManage, canChangeVisibility: canManage, deleteScope: 'personal' };
+}
+
+// The explicit global delete is independent of the currently selected mode.
+// Ownership comes from the canonical record, never from client capabilities.
+export const authoredFamilyMeal = (post, userId) => Boolean(post && post.authorId === userId && (post.mealContext === 'family' || post.author?.mode === 'family'));
+export async function mealDiaryCapabilities(db, post, userId, family) {
+  const capabilities = await diaryReferenceCapabilities(db, post, userId, family);
+  return { ...capabilities, canDeleteFamily: capabilities.canDelete && authoredFamilyMeal(post, userId) };
 }
 
 export async function hidePersonalMeal(db, post, userId, now) {

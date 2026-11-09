@@ -5,7 +5,7 @@ import { afterNativeRender } from '../composables/nativeRender.js';
 import { orderMenuActions, orderMenuGeometry, orderMenuIcon } from '../domain/order-action-menu.js';
 
 const props = defineProps({ label: String, status: String, opened: Boolean, busy: Boolean, actions: Array, floating: Boolean, elevated: Boolean, hasDishes: { type: Boolean, default: true } });
-const emit = defineEmits(['activate', 'close', 'cancel', 'restore', 'remove', 'edit', 'visibility']);
+const emit = defineEmits(['activate', 'close', 'cancel', 'restore', 'remove', 'edit', 'visibility', 'removeFamily']);
 const instance = getCurrentInstance();
 const triggerRef = ref(null);
 const menuRef = ref(null);
@@ -44,7 +44,7 @@ async function positionMenu() {
       query.select('.order-more-button').boundingClientRect(resolve).exec();
     });
     if (disposed || !props.opened || props.busy || request !== layoutRequest) return;
-    layout.value = orderMenuGeometry(anchor, uni.getWindowInfo?.() || uni.getSystemInfoSync(), options.value.length, options.value.some(option => option.action === 'visibility') ? 160 : 128);
+    layout.value = orderMenuGeometry(anchor, uni.getWindowInfo?.() || uni.getSystemInfoSync(), options.value.length, options.value.some(option => option.label.length > 6) ? 196 : options.value.some(option => option.action === 'visibility') ? 160 : 128);
     if (!layout.value) close(false);
     else focusOption();
   } catch {
@@ -120,7 +120,7 @@ onUnmounted(() => {
       <view ref="menuRef" class="order-menu-popover" :class="{ 'is-above': layout.placement === 'above' }" :style="menuStyle" @click.stop @keydown.stop="onMenuKey">
         <view class="order-menu-pointer" :style="{ left: `${layout.pointer}px` }" aria-hidden="true" />
         <scroll-view :id="menuId" class="order-menu-list" scroll-y enhanced :bounces="false" role="menu" :aria-label="`${label}的操作`">
-          <button v-for="(option, index) in options" :key="option.action" role="menuitem" class="order-menu-item" :class="{ 'is-danger': option.action === 'remove' }" :aria-label="`${option.label}${label}`" :tabindex="highlighted === index ? 0 : -1" :disabled="busy || !opened" @focus="highlighted = index" @click.stop="choose(option.action)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon v-if="orderMenuIcon(option.action)" class="order-menu-icon" :name="orderMenuIcon(option.action)" :size="18" /><text class="order-menu-label">{{ option.label }}</text></button>
+          <button v-for="(option, index) in options" :key="option.action" role="menuitem" class="order-menu-item" :class="{ 'is-danger': ['remove', 'removeFamily'].includes(option.action) }" :aria-label="`${option.label}${label}`" :tabindex="highlighted === index ? 0 : -1" :disabled="busy || !opened" @focus="highlighted = index" @click.stop="choose(option.action)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon v-if="orderMenuIcon(option.action)" class="order-menu-icon" :name="orderMenuIcon(option.action)" :size="18" /><text class="order-menu-label">{{ option.label }}</text></button>
         </scroll-view>
       </view>
     </view>
