@@ -1,11 +1,13 @@
+import { DEFAULT_FAMILY_COVER } from '../src/domain/family.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse, compileScript } from '@vue/compiler-sfc';
 import * as Vue from 'vue';
-import { MEAL_SLOTS, MEAL_MOODS, mealMoodDisplayLabel, mealPublicationAge } from '../src/domain/meal-social.js';
+import { MEAL_ICONS, mealOrigin, MEAL_SLOTS, MEAL_MOODS, mealMoodDisplayLabel, mealPublicationAge } from '../src/domain/meal-social.js';
 import { NATIVE_UI_COLORS } from '../src/domain/ui-theme.js';
 
+import { singleFeedImageWidth } from '../src/domain/feed-image-layout.js';
 import { mealPostMedia } from '../src/domain/meal-post-media.js';
 
 const compiled = new Map();
@@ -13,7 +15,7 @@ function harness(context, component, overrides = {}, props = {}) {
   const stopped = [], calls = [], events = [];
   const scope = Vue.effectScope();
   const modules = {
-    ...Vue, inject: (key, fallback) => fallback, notify() {}, mealPostMedia, MEAL_SLOTS, MEAL_MOODS, mealMoodDisplayLabel, mealPublicationAge, NATIVE_UI_COLORS,
+    ...Vue, DEFAULT_FAMILY_COVER, inject: (key, fallback) => fallback, notify() {}, singleFeedImageWidth, mealPostMedia, MEAL_ICONS, mealOrigin, MEAL_SLOTS, MEAL_MOODS, mealMoodDisplayLabel, mealPublicationAge, NATIVE_UI_COLORS,
     cloudStatus: Vue.ref({ phase: 'ready', familyId: 'family-a', userId: 'alice', mealSharingVersion: 2 }),
     currentIdentity: Vue.ref({ family: { id: 'family-a', name: '小厨房' } }),
     localDate: () => '2026-11-07', foodCover: image => image, previewImages() {},
@@ -376,4 +378,76 @@ test('discover public post IDs open the shared community detail without requesti
   const repeat = f.api.openMedia(f.api.media.value[0]);
   assert.equal(f.api.recipeDetail.value.id, 'public-r1');
   await repeat; assert.equal(f.calls.length, 1);
+});
+
+
+test('single feed photos shrink portrait and landscape previews and reset for another photo', context => {
+  const props = Vue.reactive({ feed: true, post: familyPost({ kind: 'actual', images: ['first'] }) });
+  const f = harness(context, 'MealPostCard', {}, props);
+  assert.equal(f.api.singleImageStyle.value.width, '160px');
+  f.api.rememberImageSize('first', { width: 900, height: 1600 });
+  assert.equal(f.api.singleImageStyle.value.width, '135px');
+  f.api.rememberImageSize('first', { width: 1600, height: 900 });
+  assert.equal(f.api.singleImageStyle.value.width, '200px');
+  props.post.images = ['second'];
+  assert.equal(f.api.singleImageStyle.value.width, '160px');
+  props.post.images = ['second', 'third'];
+  assert.deepEqual(f.api.singleImageStyle.value, {});
+});
+
+test('photo picker starts later selections independently, preserves order and reports one busy interval', async context => {
+  const jobs = [];
+  let selection = ['a', 'b'];
+  const props = { modelValue: [], fallbackImages: [], reservedCount: 6, disabled: false, purpose: 'meal' };
+  const { api, events } = harness(context, 'StepImagePicker', {
+    useSheetContentResize() {}, imageUploadLabel() {},
+    selectImagePaths: async count => selection.slice(0, count),
+    persistSelectedImages: (paths, report) => new Promise((resolve, reject) => { jobs.push({ path: paths[0], resolve, reject, report }); }),
+  }, props);
+  await api.choose();
+  assert.deepEqual(jobs.map(job => job.path), ['a', 'b']);
+  selection = ['c', 'd'];
+  await api.choose();
+  assert.deepEqual(jobs.map(job => job.path), ['a', 'b', 'c']);
+  assert.equal(api.capacity.value, 0);
+  jobs[2].resolve(['cloud-c']);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(api.busy.value, true);
+  jobs[1].resolve(['cloud-b']);
+  jobs[0].resolve(['cloud-a']);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(events.filter(event => event[0] === 'update:modelValue').at(-1)[1], ['cloud-a', 'cloud-b', 'cloud-c']);
+  assert.deepEqual(events.filter(event => event[0] === 'busy'), [['busy', true], ['busy', false]]);
+});
+
+test('failed photo retry does not duplicate successes or block new selections', async context => {
+  const jobs = [];
+  let selection = ['a'];
+  const { api, events } = harness(context, 'StepImagePicker', {
+    useSheetContentResize() {}, imageUploadLabel() {},
+    selectImagePaths: async () => selection,
+    persistSelectedImages: paths => new Promise((resolve, reject) => jobs.push({ path: paths[0], resolve, reject })),
+  }, { modelValue: [], fallbackImages: [], reservedCount: 0, disabled: false });
+  await api.choose();
+  jobs[0].reject(new Error('network'));
+  await new Promise(resolve => setImmediate(resolve));
+  selection = ['b'];
+  await api.choose();
+  await api.choose(true);
+  assert.deepEqual(jobs.map(job => job.path), ['a', 'b', 'a']);
+  jobs[2].resolve(['cloud-a']); jobs[1].resolve(['cloud-b']);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(events.filter(event => event[0] === 'update:modelValue').at(-1)[1], ['cloud-a', 'cloud-b']);
+  api.remove(0);
+  assert.deepEqual(events.filter(event => event[0] === 'update:modelValue').at(-1)[1], ['cloud-b']);
+});
+
+
+test('personal diary distinguishes original family and personal meals without following current viewing mode', context => {
+  for (const [mealContext, mode, expected] of [['family', 'personal', 'family'], ['personal', 'family', 'personal']]) {
+    const f = harness(context, 'MealPostCard', {}, { post: { id: mealContext, mealSharingVersion: 2, mealContext, author: { mode }, dishes: [], images: [], visibility: 'public' }, personalDiary: true, timeline: true });
+    assert.equal(f.api.origin.value, expected);
+  }
+  assert.equal(mealOrigin({ author: { mode: 'family' } }), 'family');
+  assert.equal(mealOrigin({}), '');
 });

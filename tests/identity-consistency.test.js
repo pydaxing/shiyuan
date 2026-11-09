@@ -1,3 +1,5 @@
+import { defaultAvatarForUser } from '../src/domain/default-profile.js';
+import { DEFAULT_FAMILY_COVER } from '../src/domain/family.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -133,7 +135,7 @@ test('explicit invitation profile edits synchronize memberships atomically and r
   assert.equal((await f.db.get('users', hash('alice'))).name, '主动修改');
 });
 
-test('uncovered family uses current member avatar with post-scoped access and preserves legacy response', async () => {
+test('uncovered family uses publisher avatar and permits only that identity image', async () => {
   const f = fixture(); const a = await f.family(); const b = await f.family('读者', 'bob');
   const avatar = await f.image('profile-avatar', hash('alice'), a.familyId, { profile: true });
   await ok(f.call('updateProfile', { name: 'alice', avatar }));
@@ -141,12 +143,16 @@ test('uncovered family uses current member avatar with post-scoped access and pr
   await f.db.set('meal_posts', post.id, post);
   const modern = await ok(f.call('mealFeed', { spaceId: b.familyId, identityPresentationVersion: 1 }, 'bob'));
   assert.equal(modern.posts[0].author.avatar, avatar);
-  await ok(f.call('mediaContent', { fileId: avatar, variant: 'avatar', postId: post.id }, 'bob'));
+  assert.equal((await f.call('mediaContent', { fileId: avatar, variant: 'avatar', postId: post.id }, 'bob')).ok, true);
   const legacy = await ok(f.call('mealFeed', { spaceId: b.familyId }, 'bob'));
   assert.equal(legacy.posts[0].author.avatar, '');
   const family = await f.db.get('families', a.familyId);
+  await f.db.set('families', a.familyId, { ...family, cover: DEFAULT_FAMILY_COVER });
+  assert.equal((await createIdentityPresentation(f.db).meal(post, { liveImages: true })).avatar, avatar);
+  await f.db.set('families', a.familyId, { ...family, cover: 'cloud://custom-cover' });
+  assert.equal((await createIdentityPresentation(f.db).meal(post, { liveImages: true })).avatar, 'cloud://custom-cover');
   await f.db.set('families', a.familyId, { ...family, members: [] });
-  assert.equal((await createIdentityPresentation(f.db).meal(post, { liveImages: true })).avatar, '');
+  assert.equal((await createIdentityPresentation(f.db).meal(post, { liveImages: true })).avatar, defaultAvatarForUser(post.authorId));
   assert.equal((await f.call('mediaContent', { fileId: avatar, variant: 'avatar', postId: post.id }, 'bob')).code, 'FORBIDDEN');
 });
 
@@ -174,4 +180,19 @@ test('personal friend shares store nickname and follow later profile renames by 
   await ok(f.call('updateProfile', { name: '小豆新昵称' }));
   assert.equal((await ok(f.call('readShare', { token: share.token }))).post.author, '小豆新昵称');
   assert.equal((await f.db.get('families', personal.familyId)).name, '我的餐桌');
+});
+
+
+test('family reference keeps identity across viewing spaces and canonical context overrides stale author mode', async () => {
+  const db = memoryRepository();
+  await db.set('families', 'family', { id: 'family', name: '家庭名称', cover: 'cloud://family-cover', members: [{ id: 'alice' }] });
+  await db.set('users', 'alice', { name: '个人名称', avatar: 'cloud://personal-avatar' });
+  const post = { spaceId: 'family', authorId: 'alice', mealSharingVersion: 2, mealContext: 'family', author: { mode: 'personal', name: '旧名称', avatar: 'cloud://personal-avatar' } };
+  for (const currentSpaceId of ['family', 'personal-alice', 'personal-bob']) {
+    const result = await createIdentityPresentation(db).meal(post, { liveImages: true, currentSpaceId });
+    assert.equal(result.name, '家庭名称'); assert.equal(result.avatar, 'cloud://family-cover'); assert.equal(result.mode, 'family');
+  }
+  const personal = await createIdentityPresentation(db).meal({ ...post, mealContext: 'personal', author: { mode: 'family' } }, { liveImages: true });
+  assert.equal(personal.name, '个人名称'); assert.equal(personal.avatar, 'cloud://personal-avatar'); assert.equal(personal.mode, 'personal');
+  assert.equal(post.author.avatar, 'cloud://personal-avatar');
 });

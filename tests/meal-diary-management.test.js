@@ -244,3 +244,74 @@ test('automatic shared diary personal hide survives archive reads without affect
   assert.equal((await f.diary(familyId)).posts[0].id, post.id);
   assert.equal((await f.repository.get('meal_posts', post.id)).status, 'published');
 });
+
+test('received likes count the personal diary union and family meals across pages', async () => {
+  const f = fixture(), familyId = await f.family();
+  await f.join('bob');
+  const shared = await f.publish(familyId, { visibility: 'public' });
+  const record = await f.repository.get('meal_posts', shared.id);
+  for (let n = 0; n < 105; n++) await f.repository.set('meal_posts', `count-${n}`, { ...record, id: `count-${n}`, likeCount: 2, createdAt: n + 1 });
+  assert.deepEqual(ok(await f.call('mealReceivedLikes', { spaceId: familyId })), { spaceId: familyId, receivedLikes: 210, mealCount: 106 });
+  assert.deepEqual(ok(await f.call('mealReceivedLikes', { spaceId: familyId }, 'bob')), { spaceId: familyId, receivedLikes: 210, mealCount: 106 });
+  await f.repository.set('meal_posts', 'deleted-count', { ...record, id: 'deleted-count', status: 'deleted', likeCount: 99 });
+  await f.repository.set('meal_posts', 'legacy-private', { ...record, id: 'legacy-private', visibility: 'private', likeCount: 99 });
+  const personalId = await f.personal('alice');
+  const personal = await f.publish(personalId, { visibility: 'public' });
+  const personalPost = await f.repository.get('meal_posts', personal.id);
+  await f.repository.set('meal_posts', personal.id, { ...personalPost, likeCount: 7 });
+  assert.equal(ok(await f.call('mealReceivedLikes', { spaceId: personalId })).receivedLikes, 316, 'personal diary includes family likes and authored legacy meals once');
+  assert.equal((await f.call('mealReceivedLikes', { spaceId: familyId })).code, 'CONFLICT');
+  assert.deepEqual(ok(await f.call('mealReceivedLikes', { spaceId: familyId }, 'bob')), { spaceId: familyId, receivedLikes: 210, mealCount: 106 });
+  await f.repository.set('meal_posts', personal.id, { ...personalPost, likeCount: 6 });
+  assert.equal(ok(await f.call('mealReceivedLikes', { spaceId: personalId })).receivedLikes, 315);
+  ok(await f.remove(personalId, personal.id));
+  assert.deepEqual(ok(await f.call('mealReceivedLikes', { spaceId: personalId })), { spaceId: personalId, receivedLikes: 309, mealCount: 107 });
+});
+
+test('feed starts likes and dish reads before viewer reaction completes without changing the response', async () => {
+  const f = fixture(), spaceId = await f.family();
+  const post = await f.publish(spaceId, { visibility: 'public' });
+  const stored = await f.repository.get('meal_posts', post.id);
+  await f.repository.set('meal_posts', post.id, { ...stored, kind: 'plan', orderId: 'performance-order', dishes: [{ title: '测试菜' }], likeCount: 1 });
+  const query = { spaceId, mealLikesVersion: 1, mealSharingVersion: 2, identityPresentationVersion: 1 };
+  const expected = ok(await f.call('mealFeed', query));
+  const get = f.repository.get.bind(f.repository), list = f.repository.list.bind(f.repository);
+  let release, likesStarted = false, dishesStarted = false;
+  const blocked = new Promise(resolve => { release = resolve; });
+  f.repository.get = async (collection, id, options) => {
+    if (collection === 'meal_reactions') await blocked;
+    if (collection === 'orders') dishesStarted = true;
+    return get(collection, id, options);
+  };
+  f.repository.list = (...args) => {
+    if (args[0] === 'meal_reactions') likesStarted = true;
+    return list(...args);
+  };
+  const pending = f.call('mealFeed', query);
+  try {
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(likesStarted, true, 'like names must not wait for viewer reaction');
+    assert.equal(dishesStarted, true, 'dish sources must not wait for viewer reaction');
+  } finally { release(); }
+  assert.deepEqual(ok(await pending), expected);
+});
+
+
+test('personal cooking and likes totals include eaten family meals once and respect diary removal', async () => {
+  const f = fixture(), familyId = await f.family();
+  await f.join('bob');
+  const own = await f.publish(familyId, { visibility: 'public' });
+  const other = await f.publish(familyId, { visibility: 'family' }, 'bob');
+  const personalId = await f.personal('alice');
+  const solo = await f.publish(personalId, { visibility: 'private' });
+  for (const [post, likes] of [[own, 2], [other, 3], [solo, 1]]) {
+    await f.repository.set('meal_posts', post.id, { ...await f.repository.get('meal_posts', post.id), likeCount: likes });
+  }
+  const stats = async () => ok(await f.call('mealReceivedLikes', { spaceId: personalId }));
+  assert.deepEqual(await stats(), { spaceId: personalId, mealCount: 3, receivedLikes: 6 }, 'authored family post found in both branches counts once');
+  ok(await f.remove(personalId, other.id));
+  assert.deepEqual(await stats(), { spaceId: personalId, mealCount: 2, receivedLikes: 3 }, 'personal hiding removes only own diary reference');
+  assert.deepEqual(ok(await f.call('mealReceivedLikes', { spaceId: familyId }, 'bob')), { spaceId: familyId, mealCount: 2, receivedLikes: 5 });
+  ok(await f.remove(familyId, own.id, 'bob'));
+  assert.deepEqual(await stats(), { spaceId: personalId, mealCount: 1, receivedLikes: 1 }, 'shared deletion removes personal totals too');
+});

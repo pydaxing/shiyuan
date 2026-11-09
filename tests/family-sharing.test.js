@@ -654,7 +654,7 @@ test('share buttons route invitations, dishes and sets via native share hooks, n
   assert.ok(page.pages.some(item => item.path === 'pages/invite/index'));
   for (const target of ['invite', 'shared']) {
     const source = readFileSync(new URL(`src/pages/${target}/index.vue`, root), 'utf8');
-    assert.match(source, /<view class="app-shell"[^>]*><view class="entry-page /);
+    assert.match(source, /<view[^>]*class="app-shell"[^>]*><view class="entry-page /);
     assert.match(source, /@click="dismissFocusedKeyboard"/);
   }
 });

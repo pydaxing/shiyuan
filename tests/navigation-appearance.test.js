@@ -43,3 +43,36 @@ test('native navigation follows the top page and restores the family cover throu
     globalThis.uni = previous;
   }
 });
+
+test('unchanged layered appearances avoid native calls, failures can retry', () => {
+  const previous = globalThis.uni;
+  const calls = [];
+  const scopes = [];
+  globalThis.uni = { setNavigationBarColor: value => calls.push(value) };
+  const open = value => {
+    const appearance = ref(value);
+    const scope = effectScope();
+    scopes.push(scope);
+    scope.run(() => useNavigationAppearance(appearance));
+    return { appearance, close: () => scope.stop() };
+  };
+  try {
+    const base = open('dark');
+    const editor = open('light');
+    for (let index = 0; index < 20; index++) base.appearance.value = index % 2 ? 'dark' : 'light';
+    const dialog = open(null);
+    dialog.close();
+    assert.equal(calls.length, 2, 'covered pages and transparent dialogs do not resend the same color');
+    calls.at(-1).fail();
+    base.appearance.value = 'light';
+    assert.equal(calls.length, 3, 'failed native updates are retried on the next appearance change');
+    calls[1].fail();
+    base.appearance.value = 'dark';
+    assert.equal(calls.length, 3, 'old failure cannot invalidate the newer request');
+    editor.close();
+    assert.equal(calls.at(-1).frontColor, '#ffffff');
+  } finally {
+    scopes.reverse().forEach(scope => scope.stop());
+    globalThis.uni = previous;
+  }
+});

@@ -177,7 +177,7 @@ test('choosing a compact unit or category still emits the original value and clo
 test('food category selection holds the toolbar open and activates even the unchanged default category', async context => {
   const { field, events, resizeListeners } = selectFixture(context, { variant: 'feed', active: false, modelValue: '荤菜', options: ['荤菜', '套餐'] });
   await field.show();
-  assert.deepEqual(field.dropdownLayout.value, { top: 144, left: 100, width: 176, height: 62 });
+  assert.deepEqual(field.dropdownLayout.value, { top: 144, left: 100, width: 168, height: 62 });
   assert.equal(resizeListeners.size, 1);
   field.choose('荤菜');
   assert.deepEqual(events, [['open-change', true], ['update:modelValue', '荤菜'], ['open-change', false]]);

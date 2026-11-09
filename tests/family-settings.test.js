@@ -23,10 +23,10 @@ function mount(context, name, overrides = {}, props = {}) {
   const modals = [];
   const members = [{ id: 'me', name: '我' }, { id: 'other', name: '家人' }];
   const modules = {
-    ...Vue, ...familyHelpers, presentMutation, NATIVE_UI_COLORS, coverFrameStyle, onMounted: callback => mounted.push(callback), onUnmounted: callback => unmounted.push(callback),
+    APP_VERSION: JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version, ...Vue, ...familyHelpers, presentMutation, NATIVE_UI_COLORS, coverFrameStyle, onMounted: callback => mounted.push(callback), onUnmounted: callback => unmounted.push(callback),
     state: Vue.ref({ family: { name: '我们的小家', cover: '', coverTitle: '', ownerId: 'me', members }, activeMemberId: 'me' }),
     cloudMode: true, cloudStatus: Vue.ref({ userId: 'me', familyId: 'current' }), preferencePending: Vue.ref(false),
-    familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null),
+    familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null), useReceivedMealLikes: () => ({ count: Vue.ref(0), mealCount: Vue.ref(0), error: Vue.ref(''), refresh: async () => {} }),
     familyFeatures: Vue.ref({ fridge: false, shopping: false }),
     activeMember: Vue.ref(members[0]), sheetOpen: Vue.ref(false), useNavigationAppearance() {}, dismissFocusedKeyboard() {}, notify: message => notices.push(message), useSheetContentResize: () => () => {},
     ...overrides,
@@ -52,7 +52,7 @@ function renderTemplate(name, api, props, templateContext = {}) {
     resolveComponent: tag => tag,
     renderSlot: (slots, name, slotProps, fallback) => Vue.h(Vue.Fragment, slots[name]?.(slotProps) ?? fallback?.() ?? []),
   });
-  return render({ $feedback() {}, $slots: {}, ...templateContext }, [], props, Vue.proxyRefs(api), {}, {});
+  return render({ $feedback() {}, $image: value => value, $slots: {}, ...templateContext }, [], props, Vue.proxyRefs(api), {}, {});
 }
 
 function renderedNodes(node) {
@@ -443,11 +443,10 @@ test('percentage overlays expose accessible numeric progress without visible sta
 test('step upload tiles use the same grid and center a percentage on each image', context => {
   const props = { modelValue: ['cloud://saved-step'], label: '步骤1图片' };
   const { api } = mount(context, 'StepImagePicker', { imageUploadLabel }, props);
-  api.busy.value = true;
-  api.pendingPhotos.value = [
-    { path: 'uploading.jpg', preview: 'small-upload.jpg', status: 'uploading', progress: 42 },
-    { path: 'saving.jpg', status: 'saving' },
-    { path: 'finished.jpg', status: 'done' },
+  api.entries.value = [
+    { path: 'uploading.jpg', preview: 'small-upload.jpg', status: 'uploading', stage: 'uploading', progress: 42 },
+    { path: 'saving.jpg', status: 'uploading', stage: 'saving' },
+    { path: 'finished.jpg', status: 'uploading', stage: 'done' },
     { path: 'failed.jpg', status: 'failed' },
   ];
   const nodes = renderedNodes(renderTemplate('StepImagePicker', api, props));
@@ -562,7 +561,7 @@ test('family mode switch sends a scoped request, prevents duplicate taps and ret
   assert.equal(familyNodes(api).some(node => node.props?.role === 'switch'), true);
   assert.equal(api.settingsOpen, undefined);
   const control = () => familyNodes(api).find(node => node.props?.role === 'switch');
-  const identity = () => familyNodes(api).find(node => node.props?.class === 'account-identity-label').children;
+  const identity = () => familyNodes(api).find(node => node.props?.class?.includes('account-identity-symbol')).props['aria-label'];
   assert.equal(control().props['aria-label'], '家庭模式');
   assert.equal(control().props['aria-checked'], true);
   assert.equal(identity(), '家庭');
@@ -1022,7 +1021,7 @@ test('owner exit uses one confirmation and lets the server choose a successor', 
   const cancelled = api.leave();
   assert.equal(api.creating.value, false);
   assert.equal(modals.length, 1);
-  assert.match(modals[0].content, /自动交接给最早加入/);
+  assert.equal(modals[0].content, '');
   assert.equal(modals[0].editable, undefined);
   modals[0].success({ confirm: false });
   await cancelled;
@@ -1048,18 +1047,18 @@ test('ordinary members can exit with confirmation but cannot delete their family
   const pending = api.leave();
   assert.equal(modals.length, 1);
   assert.doesNotMatch(modals[0].content, /交接/);
-  assert.match(modals[0].content, /若退出时已无其他成员，家庭将自动删除/);
+  assert.equal(modals[0].content, '');
   modals[0].success({ confirm: true });
   await pending;
   assert.deepEqual(calls, [['leaveFamily', { familyId: 'current', expectedCurrentFamilyId: 'current' }]]);
 });
 
-test('last-member exit warns about automatic deletion without asking for a name', async context => {
+test('last-member exit keeps a title-only confirmation without asking for a name', async context => {
   const calls = [];
   const { api, modules, modals } = mount(context, 'FamilyManagement', { manageFamily: async (...args) => calls.push(args) });
   modules.state.value.family.members = [modules.state.value.family.members[0]];
   const pending = api.leave();
-  assert.match(modals[0].content, /最后一位成员.*自动删除.*不能撤销/);
+  assert.equal(modals[0].content, '');
   assert.equal(modals[0].confirmText, '确认退出');
   assert.equal(modals[0].editable, undefined);
   modals[0].success({ confirm: true });
@@ -1068,12 +1067,12 @@ test('last-member exit warns about automatic deletion without asking for a name'
   assert.deepEqual(calls, [['leaveFamily', { familyId: 'current', expectedCurrentFamilyId: 'current' }]]);
 });
 
-test('exit combines discarding unsaved appearance edits into the same confirmation', async context => {
+test('title-only exit confirmation still handles unsaved appearance edits', async context => {
   const calls = [];
   let discardPrompts = 0;
   const { api, modals } = mount(context, 'FamilyManagement', { manageFamily: async (...args) => calls.push(args) }, { unsavedChanges: true, beforeChange: async () => { discardPrompts += 1; return false; } });
   const pending = api.leave();
-  assert.match(modals[0].content, /名称与封面未保存的修改也将放弃/);
+  assert.equal(modals[0].content, '');
   modals[0].success({ confirm: true });
   await pending;
   assert.equal(discardPrompts, 0);
@@ -1264,7 +1263,7 @@ test('both account modes share the same cover layout and retain only the househo
     assert.equal(nodes.some(node => node.props?.['aria-label'] === '查看我的家庭'), !personal);
     assert.equal(nodes.some(node => node.props?.['aria-label'] === '编辑菜单外观'), false);
     assert.equal(nodes.some(node => node.props?.['aria-label'] === '打开设置'), false);
-    assert.equal(nodes.find(node => node.props?.class === 'account-identity-label').children, personal ? '个人' : '家庭');
+    assert.equal(nodes.find(node => node.props?.class?.includes('account-identity-symbol')).props['aria-label'], personal ? '个人' : '家庭');
     const familyName = nodes.find(node => node.props?.class === 'account-family-name');
     assert.equal(familyName?.children, personal ? undefined : modules.state.value.family.name);
     const symbol = nodes.find(node => node.props?.class?.includes('account-identity-symbol'));
@@ -1278,7 +1277,7 @@ test('family switch failures preserve mode and missing family routes to manageme
   let code = 'NETWORK';
   const { api, modules, events, notices } = mount(context, 'FamilyView', { manageFamily: async () => { throw Object.assign(new Error('切换失败'), { code }); } });
   modules.state.value.family.kind = 'personal';
-  const identity = () => familyNodes(api).find(node => node.props?.class === 'account-identity-label').children;
+  const identity = () => familyNodes(api).find(node => node.props?.class?.includes('account-identity-symbol')).props['aria-label'];
   const pending = api.toggleMode();
   assert.equal(identity(), '家庭');
   assert.equal(familyNodes(api).some(node => node.props?.class === 'account-family-name'), false, 'personal workspace name must never appear as a household name');
@@ -1512,4 +1511,17 @@ test('privacy link navigates independently of consent and has a registered stand
   assert.deepEqual(events, [], 'reading the agreement must not accept it');
   const pages = JSON.parse(readFileSync(new URL('../src/pages.json', import.meta.url), 'utf8'));
   assert.ok(pages.pages.some(page => page.path === 'pages/privacy/index'));
+});
+
+
+test('profile identity follows mode while statistics do not depend on menu lists', context => {
+  const { api, modules } = mount(context, 'FamilyView');
+  modules.state.value.family = { id: 'personal', kind: 'personal', members: [] };
+  modules.state.value.recipes = [{ id: 'a' }, { id: 'b' }];
+  modules.state.value.mealSets = [{ id: 'set' }];
+  assert.equal(familyNodes(api).find(node => node.props?.class === 'account-personal-caption').children, '一个人也要好好吃饭~');
+  modules.familyModePreview.value = { userId: 'me', id: 'household', name: '家' };
+  api.requestedFamilyMode.value = true;
+  modules.state.value = { family: { id: 'household', kind: 'family', name: '家', members: [] }, recipes: [], mealSets: [] };
+  assert.equal(familyNodes(api).find(node => node.props?.class === 'account-family-name').children, '家');
 });

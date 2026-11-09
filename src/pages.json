@@ -26,6 +26,15 @@
       "path": "pages/privacy/index",
       "style": {
         "navigationBarTitleText": "隐私协议",
+        "navigationStyle": "custom",
+        "navigationBarBackgroundColor": "#ffffff"
+      }
+    },
+    {
+      "path": "pages/about/index",
+      "style": {
+        "navigationBarTitleText": "关于食愿小灶",
+        "navigationStyle": "custom",
         "navigationBarBackgroundColor": "#ffffff"
       }
     }

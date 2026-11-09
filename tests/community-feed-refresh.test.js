@@ -133,10 +133,10 @@ test('native refresh stays active for the real request and ignores repeated trig
   assert.equal(viewport.refreshing.value, false);
 });
 
-test('loading, editing and open sheets prevent new refresh work and release native feedback', async context => {
+test('editing and open sheets prevent new refresh work and release native feedback', async context => {
   let calls = 0;
   const viewport = fixture(context, async () => { calls += 1; });
-  for (const [control, blocked] of [[viewport.loading, true], [viewport.locked, true], [viewport.enabled, false]]) {
+  for (const [control, blocked] of [[viewport.locked, true], [viewport.enabled, false]]) {
     const previous = control.value;
     control.value = blocked;
     assert.equal(viewport.refresherEnabled.value, control === viewport.loading, 'loading blocks requests without disabling native restoration');
@@ -288,4 +288,24 @@ test('refresh results cannot overwrite a newer filter or family scope', async co
   delayed.resolve({ posts: [{ id: 'stale-result' }] });
   await refreshing;
   assert.deepEqual(feed.state.value.posts, [{ id: '素菜' }]);
+});
+
+test('background loading queues one refresh and disposal releases the wait', async context => {
+  let calls = 0;
+  const viewport = fixture(context, async () => { calls += 1; });
+  viewport.loading.value = true;
+  const pull = viewport.onRefresh();
+  await nextTick();
+  await viewport.onRefresh();
+  assert.equal(calls, 0);
+  viewport.loading.value = false;
+  await pull;
+  assert.equal(calls, 1);
+  viewport.loading.value = true;
+  const cancelled = viewport.onRefresh();
+  await nextTick();
+  viewport.scope.stop();
+  await cancelled;
+  assert.equal(calls, 1);
+  assert.equal(viewport.refreshing.value, false);
 });

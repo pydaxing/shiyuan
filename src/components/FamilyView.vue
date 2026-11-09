@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref, watch } from 'vue';
+import { APP_VERSION } from '../domain/app-info.js';
 import { state, activeMember, cloudMode, cloudStatus, notify } from '../store.js';
 import ProfileEditor from './ProfileEditor.vue';
 import LazyImage from './LazyImage.vue';
@@ -12,8 +13,9 @@ import { familyModePreview, personalModePreview, manageFamily } from '../service
 import { familyAppearance } from '../domain/family.js';
 import { localDate } from '../domain/kitchen.js';
 import { useNavigationAppearance } from '../composables/useNavigationAppearance.js';
+import { useReceivedMealLikes } from '../composables/useReceivedMealLikes.js';
 import { sheetOpen } from '../composables/sheetStack.js';
-defineProps({ today: { type: String, default: localDate }, refreshAction: Function });
+const props = defineProps({ today: { type: String, default: localDate }, refreshAction: Function });
 const emit = defineEmits(['customize', 'manage', 'diary']);
 const personal = computed(() => state.value.family.kind === 'personal');
 const modeBusy = ref(false);
@@ -41,6 +43,11 @@ const displayedFamily = computed(() => !personal.value ? state.value.family
 const displayedPersonal = computed(() => personal.value ? state.value.family
   : personalModePreview.value?.userId === cloudStatus.value.userId ? personalModePreview.value : null);
 const familyDisplay = computed(() => familyAppearance((displayedFamilyMode.value ? displayedFamily.value : displayedPersonal.value) || {}));
+const displayedSpaceId = computed(() => (displayedFamilyMode.value ? displayedFamily.value : displayedPersonal.value)?.id || '');
+const { count: receivedLikes, mealCount: cookedMeals, error: likesError, refresh: refreshLikes } = useReceivedMealLikes(displayedSpaceId);
+const receivedLikesLabel = computed(() => receivedLikes.value === null ? '—' : receivedLikes.value >= 10000 ? `${Math.floor(receivedLikes.value / 1000) / 10}万` : String(receivedLikes.value));
+const cookedMealsLabel = computed(() => cookedMeals.value === null ? '—' : cookedMeals.value >= 10000 ? `${Math.floor(cookedMeals.value / 1000) / 10}万` : String(cookedMeals.value));
+async function refreshAccount() { await Promise.all([props.refreshAction?.(), refreshLikes()]); }
 const displayedMemberCount = computed(() => displayedFamily.value?.members?.length ?? displayedFamily.value?.memberCount);
 const headerOpacity = ref(0);
 const headerSolid = computed(() => headerOpacity.value >= 0.4);
@@ -53,6 +60,8 @@ function onScroll(event) {
 defineExpose({ onScroll });
 useNavigationAppearance(computed(() => !headerSolid.value ? 'dark' : 'light'));
 const about = ref(false);
+function openPrivacy() { uni.navigateTo({ url: '/pages/privacy/index' }); }
+function openAppAbout() { uni.navigateTo({ url: '/pages/about/index' }); }
 const familyOpen = ref(false);
 const familySheet = ref(null);
 const familyManagement = ref(null);
@@ -84,18 +93,25 @@ function familyChanged() {
 
 <template>
   <view class="family-view">
-    <StretchCover class="account-hero has-family-cover" :src="familyDisplay.cover" :personal="!displayedFamilyMode" :enabled="true" :active="!sheetOpen" :at-top="atTop" :refresh-action="refreshAction">
+    <StretchCover class="account-hero has-family-cover" :src="familyDisplay.cover" :personal="!displayedFamilyMode" :enabled="true" :active="!sheetOpen" :at-top="atTop" :refresh-action="refreshAccount">
       <template #navigation><PageHeader :title="pageTitle" :cover="!headerSolid" :fade="headerOpacity" /></template>
       <button role="button" class="account-profile" :class="{ 'is-pending': modeBusy }" :disabled="modeBusy" aria-label="编辑我的资料与封面" @click.stop="editProfile" hover-class="touch-feedback">
+        <view class="account-person-row">
         <view class="account-avatar"><LazyImage :src="activeMember.avatar" variant="avatar" avatar round /></view>
         <view class="account-copy">
           <text class="account-name">{{ activeMember.name || '我' }}</text>
-          <view class="account-identity" :aria-busy="modeBusy">
-            <view class="account-identity-badge"><view class="account-identity-symbol" :class="{ 'is-family': displayedFamilyMode }" aria-hidden="true"><AppIcon :name="displayedFamilyMode ? 'identity-home-inverse' : 'identity-person-inverse'" :size="14" /></view><text class="account-identity-label">{{ displayedFamilyMode ? '家庭' : '个人' }}</text></view>
+          <view class="account-subtitle">
+            <view class="account-identity-symbol" :class="{ 'is-family': displayedFamilyMode }" :aria-label="displayedFamilyMode ? '家庭' : '个人'"><AppIcon :name="displayedFamilyMode ? 'identity-home-inverse' : 'identity-person-inverse'" :size="13" /></view>
             <text v-if="displayedFamilyMode && displayedFamily" class="account-family-name">{{ familyDisplay.name }}</text>
+            <text v-else-if="!displayedFamilyMode" class="account-personal-caption">一个人也要好好吃饭~</text>
           </view>
         </view>
         <view class="account-profile-chevron"><AppIcon name="chevron" :size="18" /></view>
+        </view>
+        <view class="account-summary-row" :aria-busy="modeBusy">
+          <view class="account-stat" :aria-label="cookedMeals === null ? '开火次数加载中' : `已记录${cookedMeals}餐`"><text class="account-stat-number">{{ cookedMealsLabel }}</text><text class="account-stat-label">开火</text></view>
+          <view class="account-stat" :aria-label="receivedLikes === null ? (likesError || '获赞数加载中') : `${displayedFamilyMode ? '家庭' : '个人'}获赞${receivedLikes}次`"><text class="account-stat-number">{{ receivedLikesLabel }}</text><text class="account-stat-label">获赞</text></view>
+        </view>
       </button>
       <template #content>
         <view class="account-sections">
@@ -109,6 +125,8 @@ function familyChanged() {
           </view>
           <view class="account-group">
             <button role="button" class="account-row family-help-entry" aria-label="打开使用说明" @click.stop="about = true" hover-class="touch-feedback"><AppIcon name="menu" :size="22" /><text class="account-row-title">使用说明</text><AppIcon name="chevron" :size="16" /></button>
+            <button role="button" class="account-row family-help-entry family-privacy-entry" aria-label="打开隐私协议" @click.stop="openPrivacy" hover-class="touch-feedback"><AppIcon name="lock" :size="22" /><text class="account-row-title">隐私协议</text><AppIcon name="chevron" :size="16" /></button>
+            <button role="button" class="account-row family-about-entry" aria-label="关于食愿小灶" @click.stop="openAppAbout" hover-class="touch-feedback"><image class="account-about-logo" :src="$image('/static/brand-shiyuan-mark.png')" mode="aspectFit" aria-hidden="true" /><text class="account-row-title">关于食愿小灶</text><text class="account-row-value">版本 {{ APP_VERSION }}</text><AppIcon name="chevron" :size="16" /></button>
           </view>
         </view>
       </template>
@@ -130,30 +148,34 @@ function familyChanged() {
 .feature-switch.pending { opacity: 1; }
 .account-workspace-group .account-row.is-pending { opacity: 1; }
 .family-view { min-height: calc(100vh - var(--account-bottom-inset, 0px)); margin: 0 calc(-1 * var(--page-gutter)); background: var(--paper); }
-.account-profile { display: flex; align-items: center; gap: 18px; width: 100%; box-sizing: border-box; height: var(--home-cover-content-height); padding: calc(var(--home-cover-content-height) - 104px) 24px 40px; background: var(--white); color: var(--ink); text-align: left; }
+.account-profile { display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; width: 100%; box-sizing: border-box; height: var(--home-cover-content-height); padding: 24px 24px 40px; background: var(--white); color: var(--ink); text-align: left; }
+.account-person-row { display: flex; align-items: center; gap: 18px; width: 100%; min-width: 0; }
+.account-summary-row { display: flex; align-items: center; justify-content: flex-start; gap: 30px; width: 100%; min-width: 0; }
 .account-profile.is-pending { opacity: 1; }
 .has-family-cover .account-profile { position: relative; background: transparent; color: var(--white); border-radius: 0; }
 .has-family-cover .account-avatar { box-shadow: 0 0 0 1px var(--profile-cover-border); }
 .has-family-cover .account-family-name { color: var(--white); }
 .has-family-cover .account-name, .has-family-cover .account-family-name { text-shadow: 0 1px 3px rgba(22, 28, 32, .45); }
-.has-family-cover .account-identity-badge { background: var(--photo-label-surface); color: var(--white); }
+
 .account-profile-chevron { display: flex; align-items: center; flex-shrink: 0; }
 .has-family-cover .account-profile-chevron { filter: brightness(0) invert(1); }
 .account-avatar { width: 64px; height: 64px; flex: 0 0 64px; overflow: hidden; border-radius: 50%; }
 .account-avatar .lazy-photo { width: 100%; height: 100%; }
 .account-copy { flex: 1; min-width: 0; }
 .account-name { display: block; font-size: var(--type-title); font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-.account-identity { display: flex; align-items: center; gap: 8px; min-height: 22px; margin-top: 7px; }
-.account-identity-badge { display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex-shrink: 0; box-sizing: border-box; height: 22px; padding: 0 9px; border-radius: 999px; background: var(--control-accent); color: var(--green); }
-.account-identity-symbol { display: flex; align-items: center; justify-content: center; flex: 0 0 14px; width: 14px; height: 14px; }
-.account-identity-label { display: block; font-size: var(--type-caption); font-weight: 500; line-height: 1; text-align: center; white-space: nowrap; }
-.account-family-name { display: block; min-width: 0; overflow: hidden; color: var(--muted); font-size: var(--type-meta); line-height: 22px; text-overflow: ellipsis; white-space: nowrap; }
+.account-subtitle { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: 7px; }
+.account-identity-symbol { display: flex; align-items: center; justify-content: center; flex: 0 0 13px; width: 13px; height: 13px; }
+.account-family-name, .account-personal-caption { display: block; min-width: 0; overflow: hidden; font-size: var(--type-caption); font-weight: 400; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; text-shadow: 0 1px 3px rgba(22, 28, 32, .45); }
+.account-stat { display: flex; align-items: baseline; gap: 6px; white-space: nowrap; text-shadow: 0 1px 3px rgba(22, 28, 32, .45); }
+.account-stat-number { font-size: var(--type-title); line-height: 26px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.account-stat-label { font-size: var(--type-caption); line-height: 18px; }
 .account-sections { position: relative; margin-top: calc(-1 * var(--radius-sheet)); padding: 0 0 24px; }
 .account-group:first-child { overflow: hidden; border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; }
 .account-group { margin-bottom: 12px; background: var(--white); }
 .account-row { display: flex; align-items: center; gap: 14px; width: 100%; box-sizing: border-box; min-height: 58px; padding: 13px 20px; text-align: left; color: var(--ink); background: var(--white); }
 .account-row + .account-row { border-top: 1px solid var(--paper); }
 .account-row-title { flex: 1; min-width: 0; font-size: var(--type-body); line-height: 24px; }
+.account-about-logo { width: 22px; height: 22px; flex-shrink: 0; border-radius: var(--radius-small); }
 .account-row-value { color: var(--muted); font-size: var(--type-meta); }
 .account-mode-row { padding-top: 5px; padding-bottom: 5px; }
 .account-mode-row .feature-switch { flex-shrink: 0; }

@@ -83,3 +83,10 @@ export function mealPublicationAge(createdAt, now = Date.now()) {
   if (elapsed < 172800000) return '昨天';
   return `${Math.floor(elapsed / 86400000)}天前`;
 }
+
+// A diary reference never changes the original meal's identity.
+export function mealOrigin(post) {
+  if (post?.mealSharingVersion === 2 && ['family', 'personal'].includes(post.mealContext)) return post.mealContext;
+  return ['family', 'personal'].includes(post?.author?.mode) ? post.author.mode : '';
+}
+export const MEAL_ICONS = Object.freeze({ 早餐: 'meal-breakfast', 午餐: 'meal-lunch', 晚餐: 'meal-dinner', 加餐: 'meal-snack' });

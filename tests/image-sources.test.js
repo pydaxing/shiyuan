@@ -246,7 +246,7 @@ test('all app upload entry points share source selection, including profile and 
     assert.match(readFileSync(new URL(`components/${name}.vue`, root), 'utf8'), /<(?:ImagePicker|InlinePhotoEditor)/);
   }
   assert.match(readFileSync(new URL('components/ImagePicker.vue', root), 'utf8'), /chooseLocalImage\(\['album', 'camera'\]/);
-  assert.match(readFileSync(new URL('components/StepImagePicker.vue', root), 'utf8'), /chooseLocalImages\(9 - props.modelValue.length, \['album', 'camera'\]/);
+  assert.match(readFileSync(new URL('components/StepImagePicker.vue', root), 'utf8'), /selectImagePaths\(capacity.value, \['album', 'camera'\]/);
   const profile = readFileSync(new URL('components/ProfileFields.vue', root), 'utf8');
   assert.match(profile, /@click="choosePhoto"/);
   assert.match(profile, /selectImagePaths\(\)/);

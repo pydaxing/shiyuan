@@ -1,4 +1,6 @@
 <script setup>
+import AccountEntry from '../../components/AccountEntry.vue';
+import { accountEntryStatus } from '../../services/account-entry.js';
 import { isUnchangedCommunityRecipe } from '../../domain/recipe-identity.js';
 import { NATIVE_UI_COLORS } from '../../domain/ui-theme.js';
 import { mainNavigation, mainNavigationTab } from '../../domain/navigation.js';
@@ -401,7 +403,8 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
 
 <template>
   <page-meta :page-style="sheetOpen ? 'overflow: hidden;' : 'overflow: visible;'" />
-  <view class="app-shell" :class="{ 'weixin-shell': isWeixin, 'menu-page': tab === 'menu', 'community-page': tab === 'community', 'square-page': tab === 'square', 'family-page': tab === 'family', 'has-selection': dishCount > 0 && menuActive }" :style="pageStyle" @click="dismissFocusedKeyboard">
+  <AccountEntry v-if="cloudMode && accountEntryStatus.phase !== 'ready'" />
+  <view v-else class="app-shell" :class="{ 'weixin-shell': isWeixin, 'menu-page': tab === 'menu', 'community-page': tab === 'community', 'square-page': tab === 'square', 'family-page': tab === 'family', 'has-selection': dishCount > 0 && menuActive }" :style="pageStyle" @click="dismissFocusedKeyboard">
     <CloudConnection v-if="cloudMode && cloudStatus.phase !== 'ready'" />
     <template v-else>
     <view class="sidebar"><view class="desktop-brand"><AppIcon name="family" /><text>{{ workspaceName }}</text></view><view class="nav-list"><button role="button" v-for="item in navigation" :key="item.id" class="nav-item" :class="{ active: activeNavigation === item.id }" :aria-label="item.label" :aria-pressed="activeNavigation === item.id" @click="selectNavigation(item.id)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="nav-icon-wrap"><AppIcon :name="item.icon" :active="activeNavigation === item.id" /><text v-if="item.id === 'menu' && pendingOrderCount" class="nav-count" :class="{ 'is-overflow': pendingOrderCount > 99 }" :aria-label="`已安排${pendingOrderCount}餐`">{{ pendingOrderCount > 99 ? '99+' : pendingOrderCount }}</text></view><text>{{ item.label }}</text></button></view></view>

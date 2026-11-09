@@ -38,7 +38,8 @@ const feedViewport = useCommunityFeedViewport({
   enabled: computed(() => props.active && cloudMode && cloudStatus.value.phase === 'ready'),
   loading,
   refresh: refreshFeed,
-  indicatorMaxMs: 900,
+  // The meal feed versions requests, so a fresh read can supersede an old page.
+  waitForLoading: false,
   onError: failure => notify(failure.message || '刷新暂时没成功，请再试试'),
 });
 const { scrollTop: feedScrollTop, refreshing, pullReady, refreshThreshold, refresherEnabled } = feedViewport;

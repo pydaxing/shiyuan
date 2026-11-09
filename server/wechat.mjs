@@ -179,7 +179,7 @@ async function resolveStoragePath(cloudPath) {
   return fileId;
 }
 const cleanupMedia = createFamilyDeletionMedia({ repository: adapter(database), removeFiles: fileList => cloud.deleteFile({ fileList }), resolveStoragePath });
-const application = createApplication({ repository: adapter(database), signFiles, storeImage, storeImageBytes, readImage, readImportImage, cleanupMedia, onError });
+const application = createApplication({ repository: adapter(database), signFiles, storeImage, storeImageBytes, readImage, readImportImage, cleanupMedia, onError, appId: () => cloud.getWXContext().APPID, exchangePhone: code => cloud.openapi.phonenumber.getPhoneNumber({ code }) });
 const maintainImages = createImageMaintenance({ repository: adapter(database), prepare: delivery.prepare });
 let firstInvocation = true;
 export async function main(event) {

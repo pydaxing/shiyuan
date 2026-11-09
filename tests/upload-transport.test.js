@@ -19,7 +19,7 @@ test('original photos and bounded previews travel as files through the full clie
   let openid = 'transport-test-user';
   const userId = hash(openid);
   const rows = new Map([
-    [`users:${userId}`, { familyId: 'test-family' }],
+    [`users:${userId}`, { familyId: 'test-family', privateContact: { phoneNumber: '13800000000', verifiedAt: 1 } }],
     ['families:test-family', { id: 'test-family', members: [{ id: userId }] }],
   ]);
   const storedFiles = new Map();
@@ -208,7 +208,7 @@ test('every image entry uses the shared picker or the compressed profile uploade
   }
   assert.match(readFileSync('src/components/RecipeEditor.vue', 'utf8'), /<StepImagePicker\b/);
   assert.match(readFileSync('src/components/ImagePicker.vue', 'utf8'), /chooseLocalImage/);
-  assert.match(readFileSync('src/components/StepImagePicker.vue', 'utf8'), /chooseLocalImages/);
+  assert.match(readFileSync('src/components/StepImagePicker.vue', 'utf8'), /selectImagePaths/);
   const profile = readFileSync('src/components/ProfileFields.vue', 'utf8');
   assert.match(profile, /compressNativePhoto/);
   assert.match(profile, /uploadProfileAvatar/);

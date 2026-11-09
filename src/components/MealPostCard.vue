@@ -1,22 +1,32 @@
 <script setup>
 import { computed, ref, watch, onUnmounted, inject } from 'vue';
-import { mealPublicationAge } from '../domain/meal-social.js';
+import { mealPublicationAge, mealOrigin, MEAL_ICONS } from '../domain/meal-social.js';
 import AppIcon from './AppIcon.vue';
 import LazyImage from './LazyImage.vue';
 import MealMoodTags from './MealMoodTags.vue';
+import MealLikeNames from './MealLikeNames.vue';
 import { previewImages } from '../services/images.js';
+import { singleFeedImageWidth } from '../domain/feed-image-layout.js';
 import { mealPostMedia } from '../domain/meal-post-media.js';
 import { cloudStatus, invokeCloud } from '../services/cloud.js';
 import { notify } from '../store.js';
 import CommunityView from './CommunityView.vue';
 import OrderActionMenu from './OrderActionMenu.vue';
 const editCommunityEntry = inject('editCommunityEntry', () => {});
-const props = defineProps({ post: Object, now: { type: Number, default: () => Date.now() }, busy: Boolean, timeline: Boolean, feed: Boolean, last: Boolean, manageable: { type: Boolean, default: true } });
+const props = defineProps({ post: Object, now: { type: Number, default: () => Date.now() }, busy: Boolean, timeline: Boolean, personalDiary: Boolean, feed: Boolean, last: Boolean, manageable: { type: Boolean, default: true } });
 const emit = defineEmits(['like', 'react', 'visibility', 'remove']);
-const mealIcons = { 早餐: 'meal-breakfast', 午餐: 'meal-lunch', 晚餐: 'meal-dinner', 加餐: 'meal-snack' };
+const mealIcons = MEAL_ICONS;
+const origin = computed(() => mealOrigin(props.post));
 const dishMedia = computed(() => mealPostMedia(props.post));
 const media = computed(() => dishMedia.value.filter(item => !item.defaultCover));
 const dishesWithoutCover = computed(() => dishMedia.value.filter(item => item.defaultCover));
+const singleImageSizes = ref({});
+const singleImageStyle = computed(() => {
+  if (!props.feed || media.value.length !== 1) return {};
+  const size = singleImageSizes.value[media.value[0].image] || {};
+  return { width: `${singleFeedImageWidth(size.width, size.height)}px` };
+});
+function rememberImageSize(image, size) { if (props.feed && media.value.length === 1) singleImageSizes.value = { [image]: size }; }
 const recipeDetail = ref(null);
 const openingDish = ref(false);
 let detailRequest = 0;
@@ -91,12 +101,12 @@ function chooseMenu(action) {
 <template>
   <view class="meal-post-card" :class="{ 'in-timeline': timeline, 'in-feed': feed, 'is-saving': busy, 'is-last': last }">
     <view class="meal-post-heading">
-      <view v-if="timeline" class="meal-post-meal"><text>{{ post.meal }}</text><view v-if="audienceLabel" class="meal-post-state"><AppIcon :name="audienceIcon" :size="13" /><text>{{ audienceLabel }}</text></view></view>
+      <view v-if="timeline" class="meal-post-meal"><view class="meal-post-slot"><text v-if="personalDiary && origin" class="meal-origin-badge source-badge source-badge-compact" :class="origin === 'family' ? 'source-badge-community' : 'source-badge-custom'">{{ origin === 'family' ? '家庭' : '独享' }}</text><AppIcon :name="mealIcons[post.meal] || 'menu'" :size="14" /><text>{{ post.meal }}</text></view><view v-if="audienceLabel" class="meal-post-state"><AppIcon :name="audienceIcon" :size="13" /><text>{{ audienceLabel }}</text></view></view>
       <view v-else class="meal-post-author"><view class="meal-post-avatar"><LazyImage :src="post.author.avatar" variant="avatar" avatar round /></view><view class="meal-post-author-copy"><view class="meal-post-author-name"><text class="meal-post-name">{{ post.author.name }}</text></view><text v-if="!feed" class="meal-post-meta">{{ post.date }} · {{ post.meal }}</text></view></view>
       <OrderActionMenu v-if="canManage" elevated :label="post.meal || '这条餐食'" :opened="menuOpened" :busy="busy" :actions="menuActions" @activate="more" @close="closeMenu" @visibility="chooseMenu('visibility')" @remove="chooseMenu('remove')" />
     </view>
-    <view v-if="media.length" class="meal-post-images" :class="{ single: media.length === 1, paired: media.length === 2 || media.length === 4, 'has-dishes': post.kind === 'plan' }">
-      <button v-for="(item, index) in media" :key="`${index}:${item.image}`" class="meal-post-image" :aria-label="item.canOpenRecipe ? `查看${item.title}菜品详情` : item.isDish ? `查看${item.title}大图` : `查看${post.meal}第${index + 1}张照片`" @click="openMedia(item)" hover-class="touch-feedback"><view class="meal-post-image-frame"><LazyImage :src="item.image" variant="card" :mode="feed && media.length === 1 ? 'widthFix' : 'aspectFill'" /><text v-if="feed && item.sourceLabel" class="meal-post-image-source source-badge source-badge-compact" :class="item.sourceLabel === '美食' ? 'source-badge-community' : item.sourceLabel === '自建' ? 'source-badge-custom' : 'source-badge-photo'">{{ feed && ['美食', '自建'].includes(item.sourceLabel) ? `${item.sourceLabel}菜` : item.sourceLabel }}</text><view v-if="item.isDish" class="meal-post-dish-caption"><text class="meal-post-dish-title">{{ item.title }}</text></view></view></button>
+    <view v-if="media.length" class="meal-post-images" :style="singleImageStyle" :class="{ single: media.length === 1, paired: media.length === 2 || media.length === 4, 'has-dishes': post.kind === 'plan' }">
+      <button v-for="(item, index) in media" :key="`${index}:${item.image}`" class="meal-post-image" :aria-label="item.canOpenRecipe ? `查看${item.title}菜品详情` : item.isDish ? `查看${item.title}大图` : `查看${post.meal}第${index + 1}张照片`" @click="openMedia(item)" hover-class="touch-feedback"><view class="meal-post-image-frame"><LazyImage :src="item.image" @natural-size="rememberImageSize(item.image, $event)" :variant="feed ? 'original' : 'card'" :mode="feed && media.length === 1 ? 'widthFix' : 'aspectFill'" /><text v-if="feed && item.sourceLabel" class="meal-post-image-source source-badge source-badge-compact" :class="item.sourceLabel === '美食' ? 'source-badge-community' : item.sourceLabel === '自建' ? 'source-badge-custom' : 'source-badge-photo'">{{ feed && ['美食', '自建'].includes(item.sourceLabel) ? `${item.sourceLabel}菜` : item.sourceLabel }}</text><view v-if="item.isDish" class="meal-post-dish-caption"><text class="meal-post-dish-title">{{ item.title }}</text></view></view></button>
     </view>
     <view v-if="dishesWithoutCover.length" class="meal-post-text-dishes" :class="{ 'after-images': media.length }">
       <view v-for="item in dishesWithoutCover" :key="item.dishIndex" class="meal-post-text-dish"><text class="meal-post-text-dish-name">{{ item.title }}</text><text v-if="item.sourceLabel" class="meal-post-text-dish-source source-badge source-badge-compact" :class="item.sourceLabel === '美食' ? 'source-badge-community' : 'source-badge-custom'">{{ feed && ['美食', '自建'].includes(item.sourceLabel) ? `${item.sourceLabel}菜` : item.sourceLabel }}</text></view>
@@ -113,7 +123,7 @@ function chooseMenu(action) {
       </view>
     </view>
     <view v-if="post.moods?.length" class="meal-post-moods"><MealMoodTags :tags="post.moods" :feed="feed" /></view>
-    <view v-if="(feed || timeline) && post.likeCount > 0" class="meal-social-likes"><AppIcon class="meal-social-likes-heart" name="heart-social" :size="16" /><text class="meal-social-likes-names">{{ likeNames || (post.liked ? '我' : '') }}{{ post.likeCount > (post.likeUsers?.length || 0) ? `${likeNames || post.liked ? ' 等' : ''}${post.likeCount}人点赞` : '' }}</text></view>
+    <view v-if="(feed || timeline) && post.likeCount > 0" class="meal-social-likes"><AppIcon class="meal-social-likes-heart" name="heart-social" :size="16" /><view class="meal-social-likes-names"><MealLikeNames :reset-key="post.id" :text="`${likeNames || (post.liked ? '我' : '')}${post.likeCount > (post.likeUsers?.length || 0) ? `${likeNames || post.liked ? ' 等' : ''}${post.likeCount}人点赞` : ''}`" /></view></view>
     <view v-if="!feed && !timeline && post.visibility === 'public'" class="meal-post-reactions">
       <button class="meal-like" :class="{ selected: post.liked }" :disabled="busy" :aria-pressed="post.liked" :aria-label="`${post.liked ? '取消喜欢' : '喜欢'}，${post.likeCount || 0}人喜欢`" @click="$emit('like', !post.liked)" hover-class="touch-feedback"><text class="meal-like-heart" aria-hidden="true">{{ post.liked ? '♥' : '♡' }}</text><text>{{ post.likeCount || '喜欢' }}</text></button>
       <template v-if="!timeline"><button v-for="tag in post.reactions" :key="tag.id" class="meal-reaction" :class="{ selected: tag.selected }" :disabled="busy" :aria-pressed="tag.selected" :aria-label="`${tag.label}，${tag.count}人认同，${tag.selected ? '点击取消' : '点击认同'}`" @click="$emit('react', { tagId: tag.id, selected: !tag.selected })" hover-class="touch-feedback"><text>{{ tag.label }}</text><text v-if="tag.count">{{ tag.count }}</text></button></template>
@@ -140,6 +150,7 @@ function chooseMenu(action) {
 .meal-post-more { display: flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 44px; min-height: 44px; padding: 0; margin: -6px -6px -6px 0; background: transparent; color: var(--muted); font-size: var(--type-heading); }
 .meal-post-moods { margin-top: 10px; }
 .meal-post-meal { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: var(--ink); font-size: var(--type-meta); }
+.meal-origin-badge { padding: 1px 4px; line-height: 13px; }
 .meal-post-state { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; line-height: 18px; color: var(--muted); font-size: var(--type-caption); }
 .meal-post-card { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius-card); padding: var(--panel-padding); }
 .meal-post-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 12px; }
@@ -175,10 +186,10 @@ function chooseMenu(action) {
 .in-feed .meal-post-name { font-size: var(--type-body); font-weight: 600; color: var(--feed-author); overflow-wrap: anywhere; line-height: 24px; }
 .in-feed { --feed-media-width: 276px; }
 .in-feed .meal-post-images { max-width: var(--feed-media-width); gap: 4px; }
-.in-feed .meal-post-images.paired { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 66.667%; }
+.in-feed .meal-post-images.paired .meal-post-image:nth-child(3) { grid-column: 1; }
 .in-feed .meal-post-image { position: relative; height: 0; padding-bottom: 100%; border-radius: 3px; }
 .in-feed .meal-post-image-frame { position: absolute; inset: 0; width: auto; height: auto; }
-.in-feed .meal-post-images.single { width: 210px; max-width: 100%; }
+.in-feed .meal-post-images.single { width: 160px; max-width: 100%; }
 .in-feed .meal-post-images.single .meal-post-image { height: auto; padding-bottom: 0; }
 .in-feed .meal-post-images.single .meal-post-image-frame { position: relative; height: auto; }
 .in-feed .meal-post-images.single .is-missing-cover { width: 96px; height: 96px; }
@@ -197,8 +208,8 @@ function chooseMenu(action) {
 .meal-social-popover { position: absolute; z-index: 5; right: 36px; top: 50%; transform: translateY(-50%); display: flex; align-items: center; justify-content: center; gap: 6px; width: 88px; height: 36px; padding: 0; margin: 0; border-radius: var(--radius-small); background: #4c4c4c; color: white; font-size: var(--type-control); line-height: 20px; white-space: nowrap; }
 .meal-social-heart { display: block; flex-shrink: 0; }
 .meal-social-likes { display: flex; align-items: center; gap: 6px; margin-top: 12px; padding: 8px 10px; border-radius: var(--radius-control); background: #f7f7f7; color: var(--feed-author); font-size: var(--type-meta); line-height: 20px; overflow-wrap: anywhere; }
-.meal-social-likes-heart { display: block; flex-shrink: 0; }
-.meal-social-likes-names { display: block; min-width: 0; line-height: 20px; }
+.meal-social-likes-heart { display: block; flex-shrink: 0; align-self: flex-start; margin-top: 2px; }
+.meal-social-likes-names { display: block; flex: 1; min-width: 0; line-height: 20px; }
 .meal-social-dismiss { position: fixed; inset: 0; z-index: 4; background: transparent; }
 .meal-social-actions.opened { z-index: 5; }
 </style>

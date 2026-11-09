@@ -1,3 +1,4 @@
+import { APP_VERSION } from '../src/domain/app-info.js';
 import { isUnchangedCommunityRecipe } from '../src/domain/recipe-identity.js';
 import assert from 'node:assert/strict';
 import { existsSync, readFileSync } from 'node:fs';
@@ -282,6 +283,8 @@ function avatarComponent(name) {
     '../domain/recipe-identity.js': { isUnchangedCommunityRecipe },
     '../domain/image-crop.js': { coverFrameStyle },
     '../domain/ui-theme.js': { NATIVE_UI_COLORS },
+    '../domain/app-info.js': { APP_VERSION },
+    '../composables/useReceivedMealLikes.js': { useReceivedMealLikes: () => ({ count: Vue.ref(0), mealCount: Vue.ref(0), error: Vue.ref(''), refresh: async () => {} }) },
     '../composables/useNavigationAppearance.js': { useNavigationAppearance() {} },
     '../composables/useSheetSizing.js': { useSheetContentResize() {} },
     '../composables/sheetStack.js': { sheetOpen: Vue.ref(false) },
@@ -326,7 +329,7 @@ const renderFamilyMembers = avatarComponent('FamilyManagement').setup({ active: 
 const nativeFamilyMarkup = readFileSync(resolve(directory, 'components/FamilyView.wxml'), 'utf8');
 const openFamilyKey = nativeFamilyMarkup.match(/<button\b[^>]*class="[^"]*family-members-entry[^>]*catchtap="{{(\w+)}}"/)?.[1];
 assert.ok(openFamilyKey, 'family members have a native isolated entry');
-renderFamilyAvatars({}, [])[openFamilyKey]();
+renderFamilyAvatars({ $image: value => value }, [])[openFamilyKey]();
 
 for (const avatar of ['https://example.com/wechat-avatar.png', 'cloud://family/updated-avatar.png', '']) {
   avatarProfiles.value[0].avatar = avatar;
@@ -334,7 +337,7 @@ for (const avatar of ['https://example.com/wechat-avatar.png', 'cloud://family/u
   const kitchenDishes = renderKitchenDishes({}, []);
   assert.equal(renderedAvatarProps(kitchenDishes).length, 0, 'native kitchen rows omit all voter avatars, including anonymous members');
   assert.equal(kitchenDishes[kitchenDishListKey].length, 1, 'one dish is not duplicated for multiple voters');
-  assert.deepEqual(renderedAvatarProps(renderFamilyAvatars({}, [])).map(photo => photo.src), [expected[0]], 'native profile retains the round current avatar and anonymous fallback');
+  assert.deepEqual(renderedAvatarProps(renderFamilyAvatars({ $image: value => value }, [])).map(photo => photo.src), [expected[0]], 'native profile retains the round current avatar and anonymous fallback');
   assert.deepEqual(renderedAvatarProps(renderFamilyMembers({}, [])).map(photo => photo.src), expected, 'native family management retains all round current avatars and anonymous fallback');
 }
 avatarRows.removable = true;
@@ -388,7 +391,7 @@ const nativeAvatarCode = transformSync(readFileSync(resolve(directory, 'componen
 runInNewContext(nativeAvatarCode, { require: specifier => { assert.ok(avatarModules[specifier], `avatar dependency: ${specifier}`); return avatarModules[specifier]; }, wx: { createComponent: component => { nativeAvatarComponent = component; } } });
 const nativeAvatarScope = Vue.effectScope();
 const nativeAvatarProps = Vue.reactive({ src: '', variant: 'card', mode: 'aspectFill', avatar: true, round: true });
-const renderNativeAvatar = nativeAvatarScope.run(() => nativeAvatarComponent.setup(nativeAvatarProps));
+const renderNativeAvatar = nativeAvatarScope.run(() => nativeAvatarComponent.setup(nativeAvatarProps, { emit() {} }));
 const settleAvatar = async () => { await Vue.nextTick(); await new Promise(resolve => setImmediate(resolve)); await Vue.nextTick(); };
 try {
   mountAvatar();

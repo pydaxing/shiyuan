@@ -1,3 +1,4 @@
+import { createAccountAccess, accountAccessSummary } from './account-access.mjs';
 import { createIdentityPresentation, canReadCurrentIdentityImage } from './identity-presentation.mjs';
 import { createHash, randomBytes } from 'node:crypto';
 import { createKitchenActions, actionNames } from '../src/domain/actions.js';
@@ -66,7 +67,8 @@ async function all(repository, collection, where, options = {}) {
   }
 }
 
-export function createApplication({ repository, signFiles, storeImage, storeImageBytes, readImage, readImportImage, cleanupMedia, onError = () => {}, now = Date.now }) {
+export function createApplication({ repository, signFiles, storeImage, storeImageBytes, readImage, readImportImage, cleanupMedia, exchangePhone, appId, onError = () => {}, now = Date.now }) {
+  const accountAccess = createAccountAccess({ repository, exchangePhone, appId, now });
   const mediaOperations = createFamilyMediaOperations({ repository, now });
   const authorizedImport = createAuthorizedImport({ repository, storeImageBytes, readImportImage, mediaOperations, now });
   const loadImageManifests = createImageManifestReader({ repository, readImage, onError, now });
@@ -123,6 +125,7 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
   }
   async function bootstrap(userId, known = {}) {
     const user = await repository.get('users', userId);
+    if (known.accountLoginVersion === 1 && !accountAccessSummary(user).phoneBound) fail('请先完成手机号登录', 'PHONE_REQUIRED');
     const profile = userProfile(user, userId, known.defaultProfileVersion);
     const profileCompatibility = known.defaultProfileVersion === DEFAULT_PROFILE_VERSION ? { defaultProfileVersion: DEFAULT_PROFILE_VERSION, profileBaseline: userProfile(user) } : {};
     const deletionIds = [...new Set(user?.pendingFamilyDeletions || [])];
@@ -449,6 +452,10 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
     validateEnvelope(event);
     const userId = hash(openid);
     const action = event.action;
+    if (action === 'accountAccess') return accountAccess.status(userId);
+    if (action === 'bindAccountPhone') { await throttle(userId, 'phone-login', 10); return accountAccess.bind(userId, event); }
+    // Existing released clients retain their protocol. Updated clients must bind
+    // before bootstrapping; account identity remains the trusted WeChat OPENID.
     if (action === 'bootstrap') return bootstrap(userId, event);
     if (action === 'switchWorkspace') {
       await throttle(userId, 'workspace', 20);

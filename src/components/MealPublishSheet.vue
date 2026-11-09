@@ -6,7 +6,7 @@ import Sheet from './Sheet.vue';
 import StepImagePicker from './StepImagePicker.vue';
 import InlineMealDate from './InlineMealDate.vue';
 import MealMoodTags from './MealMoodTags.vue';
-import { MEAL_MOODS, MEAL_SLOTS, mealMoodDisplayLabel } from '../domain/meal-social.js';
+import { MEAL_MOODS, MEAL_ICONS, MEAL_SLOTS, mealMoodDisplayLabel } from '../domain/meal-social.js';
 import { localDate } from '../domain/kitchen.js';
 import { foodCover } from '../domain/presentation.js';
 import { cloudStatus, currentIdentity, invokeCloud } from '../services/cloud.js';
@@ -24,6 +24,7 @@ function selectArrangement(id) {
   if (locked.value || uploading.value || props.order) return;
   const order = availableOrders.value.find(item => item.id === id);
   if (id && !order) return;
+  if (images.value.length + (order?.items || []).filter(item => item.recipe?.image).length > 9) { error.value = '菜品图和实拍合计最多 9 张，请先减少照片'; return; }
   selectedOrderId.value = id;
   if (order) { date.value = order.date; meal.value = order.meal; }
   arrangementsExpanded.value = false;
@@ -35,7 +36,7 @@ const meal = ref(MEAL_SLOTS.includes(props.order?.meal) ? props.order.meal : '�
 const images = ref([]), moodIds = ref([]);
 const moodsExpanded = ref(false);
 const mealExpanded = ref(false);
-const mealIcons = { 早餐: 'meal-breakfast', 午餐: 'meal-lunch', 晚餐: 'meal-dinner', 加餐: 'meal-snack' };
+const mealIcons = MEAL_ICONS;
 function toggleMealOptions() {
   if (locked.value || uploading.value) return;
   mealExpanded.value = !mealExpanded.value;
@@ -68,7 +69,7 @@ function selectVisibility(value) {
 const selectedMoods = computed(() => moodIds.value.map(id => MEAL_MOODS.find(mood => mood.id === id)).filter(Boolean));
 const moodSummary = computed(() => moodIds.value.map(id => mealMoodDisplayLabel(MEAL_MOODS.find(mood => mood.id === id))).filter(Boolean).join('、') || '未选择');
 const kind = computed(() => selectedOrder.value && !images.value.length ? 'plan' : 'actual');
-const orderImages = computed(() => (selectedOrder.value?.items || []).map(item => foodCover(item.recipe.image)).slice(0, 9));
+const orderImages = computed(() => (selectedOrder.value?.items || []).filter(item => item.recipe?.image).map(item => foodCover(item.recipe.image)).slice(0, 9));
 function toggleMoodOptions() {
   if (locked.value || uploading.value) return;
   moodsExpanded.value = !moodsExpanded.value;
@@ -98,6 +99,7 @@ async function save() {
   if (busy.value || uploading.value) return;
   error.value = '';
   if (!pendingRequest.value && selectedOrderId.value && !selectedOrder.value) { error.value = '这条安排已变更，请重新选择'; return; }
+  if (!pendingRequest.value && images.value.length + orderImages.value.length > 9) { error.value = '菜品图和实拍合计最多 9 张'; return; }
   if (!pendingRequest.value && kind.value === 'actual' && !images.value.length) { error.value = '先添加这餐的照片'; return; }
   if (!pendingRequest.value && kind.value === 'actual' && date.value > localDate()) { error.value = '实际餐食不能记录在未来日期'; return; }
   busy.value = true;
@@ -139,7 +141,7 @@ async function save() {
           <text v-if="!availableOrders.length" class="meal-arrangement-empty">今天暂无可记录的安排</text>
         </view>
       </view>
-      <StepImagePicker v-model="images" :fallback-images="orderImages" label="餐食实拍" purpose="meal" variant="meal" :disabled="locked" @busy="uploading = $event" />
+      <StepImagePicker v-model="images" :fallback-images="orderImages" :reserved-count="orderImages.length" label="餐食实拍" purpose="meal" variant="meal" :disabled="locked" @busy="uploading = $event" />
       <text v-if="error" class="form-error meal-composer-error" role="alert">{{ error }}</text>
       <view class="meal-composer-settings">
         <button role="button" class="meal-composer-setting meal-composer-mood-toggle" :disabled="locked || uploading" :aria-expanded="moodsExpanded" :aria-controls="moodsExpanded ? 'meal-composer-mood-options' : undefined" :aria-label="`标签：${moodSummary}，${moodsExpanded ? '收起' : '展开'}选择`" @click="toggleMoodOptions" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">

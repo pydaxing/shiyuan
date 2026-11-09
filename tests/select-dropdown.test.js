@@ -3,12 +3,12 @@ import assert from 'node:assert/strict';
 import { selectDropdownGeometry } from '../src/domain/select-dropdown.js';
 
 test('category popover aligns below the trigger and fits eight options in two-column rows', () => {
-  assert.deepEqual(selectDropdownGeometry({ left: 100, bottom: 140 }, { windowWidth: 390, windowHeight: 844 }, 8), { top: 144, left: 100, width: 176, height: 206 });
+  assert.deepEqual(selectDropdownGeometry({ left: 100, bottom: 140 }, { windowWidth: 390, windowHeight: 844 }, 8), { top: 144, left: 100, width: 168, height: 194 });
 });
 
 test('category popover keeps horizontal gutters on short and narrow screens', () => {
-  assert.deepEqual(selectDropdownGeometry({ left: 280, bottom: 144 }, { windowWidth: 320, windowHeight: 568 }, 8), { top: 148, left: 132, width: 176, height: 206 });
-  assert.deepEqual(selectDropdownGeometry({ left: -10, bottom: 80 }, { windowWidth: 180, windowHeight: 400 }, 3), { top: 84, left: 12, width: 156, height: 110 });
+  assert.deepEqual(selectDropdownGeometry({ left: 280, bottom: 144 }, { windowWidth: 320, windowHeight: 568 }, 8), { top: 148, left: 140, width: 168, height: 194 });
+  assert.deepEqual(selectDropdownGeometry({ left: -10, bottom: 80 }, { windowWidth: 180, windowHeight: 400 }, 3), { top: 84, left: 12, width: 156, height: 106 });
 });
 
 test('long category grids scroll within the remaining viewport instead of crossing its bottom', () => {

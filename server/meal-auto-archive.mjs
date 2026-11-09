@@ -1,3 +1,4 @@
+import { familyMealAvatar } from './identity-presentation.mjs';
 import { createHash, randomUUID } from 'node:crypto';
 import { MEAL_SLOTS } from '../src/domain/meal-social.js';
 import { activeSpaceId, personalSpaceId, workspaceMembership } from './workspaces.mjs';
@@ -86,7 +87,7 @@ export function createMealAutoArchive({ repository, now = Date.now, clock = Date
       const user = await db.get('users', authorId);
       const member = family.members?.find(item => item.id === authorId);
       const dishes = order.items.filter(item => clean(item?.recipe?.title, 30)).slice(0, 50).map(({ recipe }) => ({ ...(recipe.id ? { recipeId: clean(recipe.id, 100) } : {}), title: clean(recipe.title, 30), image: clean(recipe.image, 1000) }));
-      const author = { name: personal ? clean(user?.name || member?.name || '我', 60) : clean(family.name, 60), avatar: clean(personal ? user?.avatar || member?.avatar : family.cover || member?.avatar, 1000), mode: personal ? 'personal' : 'family' };
+      const author = { name: personal ? clean(user?.name || member?.name || '我', 60) : clean(family.name, 60), avatar: clean(personal ? user?.avatar || member?.avatar : familyMealAvatar(family, user || member, authorId), 1000), mode: personal ? 'personal' : 'family', familyIdentityVersion: 1 };
       const images = dishes.map(dish => dish.image).filter(Boolean).slice(0, 9);
       const post = {
         id, spaceId, authorId, author, kind: 'plan', date: order.date, meal: order.meal,

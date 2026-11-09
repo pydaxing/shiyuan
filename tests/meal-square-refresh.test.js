@@ -1,3 +1,4 @@
+import { DEFAULT_FAMILY_COVER } from '../src/domain/family.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,7 +12,7 @@ async function settle() { await Vue.nextTick(); await Promise.resolve(); await V
 function fixture(context) {
   const scope = Vue.effectScope(), calls = [], notices = [], stopped = [];
   const props = Vue.reactive({ active: true });
-  const modules = { ...Vue, currentIdentity: Vue.ref(null), cloudMode: true, cloudStatus: Vue.ref({ phase: 'ready', userId: 'alice', familyId: 'family-a' }), sheetOpen: Vue.ref(false), useNavigationAppearance() {}, provide() {}, useCommunityFeedViewport,
+  const modules = { ...Vue, DEFAULT_FAMILY_COVER, currentIdentity: Vue.ref(null), cloudMode: true, cloudStatus: Vue.ref({ phase: 'ready', userId: 'alice', familyId: 'family-a' }), sheetOpen: Vue.ref(false), useNavigationAppearance() {}, provide() {}, useCommunityFeedViewport,
     onUnmounted: fn => stopped.push(fn), notify: message => notices.push(message),
     invokeCloud(action, args) { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); calls.push({ action, args, resolve, reject }); return promise; },
   };
@@ -185,13 +186,13 @@ test('discover scroll pagination appends once and stops at the last page', async
   assert.deepEqual(f.feed.posts.value.map(post => post.id), ['first', 'second']);
 });
 
-test('slow discovery refresh releases pull area while retaining data and one in-flight request', async context => {
+test('slow discovery refresh keeps feedback until completion and deduplicates pulls', async context => {
   context.mock.timers.enable({ apis: ['setTimeout'] });
   const f = fixture(context);
   f.calls[0].resolve({ posts: [{ id: 'before', visibility: 'public' }], cursor: 'next' }); await settle();
   const refresh = f.view.feedViewport.onRefresh(); await settle();
   context.mock.timers.tick(900);
-  assert.equal(f.view.refreshing.value, false);
+  assert.equal(f.view.refreshing.value, true);
   assert.equal(f.feed.loading.value, true);
   assert.equal(f.view.refresherEnabled.value, true, 'native refresher must stay enabled while triggered=false restores the pull offset');
   assert.equal(f.feed.posts.value[0].id, 'before');
@@ -202,7 +203,7 @@ test('slow discovery refresh releases pull area while retaining data and one in-
   assert.equal(f.feed.posts.value[0].id, 'fresh');
 });
 
-test('slow discovery refresh still reports failure after pull area has returned', async context => {
+test('slow discovery refresh reports failure and restores the pull area', async context => {
   context.mock.timers.enable({ apis: ['setTimeout'] });
   const f = fixture(context);
   f.calls[0].resolve({ posts: [{ id: 'before', visibility: 'public' }], cursor: null }); await settle();
@@ -215,15 +216,18 @@ test('slow discovery refresh still reports failure after pull area has returned'
 });
 
 
-test('pull during a background request sends a native restore transition without duplicating the request', async context => {
+test('pull supersedes background loading without waiting and late background data cannot replace fresh data', async context => {
   const f = fixture(context);
-  assert.equal(f.feed.loading.value, true);
-  assert.equal(f.view.refresherEnabled.value, true);
-  const ignoredPull = f.view.feedViewport.onRefresh();
-  assert.equal(f.view.refreshing.value, true, 'acknowledge the native refresh event before restoring');
-  await ignoredPull;
+  const pull = f.view.feedViewport.onRefresh();
+  await settle();
+  assert.equal(f.view.refreshing.value, true);
+  assert.equal(f.calls.length, 2, 'fresh request starts before background request finishes');
+  await f.view.feedViewport.onRefresh();
+  assert.equal(f.calls.length, 2, 'duplicate pull does not start another request');
+  f.calls[1].resolve({ posts: [{ id: 'fresh', visibility: 'public' }], cursor: null }); await pull;
   assert.equal(f.view.refreshing.value, false);
-  assert.equal(f.view.refresherEnabled.value, true);
-  assert.equal(f.calls.length, 1);
-  f.calls[0].resolve({ posts: [], cursor: null }); await settle();
+  f.calls[0].resolve({ posts: [{ id: 'background', visibility: 'public' }], cursor: 'stale' }); await settle();
+  assert.equal(f.feed.posts.value[0].id, 'fresh');
+  assert.equal(f.feed.cursor.value, null);
+  assert.equal(f.feed.loading.value, false);
 });

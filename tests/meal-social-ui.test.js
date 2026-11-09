@@ -1,9 +1,10 @@
+import { DEFAULT_FAMILY_COVER } from '../src/domain/family.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { parse, compileScript } from '@vue/compiler-sfc';
 import * as Vue from 'vue';
-import { MEAL_SLOTS, MEAL_MOODS, mealMoodDisplayLabel, mealTimeline } from '../src/domain/meal-social.js';
+import { MEAL_ICONS, mealOrigin, MEAL_SLOTS, MEAL_MOODS, mealMoodDisplayLabel, mealTimeline } from '../src/domain/meal-social.js';
 import { NATIVE_UI_COLORS } from '../src/domain/ui-theme.js';
 
 const read = path => readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -17,8 +18,9 @@ function harness(context, component, overrides = {}, props = {}) {
   const stopped = [], calls = [], events = [], provided = new Map();
   const scope = Vue.effectScope();
   const modules = {
-    ...Vue, useNavigationAppearance() {}, inject: () => null, provide: (key, value) => provided.set(key, value), cloudMode: true, cloudStatus: Vue.ref({ phase: 'ready', familyId: 'family-a', userId: 'alice' }),
-    onUnmounted: callback => stopped.push(callback), MEAL_SLOTS, MEAL_MOODS, mealMoodDisplayLabel, mealTimeline, NATIVE_UI_COLORS, localDate: () => '2026-11-05',
+    useReceivedMealLikes: () => ({ count: Vue.ref(0), error: Vue.ref(''), refresh: async () => {} }),
+    ...Vue, DEFAULT_FAMILY_COVER, useNavigationAppearance() {}, inject: () => null, provide: (key, value) => provided.set(key, value), cloudMode: true, cloudStatus: Vue.ref({ phase: 'ready', familyId: 'family-a', userId: 'alice' }),
+    onUnmounted: callback => stopped.push(callback), MEAL_ICONS, mealOrigin, MEAL_SLOTS, MEAL_MOODS, mealMoodDisplayLabel, mealTimeline, NATIVE_UI_COLORS, localDate: () => '2026-11-05',
     invokeCloud: (action, args) => { const task = deferred(); calls.push({ action, args: JSON.parse(JSON.stringify(args)), ...task }); return task.promise; },
     ...overrides,
   };
@@ -395,9 +397,9 @@ test('meal photo fallback previews never enter the uploaded selection and return
   assert.deepEqual(props.modelValue, []);
   f.api.previewFallback('cloud://dish-b');
   assert.deepEqual(previews[0], [props.fallbackImages, 'cloud://dish-b']);
-  f.api.pendingPhotos.value = [{ path: 'local-photo.jpg' }];
+  f.api.entries.value = [{ path: 'local-photo.jpg' }];
   assert.deepEqual(f.api.visibleFallbacks.value, [], 'new local previews immediately replace the fallback grid');
-  f.api.pendingPhotos.value = [];
+  f.api.entries.value = [];
   assert.deepEqual(f.api.visibleFallbacks.value, props.fallbackImages, 'cancelled or failed uploads retain the usable original photos');
   props.modelValue = ['cloud://real-meal'];
   assert.deepEqual(f.api.visibleFallbacks.value, []);
@@ -787,4 +789,62 @@ test('invalid like acknowledgement cannot silently pretend the like was saved', 
   f.calls[1].resolve({ reaction: { id: 'p', liked: false, likeCount: 0 } }); await save;
   assert.equal(f.api.posts.value[0].liked, false);
   assert.match(f.api.error.value, /尚未确认/);
+});
+
+test('delete hides immediately through refresh, paging and late updates; confirmed deletion stays hidden', async context => {
+  const f = harness(context);
+  const post = { id: 'shared', sourceOrderId: 'dinner', createdAt: 2 };
+  f.calls[0].resolve({ posts: [post], cursor: 'next' }); await settle();
+  const deleting = f.api.mutate('deleteMealPost', post);
+  assert.deepEqual(f.api.posts.value, []);
+  assert.deepEqual(f.api.suppressedOrderIds.value, ['dinner']);
+  f.api.acceptPost(post);
+  f.api.syncReactions({ ...post, liked: true });
+  const refresh = f.api.load(false, true);
+  f.calls[2].resolve({ posts: [post], cursor: 'next' }); await refresh;
+  assert.deepEqual(f.api.posts.value, []);
+  assert.deepEqual(f.api.suppressedOrderIds.value, ['dinner']);
+  f.calls[1].resolve({ deletedId: post.id, deleteScope: 'personal' }); await deleting;
+  const more = f.api.load(true);
+  f.calls[3].resolve({ posts: [post, { id: 'older' }], cursor: null }); await more;
+  assert.deepEqual(f.api.posts.value.map(p => p.id), ['older']);
+});
+
+test('failed concurrent delete restores only its own record and preserves other order suppression', async context => {
+  const f = harness(context);
+  const a = { id: 'a', sourceOrderId: 'oa', createdAt: 3 }, b = { id: 'b', sourceOrderId: 'ob', createdAt: 2 }, c = { id: 'c', createdAt: 1 };
+  f.calls[0].resolve({ posts: [a, b, c], cursor: null, suppressedOrderIds: ['existing'] }); await settle();
+  const da = f.api.mutate('deleteMealPost', a), db = f.api.mutate('deleteMealPost', b);
+  assert.deepEqual(f.api.posts.value, [c]);
+  f.calls[2].resolve({ deletedId: 'b' }); await db;
+  f.calls[1].reject(new Error('网络不可用')); await da;
+  assert.deepEqual(f.api.posts.value, [a, c]);
+  assert.deepEqual(new Set(f.api.suppressedOrderIds.value), new Set(['existing', 'ob']));
+});
+
+test('invalid delete acknowledgement restores entry and scope switch ignores old failure', async context => {
+  const f = harness(context), post = { id: 'a', sourceOrderId: 'oa' };
+  f.calls[0].resolve({ posts: [post], cursor: null }); await settle();
+  const first = f.api.mutate('deleteMealPost', post);
+  f.calls[1].resolve({}); await first;
+  assert.deepEqual(f.api.posts.value, [post]);
+  assert.match(f.api.error.value, /删除状态尚未确认/);
+  const second = f.api.mutate('deleteMealPost', post);
+  f.modules.cloudStatus.value.familyId = 'new-space'; await settle();
+  f.calls[3].resolve({ posts: [{ id: 'new' }], cursor: null }); await settle();
+  f.calls[2].reject(new Error('old failure')); await second;
+  assert.deepEqual(f.api.posts.value, [{ id: 'new' }]);
+  assert.deepEqual(f.api.suppressedOrderIds.value, []);
+  assert.equal(f.api.error.value, '');
+});
+
+test('family default cover preserves publisher avatar instead of replacing it with default scenery', async context => {
+  const identity = Vue.ref({ family: { id: 'family-a', name: '家庭', cover: DEFAULT_FAMILY_COVER }, profile: { avatar: 'viewer' } });
+  const f = harness(context, undefined, { currentIdentity: identity });
+  f.calls[0].resolve({ posts: [{ id: 'a', author: { mode: 'family', currentSpace: true, avatar: 'publisher' } }], cursor: null }); await settle();
+  assert.equal(f.api.posts.value[0].author.avatar, 'publisher');
+  identity.value.family.cover = 'custom-cover';
+  assert.equal(f.api.posts.value[0].author.avatar, 'custom-cover');
+  identity.value.family.cover = '';
+  assert.equal(f.api.posts.value[0].author.avatar, 'publisher');
 });

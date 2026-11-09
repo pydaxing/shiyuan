@@ -34,7 +34,7 @@ function scheduleUpload(work) {
   });
 }
 function drainUploads() {
-  while (activeUploads < 2 && uploadQueue.length) {
+  while (activeUploads < 9 && uploadQueue.length) {
     const job = uploadQueue.shift();
     activeUploads += 1;
     Promise.resolve().then(job.work).then(job.resolve, job.reject).finally(() => { activeUploads -= 1; drainUploads(); });

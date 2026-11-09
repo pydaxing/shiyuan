@@ -1,6 +1,6 @@
 import { computed, nextTick, onScopeDispose, ref, watch } from 'vue';
 
-export function useCommunityFeedViewport({ navigation, locked, enabled, loading, refresh, indicatorMaxMs = 0, onError = () => {} }) {
+export function useCommunityFeedViewport({ navigation, locked, enabled, loading, refresh, waitForLoading = true, onError = () => {} }) {
   const scrollTop = ref(0);
   const refreshing = ref(false);
   const pullReady = ref(false);
@@ -12,7 +12,7 @@ export function useCommunityFeedViewport({ navigation, locked, enabled, loading,
   let scrollSequence = 0;
   let refreshSequence = 0;
   let disposed = false;
-  let indicatorTimer;
+  let pendingWait;
   watch(locked, value => { if (value) scrollTop.value = lastTop; }, { flush: 'sync' });
 
   function onScroll(event) {
@@ -33,7 +33,8 @@ export function useCommunityFeedViewport({ navigation, locked, enabled, loading,
     if (disposed) return;
     const token = ++scrollSequence;
     refreshSequence += 1;
-    clearTimeout(indicatorTimer);
+    pendingWait?.();
+    pendingWait = null;
     refreshing.value = false;
     pullReady.value = false;
     navigation.reset();
@@ -52,15 +53,22 @@ export function useCommunityFeedViewport({ navigation, locked, enabled, loading,
     navigation.reveal();
     try {
       await nextTick();
-      if (disposed || token !== refreshSequence || !enabled.value || locked.value || loading.value) return;
-      if (indicatorMaxMs > 0) indicatorTimer = setTimeout(() => {
-        if (!disposed && token === refreshSequence) refreshing.value = false;
-      }, indicatorMaxMs);
+      if (disposed || token !== refreshSequence || !enabled.value || locked.value) return;
+      // A background load must not swallow a deliberate pull. Wait for it, then refresh.
+      if (waitForLoading && loading.value) await new Promise(resolve => {
+        const stop = watch([loading, enabled, locked], ([busy, active, blocked]) => {
+          if (!busy || !active || blocked) { stop(); resolve(); }
+        }, { flush: 'sync' });
+        pendingWait = () => { stop(); resolve(); };
+      });
+      if (disposed || token !== refreshSequence) return;
+      pendingWait = null;
+      if (!enabled.value || locked.value) return;
       await refresh();
     } catch (error) {
       if (!disposed && token === refreshSequence && enabled.value && !locked.value) onError(error);
     } finally {
-      if (!disposed && token === refreshSequence) { clearTimeout(indicatorTimer); refreshing.value = false; }
+      if (!disposed && token === refreshSequence) { refreshing.value = false; }
     }
   }
 
@@ -68,7 +76,8 @@ export function useCommunityFeedViewport({ navigation, locked, enabled, loading,
     disposed = true;
     scrollSequence += 1;
     refreshSequence += 1;
-    clearTimeout(indicatorTimer);
+    pendingWait?.();
+    pendingWait = null;
     refreshing.value = false;
     pullReady.value = false;
   });

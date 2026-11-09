@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue';
+import { computed, ref, watch, toRaw } from 'vue';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -58,6 +58,7 @@ const wechat = {
     init() {},
     async uploadFile({ cloudPath, filePath }) { const fileID = `cloud://test/${cloudPath}`; uploadedPaths.set(fileID, filePath); calls.push({ action: 'uploadFile', filePath }); return { fileID }; },
     async callFunction({ data }) {
+      if (data.action === 'accountAccess') return { result: { ok: true, data: { accountLoginVersion: 1, phoneBound: true } } };
       calls.push(data);
       if (data.action === 'command') {
         assert.equal(data.responseMode, 'changes');
@@ -73,7 +74,7 @@ const wechat = {
     },
   },
 };
-const vendor = { index: native, wx$1: wechat, ref, computed, watch };
+const vendor = { index: native, wx$1: wechat, ref, computed, watch, toRaw };
 function load(file) {
   if (file === resolve(directory, 'common/vendor.js')) return vendor;
   if (modules.has(file)) return modules.get(file).exports;
@@ -86,6 +87,7 @@ function load(file) {
 const cloud = load(resolve(directory, 'services/cloud.js'));
 cloud.cloudStatus.value = { phase: 'ready', familyId: 'test-family' };
 const images = load(resolve(directory, 'services/images.js'));
+const choosePhotos = async (count = 9) => images.persistSelectedImages(await images.selectImagePaths(count));
 sourceIndex = 0;
 assert.deepEqual(Array.from(await images.selectImagePaths(9)), ['first.jpg']);
 assert.deepEqual(Array.from(selectionRequests.at(-1).sourceType), ['camera']);
@@ -103,7 +105,7 @@ sourceCancelled = false;
 const expected = name => cloud.cloudMode ? `cloud://test/approved/${name}` : `/saved/${name}-1400-compressed.jpg`;
 assert.equal(await images.chooseLocalImage(), expected('first.jpg'));
 selected = ['second.jpg', 'third.jpg', 'fourth.jpg'];
-assert.deepEqual(Array.from(await images.chooseLocalImages(2)), [expected('second.jpg'), expected('third.jpg')]);
+assert.deepEqual(Array.from(await choosePhotos(2)), [expected('second.jpg'), expected('third.jpg')]);
 if (cloud.cloudMode) {
   assert.equal(copies.length, 6);
   assert.ok(copies.every(path => photoInfo.get(path).width <= 960));
@@ -117,7 +119,7 @@ if (cloud.cloudMode) {
 const previousCalls = calls.length;
 cancelled = true;
 assert.equal(await images.chooseLocalImage(), '');
-assert.deepEqual(Array.from(await images.chooseLocalImages()), []);
+assert.deepEqual(Array.from(await choosePhotos()), []);
 cancelled = false;
 denied = true;
 await assert.rejects(images.chooseLocalImage(), /权限/);

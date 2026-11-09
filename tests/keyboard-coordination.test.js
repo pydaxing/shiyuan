@@ -833,3 +833,31 @@ for (const web of [false, true]) {
     assert.equal(sheet.state.sheetStyle.height, '210px');
   });
 }
+
+test('native focus survives model updates and follows blur and explicit dismissal for all field types', async () => {
+  const previousUni = globalThis.uni;
+  globalThis.uni = { hideKeyboard() {} };
+  const component = await loadComponent('FormField');
+  component.render = () => null;
+  const renderer = Vue.createRenderer({ createComment: () => ({}), insert() {}, remove() {}, parentNode() {}, nextSibling() {} });
+  try {
+    for (const options of [{}, { multiline: true }, { type: 'number' }, { type: 'nickname' }]) {
+      const props = Vue.reactive({ modelValue: '', ...options });
+      const root = { setup: () => () => Vue.h(component, props) };
+      const app = renderer.createApp(root);
+      app.mount({});
+      const field = app._instance.subTree.component.setupState;
+      assert.equal(field.focused, false);
+      field.onFocus({ detail: { height: 300 } });
+      props.modelValue = '持续输入';
+      await Vue.nextTick();
+      assert.equal(field.focused, true);
+      assert.equal(dismissFocusedKeyboard(), true);
+      assert.equal(field.focused, false);
+      field.onFocus({ detail: {} });
+      field.onBlur({ detail: { value: '持续输入' } });
+      assert.equal(field.focused, false);
+      app.unmount();
+    }
+  } finally { globalThis.uni = previousUni; }
+});

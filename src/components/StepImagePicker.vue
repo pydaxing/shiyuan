@@ -1,38 +1,83 @@
 <script setup>
 import { useSheetContentResize } from '../composables/useSheetSizing.js';
-import { computed, ref } from 'vue';
-import { chooseLocalImages, persistSelectedImages, previewImages, imageUploadLabel } from '../services/images.js';
+import { computed, ref, watch } from 'vue';
+import { selectImagePaths, persistSelectedImages, previewImages, imageUploadLabel } from '../services/images.js';
 import AppIcon from './AppIcon.vue';
 import LazyImage from './LazyImage.vue';
 import ImageUploadProgress from './ImageUploadProgress.vue';
-const props = defineProps({ modelValue: { type: Array, default: () => [] }, fallbackImages: { type: Array, default: () => [] }, label: String, purpose: { type: String, default: '' }, variant: String, iconOnly: Boolean, disabled: Boolean });
+const props = defineProps({ modelValue: { type: Array, default: () => [] }, fallbackImages: { type: Array, default: () => [] }, reservedCount: { type: Number, default: 0 }, label: String, purpose: { type: String, default: '' }, variant: String, iconOnly: Boolean, disabled: Boolean });
 const emit = defineEmits(['update:modelValue', 'busy']);
 useSheetContentResize();
-const busy = ref(false);
+const choosing = ref(false);
+const entries = ref(props.modelValue.map((image, index) => ({ id: `saved-${index}`, image, status: 'done' })));
+const busy = computed(() => choosing.value || entries.value.some(item => item.status === 'uploading'));
 const error = ref('');
-const pendingPhotos = ref([]);
-const failedPaths = ref([]);
-const visibleFallbacks = computed(() => !props.modelValue.length && !pendingPhotos.value.length ? props.fallbackImages || [] : []);
-async function choose(retry = false) {
-  if (props.disabled || busy.value || props.modelValue.length >= 9) return;
-  busy.value = true; emit('busy', true); error.value = '';
+const pendingPhotos = computed(() => entries.value.filter(item => item.status !== 'done'));
+const failedPaths = computed(() => entries.value.filter(item => item.status === 'failed').map(item => item.path));
+const capacity = computed(() => Math.max(0, 9 - (props.reservedCount || 0) - entries.value.length));
+const visibleFallbacks = computed(() => !entries.value.length ? (props.fallbackImages || []).slice(0, 9) : []);
+watch(() => props.modelValue, value => {
+  if (!busy.value && !pendingPhotos.value.length) entries.value = value.map((image, index) => ({ id: `saved-${index}`, image, status: 'done' }));
+}, { flush: 'sync' });
+let sequence = 0;
+let reportedBusy = false;
+function reportBusy() {
+  if (reportedBusy === busy.value) return;
+  reportedBusy = busy.value;
+  emit('busy', reportedBusy);
+}
+function publish() {
+  emit('update:modelValue', entries.value.filter(item => item.status === 'done').map(item => item.image));
+  reportBusy();
+}
+async function upload(entry) {
+  entry.status = 'uploading';
+  publish();
   try {
-    const report = ({ items }) => { pendingPhotos.value = items; };
-    const images = retry ? await persistSelectedImages(failedPaths.value, report, [], '', props.purpose) : await chooseLocalImages(9 - props.modelValue.length, ['album', 'camera'], report, props.purpose);
-    if (images.length) emit('update:modelValue', [...props.modelValue, ...images]);
-    failedPaths.value = [];
+    const images = await persistSelectedImages([entry.path], ({ items }) => {
+      const status = items[0];
+      if (status) Object.assign(entry, { preview: status.preview, progress: status.progress, stage: status.status });
+    }, [], '', props.purpose);
+    entry.image = images[0];
+    entry.status = 'done';
   } catch (failure) {
-    if (failure.images?.length) emit('update:modelValue', [...props.modelValue, ...failure.images]);
-    error.value = failure.images?.length ? `部分图片未上传成功：${failure.message}` : failure.message;
-    failedPaths.value = failure.failedPaths || [];
+    entry.status = 'failed';
+    error.value = failure.message || '照片上传失败，请重试';
+  } finally { publish(); }
+}
+async function choose(retry = false) {
+  if (props.disabled || choosing.value) return;
+  error.value = '';
+  if (retry) {
+    entries.value.filter(item => item.status === 'failed').forEach(item => { void upload(item); });
+    return;
   }
-  finally { pendingPhotos.value = []; busy.value = false; emit('busy', false); }
+  if (!capacity.value) return;
+  choosing.value = true; reportBusy();
+  try {
+    const paths = await selectImagePaths(capacity.value, ['album', 'camera']);
+    for (const path of paths.slice(0, capacity.value)) {
+      entries.value.push({ id: `photo-${++sequence}`, path, image: '', status: 'uploading', stage: 'processing', progress: 0 });
+      void upload(entries.value[entries.value.length - 1]);
+    }
+  } catch (failure) { error.value = failure.message; }
+  finally { choosing.value = false; reportBusy(); }
+}
+function removePending(id) {
+  if (props.disabled) return;
+  const entry = entries.value.find(item => item.id === id);
+  if (entry?.status !== 'failed') return;
+  entries.value = entries.value.filter(item => item.id !== id);
+  if (!failedPaths.value.length) error.value = '';
+  publish();
 }
 function preview(image) { void previewImages(props.modelValue, image); }
 function previewFallback(image) { void previewImages(props.fallbackImages || [], image); }
 function remove(index) {
-  if (props.disabled || busy.value) return;
-  emit('update:modelValue', props.modelValue.filter((_, position) => position !== index));
+  if (props.disabled) return;
+  const entry = entries.value.filter(item => item.status === 'done')[index];
+  entries.value = entries.value.filter(item => item !== entry);
+  publish();
 }
 </script>
 
@@ -44,12 +89,12 @@ function remove(index) {
       </view>
       <view v-for="(image, index) in modelValue" :key="`${index}-${image}`" class="step-photo-tile">
         <button role="button" class="step-photo-preview" :aria-label="`查看${label}第${index + 1}张`" @click="preview(image)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><LazyImage :src="image" variant="card" mode="aspectFill" /></button>
-        <button role="button" class="card-remove" :disabled="busy || disabled" :aria-label="`移除${label}第${index + 1}张`" @click="$feedback(); remove(index)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="close-inverse" :size="18" /></button>
+        <button role="button" class="card-remove" :disabled="disabled" :aria-label="`移除${label}第${index + 1}张`" @click="$feedback(); remove(index)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon name="close-inverse" :size="18" /></button>
       </view>
-      <view v-for="photo in pendingPhotos" :key="photo.path" class="step-photo-tile photo-processing-tile"><image :src="photo.preview || photo.path" mode="aspectFill" /><ImageUploadProgress v-if="photo.status !== 'failed'" :value="imageUploadLabel(photo)" compact /></view>
-      <button v-if="modelValue.length + pendingPhotos.length < 9" role="button" class="step-photo-add" :aria-label="`添加${label}`" :disabled="busy || disabled" @click="choose(false)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view v-if="variant === 'meal' || iconOnly" class="meal-photo-plus" aria-hidden="true" /><text v-if="variant === 'meal'" class="meal-photo-label">实拍</text><template v-if="variant !== 'meal' && !iconOnly"><AppIcon name="camera" :size="24" active /><text v-if="!busy">添加图片</text></template></button>
+      <view v-for="photo in pendingPhotos" :key="photo.id" class="step-photo-tile photo-processing-tile"><image :src="photo.preview || photo.path" mode="aspectFill" /><ImageUploadProgress v-if="photo.status !== 'failed'" :value="imageUploadLabel({ ...photo, status: photo.stage })" compact /><button v-if="photo.status === 'failed'" class="card-remove" :disabled="disabled" aria-label="移除失败照片" @click="removePending(photo.id)"><AppIcon name="close-inverse" :size="18" /></button></view>
+      <button v-if="capacity > 0" role="button" class="step-photo-add" :aria-label="`添加${label}`" :disabled="choosing || disabled" @click="choose(false)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view v-if="variant === 'meal' || iconOnly" class="meal-photo-plus" aria-hidden="true" /><text v-if="variant === 'meal'" class="meal-photo-label">实拍</text><template v-if="variant !== 'meal' && !iconOnly"><AppIcon name="camera" :size="24" active /><text v-if="!busy">添加图片</text></template></button>
     </view>
-    <text v-if="error" class="error-message" role="alert">{{ error }}</text><button v-if="failedPaths.length && !busy" class="text-button" :disabled="disabled" @click="choose(true)" role="button" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">重试未成功的图片</button>
+    <text v-if="!capacity" class="muted">最多 9 张图片（含菜品图）</text><text v-if="error" class="error-message" role="alert">{{ error }}</text><button v-if="failedPaths.length" class="text-button" :disabled="disabled" @click="choose(true)" role="button" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">重试未成功的图片</button>
   </view>
 </template>
 

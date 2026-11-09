@@ -242,6 +242,7 @@ for (const match of source.matchAll(/require\("([^"]+)"\)/g)) {
   const cloud = { cloudMode: true, cloudStatus: Vue.ref({ phase: 'ready', error: '' }), mutationStatus: Vue.ref({ pending: [], failures: [] }) };
   const modules = { ...dependencies, '../../common/vendor.js': vendor, '../../common/assets.js': {}, '../../store.js': { ...cloud, state: Vue.ref(seed), storageError: Vue.ref('') }, '../../services/cloud.js': cloud, '../../services/feedback.js': { tapFeedback }, '../../services/keyboard.js': { dismissFocusedKeyboard() { keyboardDismissals += 1; } } };
   modules['../../services/native-share.js'] = nativeShare;
+  modules['../../services/account-entry.js'] = { accountEntryStatus: Vue.ref({ phase: 'ready' }) };
   modules['../../services/mutation-feedback.js'] = mutationFeedback;
   modules['../../store.js'].familyFeatures = Vue.computed(() => seed.family.features);
   let page;

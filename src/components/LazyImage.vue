@@ -6,6 +6,7 @@ import { imageFrameStyle } from '../domain/image-crop.js';
 import { useSheetContentResize } from '../composables/useSheetSizing.js';
 import { afterNativeRender } from '../composables/nativeRender.js';
 const props = defineProps({ src: String, mode: { type: String, default: 'aspectFill' }, variant: { type: String, default: 'card' }, round: Boolean, thumbnail: Boolean, avatar: Boolean, fallback: String });
+const emit = defineEmits(['natural-size']);
 const resizeSheet = useSheetContentResize(() => props.mode === 'widthFix');
 const sheetReady = inject('sheetReady', null);
 const imageViewActive = inject('imageViewActive', null);
@@ -39,7 +40,10 @@ const imageLoaded = computed(() => {
     displayedImage.value = path;
     const width = Number(event?.detail?.width);
     const height = Number(event?.detail?.height);
-    if (props.mode === 'widthFix' && Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) naturalRatio.value = width / height;
+    if (Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+      if (props.mode === 'widthFix') naturalRatio.value = width / height;
+      emit('natural-size', { width, height });
+    }
     resizeSheet();
   };
 });

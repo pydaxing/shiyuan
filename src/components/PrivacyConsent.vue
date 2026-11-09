@@ -19,6 +19,8 @@ function openAgreement() { uni.navigateTo({ url: '/pages/privacy/index' }); }
 .privacy-consent { display: flex; align-items: center; justify-content: center; flex-wrap: wrap; margin: 24px 0 8px; color: var(--muted); font-size: var(--type-meta); }
 .privacy-toggle, .privacy-link { display: flex; align-items: center; min-height: 44px; margin: 0; padding: 0; font-size: inherit; line-height: 22px; background: transparent; color: inherit; }
 .privacy-toggle { gap: 8px; }
+.privacy-toggle, .privacy-link { border: 0; box-shadow: none; border-radius: 0; }
+.privacy-toggle::after, .privacy-link::after { border: 0; }
 .privacy-check { display: flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: 1px solid var(--border-strong); border-radius: 50%; box-sizing: border-box; }
 .privacy-check.checked { background: var(--green-light); border-color: var(--green); }
 .privacy-link { color: var(--green); }

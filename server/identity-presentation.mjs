@@ -1,6 +1,13 @@
+import { DEFAULT_FAMILY_COVER } from '../src/domain/family.js';
+import { mealOrigin } from '../src/domain/meal-social.js';
 import { canReadMealPost } from './meal-access.mjs';
 import { isOfficialPost } from '../src/domain/community-policy.js';
 import { DEFAULT_PROFILE_VERSION, profileWithDefaults, defaultAvatarForUser } from '../src/domain/default-profile.js';
+
+export function familyMealAvatar(family, user, userId) {
+  if (family?.cover && family.cover !== DEFAULT_FAMILY_COVER) return family.cover;
+  return user?.avatar || defaultAvatarForUser(userId, user?.defaultAvatarId);
+}
 
 // Request-local cache only. Never persist current profile data over meal/recipe history.
 export function createIdentityPresentation(db) {
@@ -21,20 +28,17 @@ export function createIdentityPresentation(db) {
     const defaultsEnabled = defaultProfileVersion === DEFAULT_PROFILE_VERSION;
     // A departed/deleted account may have no saved image. A bundled default
     // can be derived from its original ID without reading future private data.
-    const historicalDefault = defaultsEnabled ? defaultAvatarForUser(post.authorId) : '';
-    const savedIdentity = liveImages && defaultsEnabled && !saved.avatar ? { ...saved, avatar: historicalDefault } : saved;
-    const personal = saved.mode === 'personal';
+    const personal = mealOrigin(post) === 'personal';
+    const historicalDefault = personal ? (defaultsEnabled ? defaultAvatarForUser(post.authorId) : '') : DEFAULT_FAMILY_COVER;
+    const savedIdentity = liveImages ? { ...saved, mode: personal ? 'personal' : 'family', avatar: !personal && saved.familyIdentityVersion !== 1 ? historicalDefault : saved.avatar || historicalDefault } : saved;
     const source = personal ? await get('users', post.authorId) : await family(post.spaceId);
     if (!source || source.deletedAt || (!personal && (source.kind === 'personal' || (post.mealSharingVersion !== 2 && !source.members?.some(member => member.id === post.authorId))))) return savedIdentity;
-    // A family without a custom cover still uses its publisher's current avatar.
-    // Resolve only a current member; leaving a family must not expose future profile images.
-    const member = !personal && source.members?.find(member => member.id === post.authorId);
-    const publisher = liveImages && !personal && !source.cover && member ? await get('users', post.authorId) : null;
-    const profile = personal ? source : (publisher && !publisher.deletedAt ? publisher : member);
-    const fallback = defaultsEnabled && (personal || member) ? defaultAvatarForUser(post.authorId, profile?.defaultAvatarId) : '';
-    const avatar = personal ? source.avatar || fallback : (source.cover || (member ? profile?.avatar || fallback : defaultsEnabled ? saved.avatar || historicalDefault : ''));
+    const fallback = defaultsEnabled && personal ? defaultAvatarForUser(post.authorId, source.defaultAvatarId) : '';
+    const member = !personal && source.members?.find(item => item.id === post.authorId);
+    const publisher = member ? await get('users', post.authorId) : null;
+    const avatar = personal ? source.avatar || fallback : familyMealAvatar(source, publisher && !publisher.deletedAt ? publisher : member, post.authorId);
     const displayName = defaultsEnabled && personal ? profileWithDefaults(source, post.authorId).name : source.name;
-    return { ...saved, name: name(displayName, saved.name), ...(liveImages ? { avatar: avatar || '', currentSpace: post.spaceId === currentSpaceId, currentUser: post.authorId === currentUserId } : {}) };
+    return { ...savedIdentity, mode: personal ? 'personal' : 'family', name: name(displayName, saved.name), ...(liveImages ? { avatar: avatar || '', currentSpace: post.spaceId === currentSpaceId, currentUser: post.authorId === currentUserId } : {}) };
   }
   async function community(post) {
     if (isOfficialPost(post) || !post.familyId) return post;

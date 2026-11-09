@@ -1,3 +1,4 @@
+import { DEFAULT_FAMILY_COVER } from '../domain/family.js';
 import { computed, onUnmounted, ref, watch } from 'vue';
 import { cloudMode, cloudStatus, invokeCloud, currentIdentity } from '../services/cloud.js';
 
@@ -10,13 +11,19 @@ export function useMealPosts(kind, enabled) {
   const diaryManagementVersion = ref(0);
   const diaryArchiveComplete = ref(false);
   const suppressedOrderIds = ref([]);
+  // Keep confirmed tombstones for this scope too: an eventually consistent read
+  // or a late cross-page update must not resurrect a deleted diary entry.
+  const deletions = ref(new Map());
+  const visibleSuppressedOrderIds = computed(() => [...new Set([
+    ...suppressedOrderIds.value, ...[...deletions.value.values()].map(item => item.orderId).filter(Boolean),
+  ])]);
   // Only fields explicitly linked by the server can use local optimistic profile
   // changes. Missing flags from an old backend keep its compatible snapshot.
   const presentedPosts = computed(() => posts.value.map(post => {
     const identity = currentIdentity?.value, author = post.author;
     if (!identity || !author) return post;
     if (author.mode === 'family' && author.currentSpace && identity.family?.id === cloudStatus.value.familyId) {
-      return { ...post, author: { ...author, name: identity.family.name, avatar: identity.family.cover || author.avatar || '' } };
+      return { ...post, author: { ...author, name: identity.family.name, avatar: identity.family.cover && identity.family.cover !== DEFAULT_FAMILY_COVER ? identity.family.cover : author.avatar } };
     }
     if (author.mode === 'personal' && author.currentUser && identity.profile?.name) {
       return { ...post, author: { ...author, name: identity.profile.name, avatar: identity.profile.avatar || '' } };
@@ -30,7 +37,7 @@ export function useMealPosts(kind, enabled) {
   const optimistic = new Map();
   const likeWrites = new Map();
   const postVersions = new Map();
-  const canShow = post => Boolean(post?.id) && post.status !== 'deleted' && (kind === 'mine' || post.visibility === 'public');
+  const canShow = post => Boolean(post?.id) && !deletions.value.has(post.id) && post.status !== 'deleted' && (kind === 'mine' || post.visibility === 'public');
   const reactionValues = post => ({ liked: post.liked, likeCount: post.likeCount, ...(Array.isArray(post.likeUsers) ? { likeUsers: post.likeUsers } : {}), reactions: post.reactions });
   function invalidatePost(id) { postVersions.set(id, (postVersions.get(id) || 0) + 1); optimistic.delete(id); }
   async function readPage({ more, refresh, pageCursor }) {
@@ -126,16 +133,23 @@ export function useMealPosts(kind, enabled) {
     const postVersion = postVersions.get(post.id) || 0;
     const reaction = action === 'setMealLike' || action === 'setMealReaction';
     const before = posts.value.find(item => item.id === post.id);
+    const deleting = action === 'deleteMealPost';
+    const beforeIndex = posts.value.findIndex(item => item.id === post.id);
     let next;
     if (before && action === 'setMealReaction') next = { ...before, reactions: (before.reactions || []).map(tag => tag.id === changes.tagId ? { ...tag, selected: changes.selected, count: Math.max(0, (tag.count || 0) + Number(changes.selected) - Number(Boolean(tag.selected))) } : tag) };
     // Immediate feedback; invalidate older reads and protect this state during paging.
     revision += 1; loading.value = false;
     if (next) { optimistic.set(post.id, next); posts.value = posts.value.map(item => item.id === post.id ? next : item); }
+    if (deleting) {
+      deletions.value.set(post.id, { orderId: post.sourceOrderId });
+      removePost(post.id);
+    }
     busy.value = { ...busy.value, [post.id]: true }; error.value = ''; failedRead = null;
     try {
       const result = await invokeCloud(action, { spaceId: cloudStatus.value.familyId, mealLikesVersion: 1, postId: post.id, ...(diaryManagementVersion.value === 1 ? { diaryManagementVersion: 1 } : {}), ...changes });
       if (disposed || epoch !== generation || context !== scope.value) return;
       if (reaction && postVersion !== (postVersions.get(post.id) || 0)) return;
+      if (deleting && result?.deletedId !== post.id) throw new Error('删除状态尚未确认，请重试');
       if (action === 'setMealVisibility' && (result.post?.id !== post.id || result.post.visibility !== changes.visibility)) throw new Error('可见范围尚未确认，请刷新后重试');
       revision += 1; loading.value = false;
       if (result.deletedId || !canShow(result.post)) {
@@ -155,6 +169,14 @@ export function useMealPosts(kind, enabled) {
     } catch (failure) {
       if (!disposed && epoch === generation && context === scope.value && (!reaction || postVersion === (postVersions.get(post.id) || 0))) {
         revision += 1; loading.value = false;
+        if (deleting) {
+          deletions.value.delete(post.id);
+          if (before && !posts.value.some(item => item.id === post.id)) {
+            const restored = [...posts.value];
+            restored.splice(Math.min(beforeIndex, restored.length), 0, before);
+            posts.value = restored.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+          }
+        }
         if (next) posts.value = posts.value.map(item => item.id === post.id ? { ...item, ...reactionValues(before) } : item);
         error.value = mealError(failure, '没有保存成功，请重试');
       }
@@ -169,16 +191,16 @@ export function useMealPosts(kind, enabled) {
   }
   function removePost(id) { if (disposed || !id) return; invalidatePost(id); revision += 1; loading.value = false; posts.value = posts.value.filter(post => post.id !== id); }
   function acceptPost(post) {
-    if (disposed || !post?.id) return;
+    if (disposed || !post?.id || deletions.value.has(post.id)) return;
     if (!canShow(post)) { removePost(post.id); return; }
     invalidatePost(post.id);
     revision += 1; loading.value = false;
     posts.value = [post, ...posts.value.filter(item => item.id !== post.id)].sort((a, b) => b.createdAt - a.createdAt || b.id.localeCompare(a.id));
   }
-  function reset() { generation += 1; revision += 1; lastLoadedAt = 0; failedRead = null; likeWrites.clear(); optimistic.clear(); postVersions.clear(); posts.value = []; diaryManagementVersion.value = 0; diaryArchiveComplete.value = false; suppressedOrderIds.value = []; cursor.value = null; error.value = ''; loading.value = false; loaded.value = false; busy.value = {}; }
+  function reset() { generation += 1; revision += 1; lastLoadedAt = 0; failedRead = null; likeWrites.clear(); deletions.value.clear(); optimistic.clear(); postVersions.clear(); posts.value = []; diaryManagementVersion.value = 0; diaryArchiveComplete.value = false; suppressedOrderIds.value = []; cursor.value = null; error.value = ''; loading.value = false; loaded.value = false; busy.value = {}; }
   watch(scope, () => { reset(); if (enabled.value) void load(); }, { flush: 'sync' });
   watch(() => cloudStatus.value.phase, phase => { if (phase === 'ready' && enabled.value && !loaded.value) void load(); });
   watch(enabled, active => { if (active) void refreshIfStale(); }, { immediate: true });
   onUnmounted(() => { disposed = true; generation += 1; revision += 1; });
-  return { posts: presentedPosts, diaryManagementVersion, diaryArchiveComplete, suppressedOrderIds, cursor, loading, loaded, error, busy, load, retry, refreshIfStale, mutate, acceptPost, removePost, syncReactions };
+  return { posts: presentedPosts, diaryManagementVersion, diaryArchiveComplete, suppressedOrderIds: visibleSuppressedOrderIds, cursor, loading, loaded, error, busy, load, retry, refreshIfStale, mutate, acceptPost, removePost, syncReactions };
 }

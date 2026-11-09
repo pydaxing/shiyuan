@@ -263,15 +263,15 @@ test('step attachment thumbnails and the add control share compact square geomet
   assert.equal(declarationsFor('.step-photo-add').get('border'), '1px solid var(--line)');
   assert.equal(declarationsFor('.step-photo-preview').get('height'), '100%');
   assert.equal(declarationsFor('.step-photo-tile .card-remove').get('min-height'), '44px');
-  assert.match(pickerSource, /chooseLocalImages\(9 - props.modelValue.length/);
-  assert.match(pickerSource, /await persistSelectedImages\(failedPaths.value, report, \[\], '', props.purpose\)/);
+  assert.match(pickerSource, /selectImagePaths\(capacity.value/);
+  assert.match(pickerSource, /await persistSelectedImages\(\[entry.path\]/);
   assert.match(pickerSource, /@click="preview\(image\)"/);
   assert.match(pickerSource, /previewImages\(props.modelValue, image\)/);
-  assert.match(pickerSource, /v-if="modelValue.length \+ pendingPhotos.length < 9"/);
-  assert.match(pickerSource, /<ImageUploadProgress v-if="photo.status !== 'failed'" :value="imageUploadLabel\(photo\)" compact/);
+  assert.match(pickerSource, /v-if="capacity > 0"/);
+  assert.match(pickerSource, /<ImageUploadProgress v-if="photo.status !== 'failed'" :value="imageUploadLabel\(\{ \.\.\.photo, status: photo.stage \}\)" compact/);
   assert.doesNotMatch(pickerSource, /photo-count|photo-processing-grid/);
   assert.doesNotMatch(pickerSource, /ImageCropper|requestCrop|coverFrameStyle/);
-  assert.match(pickerSource, /v-if="failedPaths.length && !busy"/);
+  assert.match(pickerSource, /v-if="failedPaths.length"/);
   assert.match(pickerSource, /useSheetContentResize\(\)/);
 });
 

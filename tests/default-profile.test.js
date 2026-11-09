@@ -1,3 +1,4 @@
+import { DEFAULT_FAMILY_COVER } from '../src/domain/family.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -215,7 +216,7 @@ test('new Discover responses show safe defaults without exposing account IDs or 
   assert.equal(modern.posts[0].spaceId, undefined);
   assert.equal(modern.posts[0].author.userId, undefined);
   const legacy = await ok(f.call('mealFeed', { spaceId: first.familyId, identityPresentationVersion: 1 }));
-  assert.equal(legacy.posts[0].author.avatar, '');
+  assert.equal(legacy.posts[0].author.avatar, defaultAvatarForUser(first.userId));
   assert.deepEqual(await f.db.get('meal_posts', post.id), { ...post, _id: post.id });
 });
 
@@ -234,7 +235,7 @@ test('default identity presentation honors member exit and deleted accounts', as
   assert.deepEqual(await createIdentityPresentation(db).meal(personal, options), personal.author);
 });
 
-test('historical meals with missing identities receive only safe defaults while preserving every existing saved image', async () => {
+test('historical meals with missing identities receive only safe defaults while discarding ambiguous old family avatars', async () => {
   const db = memoryRepository();
   const variants = [
     { authorId: 'alice', spaceId: 'missing-family', author: { mode: 'family', name: '旧家庭', avatar: '' } },
@@ -248,11 +249,11 @@ test('historical meals with missing identities receive only safe defaults while 
   for (const row of variants) {
     const identity = createIdentityPresentation(db);
     const modern = await identity.meal(row, { liveImages: true, defaultProfileVersion: 1 });
-    assert.deepEqual(modern, { ...row.author, avatar: defaultAvatarForUser(row.authorId) });
-    assert.deepEqual(await identity.meal(row, { liveImages: true }), row.author);
+    assert.deepEqual(modern, { ...row.author, avatar: row.author.mode === 'family' ? DEFAULT_FAMILY_COVER : defaultAvatarForUser(row.authorId) });
+    assert.deepEqual(await identity.meal(row, { liveImages: true }), row.author.mode === 'family' ? { ...row.author, avatar: DEFAULT_FAMILY_COVER } : row.author);
     assert.deepEqual(await identity.meal(row, { defaultProfileVersion: 1 }), row.author);
     const withSaved = { ...row, author: { ...row.author, avatar: 'cloud://historical-image' } };
-    assert.deepEqual(await identity.meal(withSaved, { liveImages: true, defaultProfileVersion: 1 }), withSaved.author);
+    assert.deepEqual(await identity.meal(withSaved, { liveImages: true, defaultProfileVersion: 1 }), row.author.mode === 'family' ? { ...withSaved.author, avatar: DEFAULT_FAMILY_COVER } : withSaved.author);
   }
 });
 

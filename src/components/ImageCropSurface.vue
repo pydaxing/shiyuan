@@ -70,7 +70,7 @@ onUnmounted(() => { disposed = true; uni.offWindowResize?.(measure); });
     <view class="cover-crop-frame" :class="{ 'is-round': round }" :style="coverFrameStyle(frame)">
       <movable-area v-if="placement" :key="geometryVersion" class="crop-area" :style="areaStyle" :scale-area="true" @touchstart.stop="touching = true" @touchmove.stop @touchend.stop="touching = false" @touchcancel.stop="touching = false">
         <movable-view class="crop-image" direction="all" :x="placement.x" :y="placement.y" :style="imageStyle" :inertia="false" :out-of-bounds="false" :animation="false" :disabled="busy || disabled" @change="changed" @scale="scaled" :scale="!disabled && !busy" :scale-min="1" :scale-max="3" :scale-value="zoom" aria-label="图片取景，单指拖动，双指缩放">
-          <image :src="source.preview" mode="scaleToFill" class="crop-photo" :draggable="false" />
+          <image :src="source.preview" mode="aspectFill" class="crop-photo" :style="imageStyle" :draggable="false" />
         </movable-view>
       </movable-area>
       <view class="crop-guide" aria-hidden="true"><view class="crop-guide-horizontal" /><view class="crop-guide-vertical" /></view>

@@ -26,6 +26,7 @@ test('portrait, landscape and square photos fill every crop frame without blank 
       const frame = { width, height: width / ratio };
       const image = fitCropImage(source, frame, zoom);
       assert.ok(image.width >= frame.width - 1e-8 && image.height >= frame.height - 1e-8);
+      assert.ok(Math.abs(image.width / image.height - source.width / source.height) < 1e-8, "preview must preserve the source aspect ratio at every zoom");
       for (const offset of [image, { x: 999999, y: 999999 }, { x: -999999, y: -999999 }]) {
         const crop = cropRectangle(image, frame, offset);
         assert.ok(crop.x >= -1e-8 && crop.y >= -1e-8);
@@ -221,5 +222,14 @@ test('packaged default covers remain root-relative editable sources without uplo
       original: '/static/family-home-default.jpg', preview: '/static/family-home-default.jpg',
       width: 1440, height: 960, variant: 'cover',
     });
+  }
+});
+
+
+test('inline avatar and shared crop previews use explicit proportional sizes without stretching', () => {
+  for (const component of ['ImageCropSurface.vue', 'ImageCropper.vue']) {
+    const text = readFileSync(new URL(`../src/components/${component}`, import.meta.url), 'utf8');
+    assert.match(text, /<image[^>]*mode="aspectFill"[^>]*class="crop-photo"[^>]*:style="imageStyle"/);
+    assert.doesNotMatch(text, /mode="scaleToFill"/);
   }
 });

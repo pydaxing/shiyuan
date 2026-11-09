@@ -1,5 +1,5 @@
 <script setup>
-import { computed, getCurrentInstance, inject, onUnmounted, ref } from 'vue';
+import { computed, getCurrentInstance, inject, onUnmounted, ref, watch } from 'vue';
 import { focusKeyboardField, blurKeyboardField } from '../services/keyboard.js';
 defineOptions({ inheritAttrs: false });
 const props = defineProps({ modelValue: [String, Number], multiline: Boolean, fieldClass: String, variant: String, emptyValue: [String, Number], placeholder: String, placeholderStyle: String, ariaLabel: String, error: String, errorId: String, externalError: Boolean, type: { type: String, default: 'text' }, maxlength: { type: [String, Number], default: 140 }, disabled: Boolean, focus: Boolean });
@@ -8,7 +8,9 @@ const sheet = inject('sheetKeyboard', null);
 const instance = getCurrentInstance();
 const errorElementId = computed(() => props.errorId || `field-error-${instance.uid}`);
 const token = Symbol('field');
-const focused = ref(false);
+// Mirror native focus so keyboard-driven rerenders never send the default false back.
+const focused = ref(Boolean(props.focus));
+watch(() => props.focus, value => { focused.value = Boolean(value); });
 let composing = false;
 const measure = (callback) => uni.createSelectorQuery().in(instance.proxy).select('.form-field').boundingClientRect(callback).exec();
 function reveal() {
@@ -23,7 +25,7 @@ function reveal() {
 defineExpose({ reveal });
 function onFocus(event) {
   focused.value = true;
-  focusKeyboardField(token, () => sheet?.dismiss(token));
+  focusKeyboardField(token, () => { focused.value = false; sheet?.dismiss(token); });
   sheet?.focus(token, measure);
   if (event.detail?.height > 0) sheet?.keyboard(event.detail, token);
   emit('focus', event);
@@ -51,8 +53,8 @@ onUnmounted(() => { blurKeyboardField(token); sheet?.blur(token); });
 
 <template>
   <view class="form-field" data-keyboard-field="true" mark:keyboardfield="true" :class="{ 'field-invalid': error, 'form-field-inline-validation': variant === 'inline-validation', 'form-field-material': variant === 'material', 'form-field-profile-nickname': variant === 'profile-nickname', 'is-focused': focused }" :aria-invalid="Boolean(error)" @click.stop>
-    <textarea v-if="multiline" data-keyboard-field="true" style="resize: none" :class="fieldClass" :value="modelValue" :placeholder="placeholder" :placeholder-style="placeholderStyle" :aria-label="ariaLabel" :aria-invalid="Boolean(error)" :aria-describedby="error ? errorElementId : undefined" :maxlength="maxlength" :disabled="disabled" :focus="focus" :fixed="Boolean(sheet)" :adjust-position="!sheet" :cursor-spacing="24" :disable-default-padding="true" :show-confirm-bar="false" :hold-keyboard="false" @input="onInput" @compositionstart="onCompositionStart" @compositionend="onCompositionEnd" @focus="onFocus" @blur="onBlur" @keyboardheightchange="keyboardChange" />
-    <input v-else data-keyboard-field="true" :class="fieldClass" :value="modelValue" :placeholder="placeholder" :placeholder-style="placeholderStyle" :aria-label="ariaLabel" :aria-invalid="Boolean(error)" :aria-describedby="error ? errorElementId : undefined" :maxlength="maxlength" :disabled="disabled" :focus="focus" :type="type" :always-embed="true" :adjust-position="!sheet" :cursor-spacing="24" :hold-keyboard="false" @input="onInput" @compositionstart="onCompositionStart" @compositionend="onCompositionEnd" @focus="onFocus" @blur="onBlur" @keyboardheightchange="keyboardChange" />
+    <textarea v-if="multiline" data-keyboard-field="true" style="resize: none" :class="fieldClass" :value="modelValue" :placeholder="placeholder" :placeholder-style="placeholderStyle" :aria-label="ariaLabel" :aria-invalid="Boolean(error)" :aria-describedby="error ? errorElementId : undefined" :maxlength="maxlength" :disabled="disabled" :focus="focused" :fixed="Boolean(sheet)" :adjust-position="!sheet" :cursor-spacing="24" :disable-default-padding="true" :show-confirm-bar="false" :hold-keyboard="false" @input="onInput" @compositionstart="onCompositionStart" @compositionend="onCompositionEnd" @focus="onFocus" @blur="onBlur" @keyboardheightchange="keyboardChange" />
+    <input v-else data-keyboard-field="true" :class="fieldClass" :value="modelValue" :placeholder="placeholder" :placeholder-style="placeholderStyle" :aria-label="ariaLabel" :aria-invalid="Boolean(error)" :aria-describedby="error ? errorElementId : undefined" :maxlength="maxlength" :disabled="disabled" :focus="focused" :type="type" :always-embed="true" :adjust-position="!sheet" :cursor-spacing="24" :hold-keyboard="false" @input="onInput" @compositionstart="onCompositionStart" @compositionend="onCompositionEnd" @focus="onFocus" @blur="onBlur" @keyboardheightchange="keyboardChange" />
     <text v-if="error && !externalError" :id="errorElementId" class="field-error" role="alert">{{ error }}</text>
   </view>
 </template>

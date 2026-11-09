@@ -129,11 +129,8 @@ function leave(family = familyDetails()) {
   const familyId = target.id;
   const expectedCurrentFamilyId = cloudStatus.value.familyId;
   const changesFamily = familyId === expectedCurrentFamilyId;
-  const lastMember = target.memberCount === 1;
-  const cleanupNotice = '家庭私有的菜品、套餐、安排、库存等数据将被清理。已发布的美食和公开餐食保留；已归入成员个人日记的家庭共享餐食继续保留，原可见范围不变，其余家庭日记清理。美食发布时的家庭名称、头像和封面会保留。此操作不能撤销。';
-  const consequence = lastMember ? `你是最后一位成员，退出后将自动删除这个家庭。${cleanupNotice}` : `${target.owner ? '管理员将自动交接给最早加入且仍在家的成员。' : ''}家庭记录会保留给其他成员；若退出时已无其他成员，家庭将自动删除。${cleanupNotice}`;
   return perform('leaveFamily', {}, changesFamily, async () => {
-    const confirmation = await new Promise((resolve, reject) => uni.showModal({ cancelColor: NATIVE_UI_COLORS.muted, title: `退出「${target.name}」？`, content: `${consequence}其他家庭不受影响。${changesFamily && props.unsavedChanges ? '名称与封面未保存的修改也将放弃。' : ''}`, confirmText: '确认退出', cancelText: '取消', confirmColor: NATIVE_UI_COLORS.danger, success: resolve, fail: () => reject(new Error('无法打开确认窗口，请重试')) }));
+    const confirmation = await new Promise((resolve, reject) => uni.showModal({ cancelColor: NATIVE_UI_COLORS.muted, title: `退出「${target.name}」？`, content: '', confirmText: '确认退出', cancelText: '取消', confirmColor: NATIVE_UI_COLORS.danger, success: resolve, fail: () => reject(new Error('无法打开确认窗口，请重试')) }));
     if (!confirmation.confirm) return;
     return { familyId, expectedCurrentFamilyId };
   });

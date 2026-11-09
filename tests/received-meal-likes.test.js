@@ -1,0 +1,51 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import * as Vue from 'vue';
+const source = readFileSync(new URL('../src/composables/useReceivedMealLikes.js', import.meta.url), 'utf8');
+const settle = async () => { await Vue.nextTick(); await Promise.resolve(); await Vue.nextTick(); };
+function harness(t) {
+  const calls = [], stopped = [], space = Vue.ref('family');
+  const modules = { ...Vue, cloudMode: true, cloudStatus: Vue.ref({ userId: 'alice', familyId: 'family', phase: 'ready' }), mealStatsVersion: Vue.ref(0), onUnmounted: f => stopped.push(f), invokeCloud: (action, args) => new Promise((resolve, reject) => calls.push({ action, args, resolve, reject })) };
+  const code = source.replace(/import \{([^}]+)\} from '[^']+';/g, 'const {$1} = modules;').replace('export function', 'function');
+  const scope = Vue.effectScope();
+  const use = new Function('modules', `${code}\nreturn useReceivedMealLikes;`)(modules);
+  const api = scope.run(() => use(space));
+  t.after(() => { stopped.forEach(f => f()); scope.stop(); });
+  return { api, modules, calls, space };
+}
+test('received likes preserve cached count on refresh failure and reject late responses from another space', async t => {
+  const f = harness(t);
+  assert.equal(f.api.count.value, null);
+  assert.equal(f.api.mealCount.value, null);
+  f.calls[0].resolve({ spaceId: 'family', receivedLikes: 12, mealCount: 8 }); await settle();
+  assert.equal(f.api.count.value, 12);
+  assert.equal(f.api.mealCount.value, 8);
+  const refresh = f.api.refresh();
+  assert.equal(f.api.count.value, 12);
+  assert.equal(f.api.mealCount.value, 8);
+  f.calls[1].reject(new Error('离线')); await refresh;
+  assert.equal(f.api.count.value, 12);
+  assert.equal(f.api.mealCount.value, 8);
+  const late = f.api.refresh();
+  f.space.value = 'personal'; await settle();
+  assert.equal(f.api.count.value, null);
+  assert.equal(f.api.mealCount.value, null);
+  assert.equal(f.calls.length, 3, 'optimistic switch does not query unconfirmed membership');
+  f.modules.cloudStatus.value.familyId = 'personal'; await settle();
+  f.calls[3].resolve({ spaceId: 'personal', receivedLikes: 3, mealCount: 2 }); await settle();
+  f.calls[2].resolve({ spaceId: 'family', receivedLikes: 999 }); await late;
+  assert.equal(f.api.count.value, 3);
+  assert.equal(f.api.mealCount.value, 2);
+  f.modules.mealStatsVersion.value++; await settle();
+  f.calls[4].resolve({ spaceId: 'personal', receivedLikes: 2 }); await settle();
+  assert.equal(f.api.count.value, 2);
+  assert.equal(f.api.mealCount.value, null, 'old backend missing count must not show a fabricated zero');
+});
+test('unavailable statistics never masquerade as zero', async t => {
+  const f = harness(t);
+  f.calls[0].resolve({ spaceId: 'wrong', receivedLikes: 10 }); await settle();
+  assert.equal(f.api.count.value, null);
+  assert.equal(f.api.mealCount.value, null);
+  assert.ok(f.api.error.value);
+});

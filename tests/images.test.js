@@ -109,7 +109,7 @@ test('multiple pickers share upload concurrency and failed paths can retry indep
   let failedPaths;
   await assert.rejects(first, error => { assert.deepEqual(error.images, ['first']); failedPaths = error.failedPaths; return true; });
   assert.deepEqual(await second, ['third', 'fourth']);
-  assert.equal(maximum, 2);
+  assert.equal(maximum, 4);
   assert.equal(statuses[0].items[0].path, 'first');
   assert.equal(statuses.at(-1).completed, 1);
   assert.equal(statuses.at(-1).items.find(item => item.status === 'failed').preview, '');
@@ -183,7 +183,7 @@ test('cancelling multi-photo selection preserves the current photo list', async 
   assert.deepEqual(await chooseLocalImages(4), []);
 });
 
-test('multi-photo processing uses at most two workers, preserves order and reports completion', async () => {
+test('multi-photo processing starts all selected photos, preserves order and reports completion', async () => {
   let active = 0;
   let maximum = 0;
   const progress = [];
@@ -200,7 +200,7 @@ test('multi-photo processing uses at most two workers, preserves order and repor
     saveFile: async ({ tempFilePath }) => ({ savedFilePath: tempFilePath }),
   };
   assert.deepEqual(await chooseLocalImages(3, ['album'], status => progress.push(status)), ['first', 'second', 'third']);
-  assert.equal(maximum, 2);
+  assert.equal(maximum, 3);
   assert.deepEqual([...new Set(progress.map(item => item.completed))], [0, 1, 2, 3]);
   assert.ok(progress.every(item => item.total === 3));
   assert.ok(progress.every(item => item.completed === item.items.filter(photo => photo.status === 'done').length));

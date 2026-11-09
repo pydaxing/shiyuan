@@ -25,6 +25,7 @@ function mount(src, cache, overrides = {}, sheetReady = null, imageViewActive = 
     inject: key => key === 'sheetReady' ? sheetReady : key === 'imageViewActive' ? imageViewActive : null,
     afterNativeRender: afterRender,
     defineProps: () => props,
+    defineEmits: () => () => {},
     getCurrentInstance: () => ({ proxy: {} }),
     useSheetContentResize: enabled => () => { if (enabled()) resizeRequests += 1; },
     onMounted: callback => { mounted = callback; },

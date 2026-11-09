@@ -6,15 +6,15 @@ import { createSeed } from '../src/data/seed.js';
 import { matchesImportedSource } from '../src/domain/kitchen.js';
 import { defaultAvatarForUser, defaultAvatarIdForPath, defaultNicknameForUser, profileWithDefaults } from '../src/domain/default-profile.js';
 
-const bundled = await build({ entryPoints: ['src/services/cloud.js'], bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only' }) } });
+const bundled = await build({ stdin: { contents: "export * from './src/services/cloud.js'; export { accountEntry } from './src/services/account-entry.js';", resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only' }) } });
 let sequence = 0;
 const stockBatch = { name: '玉米', quantity: 2, unit: '根', location: '冷藏', expiresOn: '', image: '' };
 
 test('cloud client routes to the configured replacement function without changing the environment', async () => {
-  const configured = await build({ entryPoints: ['src/services/cloud.js'], bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only', VITE_CLOUD_FUNCTION: 'kitchen-v2' }) } });
+  const configured = await build({ stdin: { contents: "export * from './src/services/cloud.js'; export { accountEntry } from './src/services/account-entry.js';", resolveDir: process.cwd() }, bundle: true, platform: 'node', format: 'esm', write: false, define: { 'import.meta.env': JSON.stringify({ VITE_DATA_MODE: 'cloud', VITE_CLOUD_ENV: 'test-only', VITE_CLOUD_FUNCTION: 'kitchen-v2' }) } });
   let environment;
   let functionName;
-  globalThis.wx = { cloud: { init(options) { environment = options.env; }, async callFunction(options) { functionName = options.name; return { result: { ok: true, data: {} } }; } } };
+  globalThis.wx = { cloud: { init(options) { environment = options.env; }, async callFunction(options) { functionName = options.name; return { result: { ok: true, data: { accountLoginVersion: 1, phoneBound: true } } }; } } };
   const app = await import(`data:text/javascript;base64,${Buffer.from(configured.outputFiles[0].text).toString('base64')}`);
   await app.invokeCloud('bootstrap');
   assert.equal(environment, 'test-only');
@@ -25,9 +25,10 @@ function snapshot(revision = 1) {
 }
 async function client(handler, { storage = new Map(), cold = false } = {}) {
   const calls = [];
-  globalThis.wx = { cloud: { init() {}, async callFunction({ data }) { calls.push(data); return { result: await handler(data) }; } } };
+  globalThis.wx = { cloud: { init() {}, async callFunction({ data }) { if (data.action === 'accountAccess') return { result: { ok: true, data: { accountLoginVersion: 1, phoneBound: true } } }; calls.push(data); return { result: await handler(data) }; } } };
   if (storage) Object.assign(wx, { getStorageSync: key => storage.get(key), setStorageSync: (key, value) => storage.set(key, value), removeStorageSync: key => storage.delete(key) });
   const module = await import(`data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString('base64')}#${++sequence}`);
+  await module.accountEntry.ensureReady();
   const state = { value: emptySnapshot() };
   module.bindCloudState(state);
   if (!cold) module.cloudStatus.value = { phase: 'ready', revision: 1, familyId: 'family-1', userId: 'alice', busy: false, error: '' };

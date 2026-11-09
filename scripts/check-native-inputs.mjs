@@ -54,8 +54,10 @@ assert.ok(readFileSync(new URL('static/icon-close.png', root)).length > 0);
 assert.match(readFileSync(new URL('common/assets.js', root), 'utf8'), /\/static\/icon-close\.png/);
 const page = elements('pages/index/index.wxml');
 assert.equal(page[0].tag, 'page-meta');
-assert.ok(attribute(page[1], 'style'), 'background page needs a physical scroll lock');
-assert.ok(attribute(page[1], 'bindtap'), 'the page must handle outside taps for search keyboards');
+const appShell = page.find(node => node.tag === 'view' && (attribute(node, 'class') || '').includes('app-shell'));
+assert.ok(appShell, 'main application shell must exist behind the login gate');
+assert.ok(attribute(appShell, 'style'), 'background page needs a physical scroll lock');
+assert.ok(attribute(appShell, 'bindtap'), 'the page must handle outside taps for search keyboards');
 for (const file of ['pages/index/index.wxml', ...readdirSync(new URL('components/', root)).filter((file) => file.endsWith('.wxml')).map((file) => `components/${file}`)]) {
   for (const node of elements(file)) {
     if (node.tag === 'view' && attribute(node, 'slot') && !attribute(node, 'bindtap') && !attribute(node, 'catchtap')) continue;

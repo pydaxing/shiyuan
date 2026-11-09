@@ -1,5 +1,5 @@
 import { profileWithDefaults } from '../src/domain/default-profile.js';
-import { createIdentityPresentation } from './identity-presentation.mjs';
+import { createIdentityPresentation, familyMealAvatar } from './identity-presentation.mjs';
 import { createHash } from 'node:crypto';
 import { MEAL_REACTIONS, MEAL_SLOTS, MEAL_MOODS } from '../src/domain/meal-social.js';
 import { workspaceMembership } from './workspaces.mjs';
@@ -10,7 +10,7 @@ import { createMealDishOrigins } from './meal-dish-origin.mjs';
 import { mealDiaryCapabilities, mealDiaryRelationId, hidePersonalMeal, deleteCanonicalMeal } from './meal-diary-management.mjs';
 
 export const MEAL_POST_COLLECTIONS = ['meal_posts', 'meal_reactions'];
-export const mealPostActions = ['mealFeed', 'myMealPosts', 'mealDishDetail', 'publishMeal', 'finishMeal', 'setMealLike', 'setMealReaction', 'setMealVisibility', 'deleteMealPost'];
+export const mealPostActions = ['mealReceivedLikes', 'mealFeed', 'myMealPosts', 'mealDishDetail', 'publishMeal', 'finishMeal', 'setMealLike', 'setMealReaction', 'setMealVisibility', 'deleteMealPost'];
 const hash = value => createHash('sha256').update(value).digest('hex');
 const fail = (message, code = 'INVALID') => { throw Object.assign(new Error(message), { code }); };
 const recordId = (postId, userId) => hash(`${postId}:${userId}`);
@@ -124,12 +124,12 @@ export function mealPostView(post, relation, userId) {
 
 export function createMealPostService({ repository, now, throttle, archiveForUser }) {
   async function view(db, post, userId, identity = createIdentityPresentation(db), options = {}, dishOrigin = createMealDishOrigins(db)) {
-    const [relation, author] = await Promise.all([
+    // Independent read-only projections run together. No cache survives this request,
+    // so a refresh still rechecks current identity, likes and recipe provenance.
+    const [relation, author, likeUsers, dishes] = await Promise.all([
       db.get('meal_reactions', recordId(post.id, userId)),
       identity.meal(post, { currentUserId: userId, ...options }),
-    ]);
-    const result = mealPostView({ ...post, author }, relation, userId);
-    if (options.mealLikesVersion === 1) {
+      options.mealLikesVersion === 1 ? (async () => {
       const likes = [];
       let after = '';
       // Reuse the existing postId/_id index, including legacy reactions.
@@ -140,17 +140,15 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
         if (rows.length < 100) break;
         after = rows.at(-1)._id || rows.at(-1).id;
       }
-      result.likeUsers = await Promise.all(likes.slice(0, 100).map(async row => {
+      return Promise.all(likes.slice(0, 100).map(async row => {
         const profile = await db.get('users', row.userId);
         return { key: recordId(post.id, row.userId), self: row.userId === userId,
           name: profile && !profile.deletedAt ? profileWithDefaults(profile, row.userId).name : '微信用户' };
       }));
-      result.mealLikesVersion = 1;
-    }
-
-    if (post.kind === 'plan' && post.dishes?.length) {
+      })() : undefined,
+      post.kind === 'plan' && post.dishes?.length ? (async () => {
       const sources = await mealDishSources(db, post);
-      result.dishes = await Promise.all(post.dishes.map(async (dish, index) => {
+      return Promise.all(post.dishes.map(async (dish, index) => {
         const origin = await dishOrigin(sources[index], post, dish.recipeId);
         const { sourceKind: previousSourceKind, ...displayDish } = dish;
         return { ...displayDish,
@@ -160,7 +158,13 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
           ...(origin.kind === 'community' ? { communityPostId: await dishOrigin.communityPostId(sources[index], post) } : {}),
         };
       }));
-      const restoredImages = result.dishes.map(dish => dish.image).filter(Boolean).slice(0, 9);
+      })() : undefined,
+    ]);
+    const result = mealPostView({ ...post, author }, relation, userId);
+    if (options.mealLikesVersion === 1) Object.assign(result, { likeUsers, mealLikesVersion: 1 });
+    if (dishes) {
+      result.dishes = dishes;
+      const restoredImages = dishes.map(dish => dish.image).filter(Boolean).slice(0, 9);
       if (restoredImages.some(image => !(post.images || []).includes(image))) result.images = restoredImages;
     }
     if (options.currentSpaceId && options.currentSpaceId !== post.spaceId) delete result.sourceOrderId;
@@ -267,7 +271,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
         content = { date: input.date, meal: input.meal, title: `${input.meal}好好吃饭`, images: input.images, dishes, ...(sourceOrder ? { orderId: sourceOrder.id } : {}) };
       }
       const member = family.members.find(member => member.id === userId);
-      const author = { name: family.kind === 'personal' ? (user.name || member.name || '我') : family.name, avatar: family.kind === 'personal' ? (user.avatar || '') : (family.cover || member.avatar || ''), mode: family.kind === 'personal' ? 'personal' : 'family' };
+      const author = { name: family.kind === 'personal' ? (user.name || member.name || '我') : family.name, avatar: family.kind === 'personal' ? (user.avatar || '') : familyMealAvatar(family, user, userId), mode: family.kind === 'personal' ? 'personal' : 'family', familyIdentityVersion: 1 };
       const post = { id, spaceId: family.id, authorId: userId, author, kind: input.kind, ...content, moodIds, visibility, status: 'published', createdAt: now(), likeCount: 0, reactionCounts: {} };
       if (modern) Object.assign(post, { mealSharingVersion: 2, mealContext: family.kind === 'personal' ? 'personal' : 'family', showMealBadge: input.showMealBadge, participantUserIds: family.kind === 'personal' ? [userId] : [...new Set(family.members.map(member => member.id))] });
       if (finish) post.mealStarted = true;
@@ -280,6 +284,59 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
     });
   }
   return async (action, event, userId) => {
+    if (action === 'mealReceivedLikes') {
+      const { family } = await workspaceMembership(repository, userId);
+      if (event.spaceId !== family.id) fail('使用空间已变更，请刷新后重试', 'CONFLICT');
+      await throttle(userId, 'mealReceivedLikes', 120);
+      // Personal totals use the same deduplicated, visible diary union.
+      // Only scalar fields and hidden-reference markers are read.
+      const personalMeals = family.kind === 'personal' ? (async () => {
+        const filters = [{ authorId: userId },
+          { mealSharingVersion: 2, participantUserIds: { contains: userId }, visibility: 'public' },
+          { mealSharingVersion: 2, participantUserIds: { contains: userId }, visibility: 'family' }];
+        const branches = await Promise.all(filters.map(async filter => {
+          const posts = []; let cursor;
+          while (true) {
+            const rows = await repository.list('meal_posts', { status: 'published', ...filter }, { order: 'published', after: cursor, limit: 100, fields: ['_id', 'id', 'createdAt', 'likeCount'] });
+            posts.push(...rows);
+            if (rows.length < 100) return posts;
+            const last = rows.at(-1); cursor = { id: last._id || last.id, createdAt: last.createdAt };
+          }
+        }));
+        const posts = new Map(branches.flat().map(post => [post.id || post._id, post]));
+        const ids = [...posts.keys()];
+        const hidden = await readDocuments(repository, 'meal_reactions', ids.map(id => mealDiaryRelationId(id, userId)), { fields: ['diaryHiddenAt'] });
+        return ids.reduce((totals, id) => {
+          if (!hidden.get(mealDiaryRelationId(id, userId))?.diaryHiddenAt) {
+            totals.mealCount += 1;
+            totals.receivedLikes += Math.max(0, Math.floor(Number(posts.get(id).likeCount) || 0));
+          }
+          return totals;
+        }, { mealCount: 0, receivedLikes: 0 });
+      })() : Promise.resolve(null);
+      const ownStats = family.kind === 'personal' ? Promise.resolve(null) : (async () => {
+      let after, count = 0, mealCount = 0;
+      // Canonical posts only: diary participant references are not extra likes.
+      // Stable ID pagination includes legacy posts without creation timestamps.
+      while (true) {
+        const rows = await repository.list('meal_posts', { status: 'published', spaceId: family.id }, { after, limit: 100, fields: ['_id', 'id', 'mealContext', 'author', 'authorId', 'visibility', 'likeCount'] });
+        for (const post of rows) {
+          const familyMeal = post.mealContext ? post.mealContext === 'family' : post.author?.mode === 'family';
+          const belongs = family.kind === 'personal' ? !familyMeal && post.authorId === userId
+            : familyMeal && ['public', 'family'].includes(post.visibility);
+          if (belongs) {
+            mealCount += 1;
+            count += Math.max(0, Math.floor(Number(post.likeCount) || 0));
+          }
+        }
+        if (rows.length < 100) break;
+        after = rows.at(-1)._id || rows.at(-1).id;
+      }
+      return { receivedLikes: count, mealCount };
+      })();
+      const [totals, personalTotals] = await Promise.all([ownStats, personalMeals]);
+      return { spaceId: family.id, ...(personalTotals ?? totals) };
+    }
     if (action === 'mealFeed' || action === 'myMealPosts') return feed(event, userId, action === 'myMealPosts');
     if (action === 'mealDishDetail') {
       const postId = postIdOf(event.postId);
