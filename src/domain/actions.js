@@ -57,7 +57,7 @@ function updateOrder(orderId, action) {
     order.status = 'accepted';
     return commit(next);
   }
-  if (!order || !['pending', 'accepted'].includes(order.status)) throw new Error('订单状态已变化，请重新查看');
+  if (!order || order.autoArchivedAt || !['pending', 'accepted'].includes(order.status)) throw new Error('订单状态已变化，请重新查看');
   if (action === 'accepted' && order.status === 'accepted') return;
   if (!['accepted', 'cancelled'].includes(action)) throw new Error('不支持的订单操作');
   order.status = action;
@@ -82,7 +82,7 @@ function setDishPrepared(orderId, recipeId, prepared, signature) {
   if (typeof prepared !== 'boolean' || typeof signature !== 'string' || !signature || signature.length > 50000) throw new Error('备菜信息无效，请重新打开');
   const next = clone(state.value);
   const order = next.orders.find(entry => entry.id === orderId);
-  if (!order || !['pending', 'accepted'].includes(order.status)) throw Object.assign(new Error('这一餐已结束或已取消，请重新查看'), { code: 'CONFLICT' });
+  if (!order || order.autoArchivedAt || !['pending', 'accepted'].includes(order.status)) throw Object.assign(new Error('这一餐已结束或已取消，请重新查看'), { code: 'CONFLICT' });
   const item = order.items.find(entry => entry.recipe.id === recipeId);
   const edit = order.preparationEdits?.find(record => record.recipeId === recipeId);
   if (!item || signature !== dishPreparationSignature(item, edit)) throw Object.assign(new Error('这道菜的备菜用量已变化，请重新确认'), { code: 'CONFLICT' });
@@ -100,7 +100,7 @@ function saveDishPreparation(orderId, recipeId, draft, signature) {
   const clean = normalizePreparationDraft(draft);
   const next = clone(state.value);
   const order = next.orders.find(entry => entry.id === orderId);
-  if (!order || !['pending', 'accepted'].includes(order.status)) throw Object.assign(new Error('这一餐已结束或已取消，请重新查看'), { code: 'CONFLICT' });
+  if (!order || order.autoArchivedAt || !['pending', 'accepted'].includes(order.status)) throw Object.assign(new Error('这一餐已结束或已取消，请重新查看'), { code: 'CONFLICT' });
   const item = order.items.find(entry => entry.recipe.id === recipeId);
   const previous = order.preparationEdits?.find(record => record.recipeId === recipeId);
   if (!item || signature !== preparationEditSignature(item, previous)) throw Object.assign(new Error('这道菜的食材或备注已更新，请载入最新内容后再修改'), { code: 'CONFLICT' });
@@ -116,7 +116,7 @@ function saveDishPreparation(orderId, recipeId, draft, signature) {
 
 function currentShoppingOrder(next, orderId, recipeId, signature) {
   const order = next.orders.find(entry => entry.id === orderId);
-  if (!order || !['pending', 'accepted'].includes(order.status)) throw Object.assign(new Error('这一餐已结束或已删除，请重新查看'), { code: 'CONFLICT' });
+  if (!order || order.autoArchivedAt || !['pending', 'accepted'].includes(order.status)) throw Object.assign(new Error('这一餐已结束或已删除，请重新查看'), { code: 'CONFLICT' });
   if (typeof signature !== 'string' || !signature || signature.length > 100000 || signature !== shoppingEditSignature(order, recipeId)) throw Object.assign(new Error('家人已更新备菜或采购清单，请载入最新内容'), { code: 'CONFLICT' });
   return order;
 }

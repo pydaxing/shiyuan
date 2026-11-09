@@ -1,3 +1,4 @@
+import { assertMealBeforeCutoff } from '../src/domain/meal-cutoff.js';
 import { orderStatusLabel } from '../src/domain/order-record-state.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -67,6 +68,7 @@ function context({ initialStatus = 'pending', fail = false, wait = Promise.resol
   const orderActionBusy = Vue.computed(() => Boolean(orderSavingId.value));
   let task = Promise.resolve();
   const bindings = {
+    assertMealBeforeCutoff: order => assertMealBeforeCutoff(order, Date.parse(`${currentDate}T08:00:00+08:00`)),
     NATIVE_UI_COLORS, hasIngredientManagement, isPendingRecord, presentMutation, orderSavingId, orderFailure, orderActionBusy, openedOrderId, mealDateLabel, today: pageDate,
     refreshDay: () => { pageDate.value = currentDate; },
     tab: Vue.ref('kitchen'),

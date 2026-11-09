@@ -1,3 +1,4 @@
+import { assertMealBeforeCutoff } from '../src/domain/meal-cutoff.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -25,6 +26,7 @@ function fixture(action = 'submit') {
     tab: ref('menu'), cartOpen: ref(true),
     submitting: ref(false), submitRevision: 0, submitError: ref(''),
     checkout: ref({ action }), selection: ref({ date: '2026-11-05', meal: '晚餐' }), currentOrder: ref(null),
+    assertMealBeforeCutoff: order => assertMealBeforeCutoff(order, Date.parse('2026-11-05T08:00:00+08:00')),
     refreshDay() {}, dismissFocusedKeyboard() {}, tapFeedback() {},
     kitchenFocus: { focus: id => calls.push(['focus', id]) },
     submitOrder: async (cart, slot, note) => { calls.push(['submit', { ...cart }, slot, note]); bindings.currentOrder.value = { id: 'new-order' }; },

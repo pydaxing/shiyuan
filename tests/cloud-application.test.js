@@ -693,7 +693,7 @@ test('cloud rejects future serving without changing the meal, shopping or revisi
 });
 
 test('serving uses the Shanghai calendar day and keeps successful retries idempotent across midnight', async () => {
-  let instant = Date.parse('2026-09-09T15:59:59Z');
+  let instant = Date.parse('2026-09-09T01:00:00Z');
   const server = fixture({ now: () => instant });
   let current = await family(server);
   current = await success(server.command('saveRecipe', [recipe], current.revision));
@@ -704,6 +704,7 @@ test('serving uses the Shanghai calendar day and keeps successful retries idempo
   const dinner = current.snapshot.orders.find(order => order.meal === '晚餐');
   const midnightMeal = current.snapshot.orders.find(order => order.meal === '宵夜');
   const breakfast = current.snapshot.orders.find(order => order.meal === '早餐');
+  instant = Date.parse('2026-09-09T15:59:59Z');
   const completion = { name: 'updateOrder', args: [dinner.id, 'completed'], revision: current.revision, requestId: 'serve-across-midnight-001' };
   current = await success(server.call('command', completion));
   const completedAt = current.snapshot.orders.find(order => order.id === dinner.id).completedAt;
@@ -1408,4 +1409,31 @@ test('record presentation stays outside canonical snapshots and follows real dia
   loaded = await success(server.call('bootstrap', { includeFeed: false }));
   assert.equal(loaded.orderRecordStates[id], 'deleted');
   assert.deepEqual(loaded.snapshot.orders, canonical);
+});
+
+test('meal cutoff blocks new scheduling, additions and restoration but replays accepted writes and permits removal', async () => {
+  let instant = Date.parse('2026-09-09T09:59:59+08:00');
+  const server = fixture({ now: () => instant });
+  let current = await family(server);
+  current = await success(server.command('saveRecipe', [recipe], current.revision));
+  const recipeId = current.snapshot.recipes[0].id;
+  const request = { name: 'submitOrder', args: [{ [recipeId]: 1 }, { date: '2026-09-09', meal: '早餐' }], revision: current.revision, requestId: 'cutoff-idempotent-write' };
+  current = await success(server.call('command', request));
+  const orderId = current.snapshot.orders[0].id;
+  instant += 1000;
+  current = await success(server.call('command', request));
+  assert.equal(current.snapshot.orders.length, 1);
+  for (const [name, args] of [['submitOrder', request.args], ['addOrderDishes', [orderId, { [recipeId]: 1 }]]]) {
+    const denied = await server.command(name, args, current.revision);
+    assert.equal(denied.code, 'INVALID');
+    assert.match(denied.message, /早餐安排已截止/);
+  }
+  current = await success(server.command('updateOrder', [orderId, 'cancelled'], current.revision));
+  const denied = await server.command('updateOrder', [orderId, 'accepted'], current.revision);
+  assert.equal(denied.code, 'INVALID');
+  assert.match(denied.message, /安排已截止/);
+  current = await success(server.command('removeOrder', [orderId], current.revision));
+  assert.equal(current.snapshot.orders.length, 0);
+  current = await success(server.command('submitOrder', [{ [recipeId]: 1 }, { date: '2026-09-10', meal: '早餐' }], current.revision));
+  assert.equal(current.snapshot.orders.length, 1);
 });

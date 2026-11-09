@@ -374,7 +374,7 @@ export function rebuildMealOrder(order) {
 }
 
 export function assertMealEditable(order) {
-  if (['pending', 'accepted'].includes(order?.status)) return;
+  if (['pending', 'accepted'].includes(order?.status) && !order.autoArchivedAt) return;
   throw Object.assign(new Error('这一餐已结束或已取消，请重新查看三餐'), { code: 'CONFLICT' });
 }
 

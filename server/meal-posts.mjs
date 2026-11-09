@@ -1,3 +1,4 @@
+import { canonicalMeal } from '../src/domain/meal-cutoff.js';
 import { mealRecipeSnapshots, matchMealRecipes } from './meal-dish-snapshots.mjs';
 import { isPrivateRecipeCollection, sameRecipeContent } from '../src/domain/recipe-identity.js';
 import { orderDiaryParticipants } from './meal-auto-archive.mjs';
@@ -256,17 +257,18 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
         if (!post || post.status !== 'published') fail('这条餐食已删除', 'NOT_FOUND');
         return { post, currentSpaceId: family.id, replay: true };
       }
-      const id = `meal-${hash(`${family.id}:${userId}:${input.kind}:${event.requestId}`)}`;
+      let id = `meal-${hash(`${family.id}:${userId}:${input.kind}:${event.requestId}`)}`;
       // Older clients could publish an arrangement without completing it. The
       // order's transactional status, not that old post, guards completion.
       const previous = !finish && input.kind === 'plan' ? (await db.list('meal_posts', { spaceId: family.id, authorId: userId, orderId: input.orderId, status: 'published' }, { limit: 1 }))[0] : await db.get('meal_posts', id);
-      if (previous?.status === 'published') fail('这餐已经记录过，可以在我的中查看', 'ALREADY_PUBLISHED');
+      if (previous?.status === 'published' && (!previous.autoArchived || previous.manuallyRecordedAt)) fail('这餐已经记录过，可以在我的中查看', 'ALREADY_PUBLISHED');
       let content;
       let sourceOrder;
+      let automaticPost;
       let matchedOrderId = input.orderId;
       if (!matchedOrderId && input.kind === 'actual') {
-        const rows = await db.list('orders', { familyId: family.id, 'value.date': input.date, 'value.meal': input.meal });
-        const matches = rows.map(row => row.value).filter(order => order && order.date === input.date && order.meal === input.meal && order.items?.length && (['pending', 'accepted'].includes(order.status) || order.status === 'completed' && order.diaryDeletedAt));
+        const rows = (await Promise.all((input.meal === '加餐' ? ['加餐', '宵夜'] : [input.meal]).map(meal => db.list('orders', { familyId: family.id, 'value.date': input.date, 'value.meal': meal })))).flat();
+        const matches = rows.map(row => row.value).filter(order => order && order.date === input.date && canonicalMeal(order.meal) === input.meal && order.items?.length && (['pending', 'accepted'].includes(order.status) || order.status === 'completed' && (order.diaryDeletedAt || order.autoArchivedAt)));
         // Never guess between inconsistent duplicate slots.
         if (matches.length === 1) matchedOrderId = matches[0].id;
       }
@@ -274,10 +276,17 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
         const row = await db.get('orders', hash(`${family.id}:${matchedOrderId}`));
         sourceOrder = row?.familyId === family.id ? row.value : null;
         if (!sourceOrder || sourceOrder.status === 'cancelled' || !sourceOrder.items?.length) fail('餐食已取消或没有菜品，请重新选择');
+        if (sourceOrder.mealPostId && !sourceOrder.diaryDeletedAt) {
+          const linked = await db.get('meal_posts', sourceOrder.mealPostId);
+          if (linked?.status === 'published' && linked.spaceId === family.id && linked.orderId === sourceOrder.id && linked.autoArchived && !linked.manuallyRecordedAt) {
+            automaticPost = linked;
+            id = linked.id;
+          } else if (sourceOrder.autoArchivedAt) fail('这餐已经记录过，可以在我的中查看', 'ALREADY_PUBLISHED');
+        }
         if (finish) {
-          if (!['pending', 'accepted'].includes(sourceOrder.status) && !(sourceOrder.status === 'completed' && sourceOrder.diaryDeletedAt)) fail('这一餐已结束，请查看原安排', 'ALREADY_FINISHED');
+          if (!['pending', 'accepted'].includes(sourceOrder.status) && !(sourceOrder.status === 'completed' && sourceOrder.diaryDeletedAt) && !automaticPost) fail('这一餐已结束，请查看原安排', 'ALREADY_FINISHED');
           if (sourceOrder.date !== chinaDate(now()) && !(sourceOrder.diaryDeletedAt && sourceOrder.date < chinaDate(now()))) fail('只能在安排当天记录餐食', 'MEAL_DATE');
-          if (input.kind === 'actual' && (input.date !== sourceOrder.date || input.meal !== sourceOrder.meal)) fail('照片须记录到当前餐次');
+          if (input.kind === 'actual' && (input.date !== sourceOrder.date || input.meal !== canonicalMeal(sourceOrder.meal))) fail('照片须记录到当前餐次');
         }
       }
       const dishes = sourceOrder ? sourceOrder.items.slice(0, 50).map(item => ({ ...(item.recipe.id ? { recipeId: item.recipe.id } : {}), title: visible(item.recipe.title, 30), image: visible(item.recipe.image, 1000) })) : [];
@@ -296,12 +305,20 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       const author = { name: family.kind === 'personal' ? (user.name || member.name || '我') : family.name, avatar: family.kind === 'personal' ? (user.avatar || '') : familyMealAvatar(family, user, userId), mode: family.kind === 'personal' ? 'personal' : 'family', familyIdentityVersion: 1 };
       const post = { id, spaceId: family.id, authorId: userId, author, kind: input.kind, ...content, moodIds, visibility, status: 'published', createdAt: now(), likeCount: 0, reactionCounts: {} };
       if (modern) Object.assign(post, { mealSharingVersion: 2, mealContext: family.kind === 'personal' ? 'personal' : 'family', showMealBadge: input.showMealBadge, participantUserIds: sourceOrder ? orderDiaryParticipants(sourceOrder, family) : family.kind === 'personal' ? [userId] : [...new Set(family.members.map(member => member.id))] });
-      const completesOrder = Boolean(sourceOrder && (finish || !input.orderId));
+      if (automaticPost) Object.assign(post, {
+        authorId: automaticPost.authorId, author: automaticPost.author,
+        createdAt: automaticPost.createdAt, likeCount: automaticPost.likeCount || 0,
+        reactionCounts: automaticPost.reactionCounts || {}, participantUserIds: automaticPost.participantUserIds,
+        mealSharingVersion: automaticPost.mealSharingVersion, mealContext: automaticPost.mealContext,
+        autoArchived: true, autoArchiveVersion: automaticPost.autoArchiveVersion,
+        manuallyRecordedAt: now(),
+      });
+      const completesOrder = Boolean(sourceOrder && (finish || !input.orderId || automaticPost));
       if (completesOrder) post.mealStarted = true;
       post.assetIds = refs(post);
       if (completesOrder) {
         const { diaryDeletedAt, ...recordedOrder } = sourceOrder;
-        await db.set('orders', hash(`${family.id}:${sourceOrder.id}`), { familyId: family.id, value: { ...recordedOrder, status: 'completed', completedAt: new Date(now()).toISOString(), mealPostId: id } });
+        await db.set('orders', hash(`${family.id}:${sourceOrder.id}`), { familyId: family.id, value: { ...recordedOrder, ...(automaticPost ? { manuallyRecordedAt: now() } : {}), status: 'completed', completedAt: new Date(now()).toISOString(), mealPostId: id } });
       }
       await db.set('families', family.id, { ...family, socialWriteVersion: (family.socialWriteVersion || 0) + 1, ...(completesOrder ? { revision: (family.revision || 0) + 1, updatedAt: now() } : {}) });
       await db.set('meal_posts', id, post);

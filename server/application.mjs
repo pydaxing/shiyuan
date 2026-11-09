@@ -1,3 +1,4 @@
+import { assertMealBeforeCutoff } from '../src/domain/meal-cutoff.js';
 import { preserveMealRecipes } from './meal-dish-snapshots.mjs';
 import { withOrderRecordStates } from './order-record-state.mjs';
 import { createAccountVisits } from './account-visits.mjs';
@@ -269,10 +270,11 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
         if (!post || post.status !== 'published') fail('这条分享已不存在');
         args[0] = publicPost(post);
       } else await allowedImages(db, args, snapshot);
-      if (name === 'submitOrder') validateReservation(args[1], todayInChina(now()));
+      if (name === 'submitOrder') { validateReservation(args[1], todayInChina(now())); assertMealBeforeCutoff(args[1], now()); }
+      if (name === 'addOrderDishes') assertMealBeforeCutoff(snapshot.orders.find(order => order.id === args[0]), now());
       if (name === 'updateOrder') {
         const order = snapshot.orders.find(item => item.id === args[0]);
-        if (order?.status === 'cancelled' && args[1] === 'accepted') validateReservation(order, todayInChina(now()));
+        if (order?.status === 'cancelled' && args[1] === 'accepted') { validateReservation(order, todayInChina(now())); assertMealBeforeCutoff(order, now()); }
       }
       if (name === 'deleteCommunityPost' || name === 'addComment') {
         post = await db.get('posts', args[0]);

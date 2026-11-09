@@ -1,3 +1,4 @@
+import { mealIsDue, mealArchiveWindow } from '../src/domain/meal-cutoff.js';
 import { mealRecipeSnapshots } from './meal-dish-snapshots.mjs';
 import { familyMealAvatar } from './identity-presentation.mjs';
 import { createHash, randomUUID } from 'node:crypto';
@@ -56,7 +57,7 @@ export function createMealAutoArchive({ repository, now = Date.now, clock = Date
       const rowKey = hash(`${spaceId}:${orderId}`);
       const row = await db.get('orders', rowKey);
       const order = row?.familyId === spaceId && row.value?.id === orderId ? row.value : null;
-      if (!order || !validDate(order.date) || order.date >= mealArchiveDate(now()) || ![...MEAL_SLOTS, '宵夜'].includes(order.meal)) return { reason: 'not_due' };
+      if (!order || !validDate(order.date) || !mealIsDue(order, now()) || ![...MEAL_SLOTS, '宵夜'].includes(order.meal)) return { reason: 'not_due' };
       if (!['pending', 'accepted', 'completed'].includes(order.status) || !order.items?.some(item => item?.recipe?.title)) return { reason: 'cancelled_or_empty' };
       if (order.diaryDeletedAt || order.deletedAt) return { reason: 'deleted' };
       // A surviving pointer is authoritative even if the referenced post was
@@ -117,7 +118,8 @@ export function createMealAutoArchive({ repository, now = Date.now, clock = Date
     const checkpointId = hash(`meal-auto-space-v1:${spaceId}`);
     const checkpoint = await repository.get('requests', checkpointId);
     const date = mealArchiveDate(now());
-    if (checkpoint?.date === date && checkpoint.revision === start.revision) return { complete: true, created: 0, skipped: {}, suppressedOrderIds: checkpoint.suppressedOrderIds || [] };
+    const window = mealArchiveWindow(now());
+    if (checkpoint?.window === window && checkpoint.revision === start.revision) return { complete: true, created: 0, skipped: {}, suppressedOrderIds: checkpoint.suppressedOrderIds || [] };
     const orders = await all(repository, 'orders', { familyId: spaceId });
     const result = { complete: true, created: 0, skipped: {}, suppressedOrderIds: [] };
     for (const row of orders) {
@@ -126,7 +128,7 @@ export function createMealAutoArchive({ repository, now = Date.now, clock = Date
         result.skipped.budget_exceeded = 1;
         break;
       }
-      if (!validDate(row.value?.date) || row.value.date >= date) continue;
+      if (!validDate(row.value?.date) || !mealIsDue(row.value, now())) continue;
       const outcome = await archiveOrder(spaceId, row.value.id, userId);
       if (outcome.created) result.created += 1;
       else result.skipped[outcome.reason] = (result.skipped[outcome.reason] || 0) + 1;
@@ -135,7 +137,7 @@ export function createMealAutoArchive({ repository, now = Date.now, clock = Date
     }
     await repository.transaction(async db => {
       const current = await db.get('families', spaceId);
-      if (result.complete && alive(current) && current.revision === (start.revision || 0) + result.created && current.members?.some(member => member.id === userId)) await db.set('requests', checkpointId, { kind: 'meal_auto_scan_v1', date, revision: current.revision, suppressedOrderIds: result.suppressedOrderIds });
+      if (result.complete && alive(current) && current.revision === (start.revision || 0) + result.created && current.members?.some(member => member.id === userId)) await db.set('requests', checkpointId, { kind: 'meal_auto_scan_v1', date, window, revision: current.revision, suppressedOrderIds: result.suppressedOrderIds });
     });
     return result;
   }

@@ -197,7 +197,7 @@ for (const fridge of [false, true]) {
 }
 
 test('confirmation scope and signatures come only from matching active meals in the authenticated family', async () => {
-  const server = fixture();
+  const server = fixture({ now: () => Date.parse(`${today}T08:00:00+08:00`) });
   let alice = await orderedKitchen(server);
   const recipeId = alice.snapshot.recipes[0].id;
   const pendingId = alice.snapshot.orders[0].id;

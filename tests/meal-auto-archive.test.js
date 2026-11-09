@@ -39,9 +39,9 @@ async function fixture() {
   return { repository, family, service, order, personal, now, errors, setTime: value => { time = value; }, call: (action, payload, who = 'alice') => app({ action, ...payload }, { OPENID: who }) };
 }
 
-test('automatic diary rollover uses China midnight and excludes future, cancelled and empty arrangements', async () => {
+test('snack automatic diary rollover uses China midnight and excludes future, cancelled and empty arrangements', async () => {
   const f = await fixture();
-  await f.order();
+  await f.order({ meal: '宵夜' });
   await f.order({ id: 'today', date: '2026-11-08' });
   await f.order({ id: 'tomorrow', date: '2026-11-09' });
   await f.order({ id: 'cancelled', status: 'cancelled' });
@@ -373,4 +373,42 @@ test('automatic archive retains recipe details independently of the arrangement'
   const postId = automaticMealId(familyId, order.id);
   const detail = ok(await f.call('mealDishDetail', { postId, dishIndex: 0 }));
   assert.equal(detail.recipe.steps[0].text, '炒熟');
+});
+
+for (const [meal, boundary] of [['早餐', '2026-11-08T10:00:00+08:00'], ['午餐', '2026-11-08T14:00:00+08:00'], ['晚餐', '2026-11-08T20:00:00+08:00'], ['加餐', '2026-11-09T00:00:00+08:00'], ['宵夜', '2026-11-09T00:00:00+08:00']]) {
+  test(`${meal}: same-revision checkpoint expires at exact cutoff, timer and reads deduplicate`, async () => {
+    const f = await fixture();
+    await f.order({ date: '2026-11-08', meal });
+    f.setTime(Date.parse(boundary) - 1);
+    assert.equal((await f.service.archiveForUser(uid('alice'), familyId)).created, 0);
+    f.setTime(Date.parse(boundary));
+    assert.equal((await f.service.archiveForUser(uid('alice'), familyId)).created, 1);
+    assert.equal((await f.service.runScheduled()).created, 0);
+    assert.equal((await f.repository.list('meal_posts')).length, 1);
+  });
+}
+
+for (const autoFirst of [true, false]) test(`photos and timer share one meal, automatic first=${autoFirst}`, async () => {
+  const f = await fixture();
+  await f.order({ date: '2026-11-08', meal: '早餐' });
+  f.setTime(Date.parse('2026-11-08T10:00:00+08:00'));
+  const image = 'cloud://env/cutoff-photo';
+  await f.repository.set('media', hash(image), { confirmed: true, mealPhoto: true, userId: uid('alice'), familyId, fileId: image });
+  if (autoFirst) {
+    await f.service.runScheduled();
+    const post = (await f.repository.list('meal_posts'))[0];
+    await f.repository.set('meal_posts', post.id, { ...post, likeCount: 3 });
+  }
+  const request = { spaceId: familyId, requestId: 'cutoff-photo-request', kind: 'actual', date: '2026-11-08', meal: '早餐', images: [image], visibility: 'public', mealSharingVersion: 2 };
+  const saved = ok(await f.call('publishMeal', request));
+  await f.service.runScheduled();
+  const replay = ok(await f.call('publishMeal', request));
+  assert.equal(saved.post.id, replay.post.id);
+  const posts = await f.repository.list('meal_posts');
+  assert.equal(posts.length, 1);
+  assert.equal(posts[0].kind, 'actual');
+  assert.deepEqual(posts[0].images, [image]);
+  assert.equal(posts[0].likeCount, autoFirst ? 3 : 0);
+  assert.equal((await f.repository.get('orders', hash(`${familyId}:dinner`))).value.mealPostId, saved.post.id);
+  if (autoFirst) assert.equal((await f.call('publishMeal', { ...request, requestId: 'cutoff-second-request' })).code, 'ALREADY_PUBLISHED');
 });

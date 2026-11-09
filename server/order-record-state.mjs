@@ -3,7 +3,7 @@ import { legacyCompletedMealId } from './meal-auto-archive.mjs';
 
 // Read-only projection. Never reinterpret a legacy completed flag as a diary.
 export async function withOrderRecordStates(repository, spaceId, orders, today) {
-  const visible = orders.filter(order => order.status === 'completed' && order.date >= today && !order.diaryDeletedAt);
+  const visible = orders.filter(order => (order.status === 'completed' || order.autoArchivedAt && order.mealPostId) && order.date >= today && !order.diaryDeletedAt);
   const records = await readDocuments(repository, 'meal_posts', visible.map(order => order.mealPostId || legacyCompletedMealId(spaceId, order.id)));
   const states = new Map(await Promise.all(visible.map(async order => {
     let post = records.get(order.mealPostId || legacyCompletedMealId(spaceId, order.id));
