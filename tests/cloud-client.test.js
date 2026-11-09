@@ -227,7 +227,7 @@ test('older cloud functions cannot silently accept and discard the new subtitle'
   assert.deepEqual(app.calls.map(item => item.name), ['customizeFamilyWithSubtitle']);
   assert.equal(JSON.stringify(app.state.value), before);
   assert.equal(app.cloudStatus.value.busy, false);
-  await app.dismissMutation(app.mutationStatus.value.failures[0].id);
+  assert.equal(app.mutationStatus.value.failures.length, 0);
   await assert.rejects(app.manageFamily('createFamily', { familyName: appearance.name, ...appearance, requestId: 'subtitle-client-create-001' }), /请更新家庭服务后再创建带主副标题的小家/);
   assert.deepEqual(app.calls.map(item => item.action), ['command', 'createFamilyWithSubtitle']);
   assert.equal(JSON.stringify(app.state.value), before);
@@ -314,25 +314,23 @@ test('new approved uploads reuse a private local copy and never refetch the uplo
   assert.equal(copies.length, 1);
 });
 
-test('cloud client retains uncertain IDs and holds subsequent commands until explicit retry', async () => {
-  let fail = true;
+test('cloud client stops after three automatic retries and lets subsequent commands complete', async () => {
   const app = await client(async data => {
-    if (data.name === 'addStock' && fail) throw new Error('network lost after commit');
+    if (data.name === 'addStock') throw new Error('network lost after commit');
     return { ok: true, data: { ...snapshot(2), value: 'saved' } };
   });
   const first = app.remoteAction('addStock', [stockBatch]);
   assert.equal(first.accepted, true);
-  await assert.rejects(first, /网络连接暂时不稳定/);
+  await assert.rejects(first, /已停止重试/);
   const later = app.remoteAction('setChef', [true]);
   assert.equal(later.accepted, true);
-  assert.equal(app.calls.length, 1);
-  assert.equal(app.mutationStatus.value.failures[0].status, 'uncertain');
-  await assert.rejects(app.dismissMutation(first.operationId), /不能放弃/);
-  fail = false;
-  assert.equal(await app.retryMutation(first.operationId), 'saved');
   await later;
-  assert.equal(app.calls[0].requestId, app.calls[1].requestId);
-  assert.equal(app.calls[0].revision, app.calls[1].revision);
+  const attempts = app.calls.filter(call => call.name === 'addStock');
+  assert.equal(attempts.length, 4);
+  assert.ok(attempts.every(call => call.requestId === attempts[0].requestId && call.revision === attempts[0].revision));
+  assert.equal(app.mutationStatus.value.failures.length, 0);
+  assert.equal(app.commandQueueStatus.value.pendingCount, 0);
+  await assert.rejects(app.retryMutation(first.operationId), /没有可重试/);
   assert.equal(app.cloudStatus.value.busy, false);
 });
 
@@ -430,18 +428,16 @@ test('older bootstrap responses cannot replace newer state and refresh preserves
   assert.equal(app.state.value.comments[0].id, 'comment-1');
 });
 
-test('uncertain internal failures keep their retry key and cloud media uses only approved ID', async () => {
-  let failed = true;
+test('automatic internal-error recovery keeps its retry key and cloud media uses only approved ID', async () => {
+  let attempts = 0;
   const app = await client(async data => {
     if (data.action === 'mediaTicket') return { ok: true, data: { id: 'ticket-1', path: 'private/alice/test.jpg' } };
     if (data.action === 'mediaConfirm') return { ok: true, data: { fileId: 'cloud://env/approved/family/test.jpg' } };
     if (data.action === 'mediaUrl') return { ok: true, data: { media: { [data.fileId]: 'signed-url' } } };
-    return failed ? { ok: false, code: 'INTERNAL', message: '未知结果' } : { ok: true, data: snapshot(2) };
+    return ++attempts === 1 ? { ok: false, code: 'INTERNAL', message: '未知结果' } : { ok: true, data: snapshot(2) };
   });
   const first = app.remoteAction('addStock', [stockBatch]);
-  await assert.rejects(first);
-  failed = false;
-  await app.retryMutation(first.operationId);
+  await first;
   assert.equal(app.calls[0].requestId, app.calls[1].requestId);
   wx.cloud.uploadFile = async () => ({ fileID: 'cloud://env/private/alice/test.jpg' });
   wx.getFileSystemManager = () => ({});

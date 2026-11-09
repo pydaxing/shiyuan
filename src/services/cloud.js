@@ -108,6 +108,7 @@ export function bindCloudState(state) {
   commandQueue = createCommandQueue({
     snapshot: state.value,
     journal: commandJournal,
+    automaticRecovery: true,
     send: async payload => {
       if (pendingRefresh) await pendingRefresh.catch(() => {});
       postDetails.clear();

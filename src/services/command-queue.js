@@ -2,7 +2,7 @@ import { clone } from '../domain/kitchen.js';
 import { prepareCommand, projectCommand, dependenciesMatch, commandDependencies, commandWireArgs, commandSignature } from './command-projection.js';
 
 const errorWith = (message, code) => Object.assign(new Error(message), { code });
-const rejectedCodes = new Set(['INVALID', 'FORBIDDEN', 'CONFLICT', 'ALREADY_SHARED', 'RATE_LIMIT', 'CAPACITY']);
+const rejectedCodes = new Set(['INVALID', 'FORBIDDEN', 'CONFLICT', 'ALREADY_SHARED', 'RATE_LIMIT', 'CAPACITY', 'NO_FAMILY', 'UNAUTHENTICATED', 'SCOPE_CHANGED']);
 const replacements = new Set(['saveRecipe', 'saveMealSet', 'customizeFamily', 'setChef', 'setFeature', 'setPreferences', 'changeStockImage', 'saveDishPreparation', 'saveShoppingDraft', 'setDishPrepared']);
 function canRebaseReplacement(previous, remaining, operation) {
   if (!replacements.has(operation.name)) return false;
@@ -11,11 +11,12 @@ function canRebaseReplacement(previous, remaining, operation) {
   return commandSignature(previous, preparation) === commandSignature(remaining, preparation);
 }
 const restored = operation => {
+  if (operation.stopped) return { ...operation, status: 'failed' };
   const uncertain = operation.hadUncertain || operation.committed || (operation.sent && operation.status !== 'failed');
   return { ...operation, status: uncertain ? 'uncertain' : operation.status === 'failed' ? 'failed' : 'blocked', hadUncertain: Boolean(uncertain), message: uncertain ? '上次同步结果尚未确认，请重试核对；不会重复提交' : operation.message || '已恢复待同步操作，请确认后重试' };
 };
 
-export function createCommandQueue({ snapshot, send, reconcile, refresh, journal, onChange = () => {}, onStatus = () => {}, onFailure = () => {}, now = Date.now, newId = () => `command-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}` }) {
+export function createCommandQueue({ snapshot, send, reconcile, refresh, journal, onChange = () => {}, onStatus = () => {}, onFailure = () => {}, automaticRecovery = false, retryDelays = [400, 1200, 2400], wait = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds)), requestTimeout = 10000, now = Date.now, newId = () => `command-${Date.now()}-${Math.random().toString(36).slice(2)}-${Math.random().toString(36).slice(2)}` }) {
   let base = clone(snapshot);
   let view = base;
   let revision = 0;
@@ -27,6 +28,19 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
   let journalUnreadable = false;
   let paused = false;
   const waiters = new Map();
+
+  function recover(saved) {
+    return saved.map(restored).map(operation => automaticRecovery && !operation.stopped
+      ? { ...operation, status: 'queued' } : operation);
+  }
+
+  function bounded(work) {
+    if (!automaticRecovery) return work;
+    let timer;
+    return Promise.race([work, new Promise((_, reject) => {
+      timer = setTimeout(() => reject(errorWith('同步响应超时', 'NETWORK')), requestTimeout);
+    })]).finally(() => clearTimeout(timer));
+  }
 
   function persist() {
     if (journalUnreadable) throw journalError;
@@ -50,7 +64,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
         operation.expectedSignature = commandSignature(view, operation);
       } catch {}
     }
-    const entries = operations.map(statusEntry);
+    const entries = operations.filter(operation => !operation.stopped).map(statusEntry);
     const failures = entries.filter(operation => ['failed', 'blocked', 'uncertain'].includes(operation.status));
     if (journalError) failures.unshift({ id: 'journal', name: 'journal', label: '保存待同步记录', args: [], status: 'failed', message: journalError.message, canRetry: true, retryable: true, canDismiss: false, discardable: false });
     // Renderers patch reactive objects in place; never expose the confirmed
@@ -97,12 +111,13 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
       journalError = undefined;
       journalUnreadable = false;
       if (restore && current.scope) try {
-        operations = journal.read(current.scope).map(restored);
+        operations = recover(journal.read(current.scope));
       } catch (error) { journalError = error; journalUnreadable = true; }
     }
     base = clone(next);
     revision = current.revision ?? revision;
     publish();
+    if (automaticRecovery) Promise.resolve().then(start);
   }
 
   function receive(next, nextRevision, acknowledgedId) {
@@ -146,7 +161,20 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
     operation.status = status;
     operation.message = error.message || '同步失败，请重试';
     operation.code = error.code || 'NETWORK';
-    if (status === 'uncertain') { operation.hadUncertain = true; blockWaitingImports(); }
+    if (status === 'uncertain') { operation.hadUncertain = true; if (!automaticRecovery) blockWaitingImports(); }
+    if (automaticRecovery) {
+      // Keep a bounded receipt history, but never replay terminal operations or
+      // include them in projections, pending counts, or workspace guards.
+      operation.stopped = true;
+      operation.status = 'failed';
+      delete operation.response;
+      const retained = operations.filter(entry => entry.stopped).slice(-20);
+      operations = operations.filter(entry => !entry.stopped || retained.includes(entry));
+      error = errorWith(status === 'uncertain'
+        ? '同步未确认，已停止重试，请刷新核对结果'
+        : error.code === 'CONFLICT' ? '相关内容已变化，本次修改已取消，请重新操作' : error.message || '本次修改未保存，请稍后再试', error.code || 'NETWORK');
+      operation.message = error.message;
+    }
     saveStatus();
     settle(operation, error);
     onFailure(error, operation);
@@ -157,6 +185,10 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
     while (!paused && !journalError && epoch === generation) {
       const operation = operations.find(entry => !['failed', 'blocked'].includes(entry.status));
       if (!operation || operation.status === 'uncertain') return;
+      if (automaticRecovery && (operation.automaticAttempts || 0) >= retryDelays.length + 1) {
+        fail(operation, errorWith('同步结果未确认', 'NETWORK'), 'uncertain');
+        continue;
+      }
       if (!operation.sent && !dependenciesMatch(base, operation)) {
         fail(operation, errorWith('相关内容已变化，已保留本次修改，请重新打开核对后保存', 'CONFLICT'), 'blocked');
         continue;
@@ -166,6 +198,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
         const requestName = operation.name === 'customizeFamily' && operation.args[0]?.coverSubtitle !== undefined ? 'customizeFamilyWithSubtitle' : operation.name;
         operation.sent = { name: requestName, args: commandWireArgs(base, operation), familyId: context.familyId, requestId: operation.id, revision, responseMode: 'changes', commentMode: 'patch', includeFeed: false };
       }
+      if (automaticRecovery) operation.automaticAttempts = (operation.automaticAttempts || 0) + 1;
       operation.status = 'sending';
       operation.message = '';
       try { persist(); }
@@ -176,11 +209,11 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
       }
       publish();
       try {
-        const response = operation.committed ? operation.response : await send(clone(operation.sent), operation);
+        const response = operation.committed ? operation.response : await bounded(send(clone(operation.sent), operation));
         if (epoch !== generation) return;
         operation.committed = true;
         operation.response = response;
-        await reconcile(response, operation.id);
+        await bounded(reconcile(response, operation.id));
         if (epoch !== generation) return;
         if (operations.includes(operation)) throw errorWith('操作已提交，正在等待确认最新状态，请重试核对', 'SYNC_BUSY');
         settle(operation, undefined, response.value);
@@ -188,7 +221,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
         if (epoch !== generation) return;
         if (error.code === 'CONFLICT' && !operation.hadUncertain && !operation.committed && !operation.rebased) {
           try {
-            await refresh();
+            await bounded(refresh());
             if (epoch !== generation) return;
             if (dependenciesMatch(base, operation)) {
               operation.rebased = true;
@@ -199,14 +232,29 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
             }
           } catch {}
         } else if (error.code === 'ALREADY_SHARED' && !operation.hadUncertain && !operation.committed) {
-          try { await refresh(); } catch {}
+          try { await bounded(refresh()); } catch {}
           if (epoch !== generation) return;
         }
         if (epoch !== generation) return;
         if (operation.sent.name !== operation.name && /不支持.*操作/.test(error.message)) error.message = '请更新家庭服务后再保存主副标题';
         const uncertain = operation.hadUncertain || operation.committed || !rejectedCodes.has(error.code);
+        const retryable = !rejectedCodes.has(error.code) || error.code === 'RATE_LIMIT';
+        if (automaticRecovery && retryable && (operation.automaticRetries || 0) < retryDelays.length) {
+          if (uncertain) operation.hadUncertain = true;
+          const delay = retryDelays[operation.automaticRetries || 0];
+          operation.automaticRetries = (operation.automaticRetries || 0) + 1;
+          operation.status = 'queued';
+          saveStatus();
+          await wait(delay);
+          if (epoch !== generation) return;
+          continue;
+        }
         fail(operation, error, uncertain ? 'uncertain' : 'failed');
-        if (uncertain) return;
+        if (uncertain && !automaticRecovery) return;
+        if (uncertain && automaticRecovery) {
+          try { await bounded(refresh()); } catch {}
+          if (epoch !== generation) return;
+        }
       }
     }
   }
@@ -237,7 +285,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
     if (id === 'journal') {
       try {
         if (journalUnreadable) {
-          operations = journal.read(context.scope).map(restored);
+          operations = recover(journal.read(context.scope));
           journalUnreadable = false;
         } else persist();
         journalError = undefined;
@@ -248,7 +296,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
       catch (error) { return Promise.reject(error); }
     }
     const operation = operations.find(entry => entry.id === id);
-    if (!operation || !['failed', 'blocked', 'uncertain'].includes(operation.status)) return Promise.reject(errorWith('没有可重试的操作', 'INVALID'));
+    if (!operation || operation.stopped || !['failed', 'blocked', 'uncertain'].includes(operation.status)) return Promise.reject(errorWith('没有可重试的操作', 'INVALID'));
     if (operation.name === 'addCollection' && operations.some(entry => entry !== operation && entry.status === 'uncertain')) return Promise.reject(synchronizationBlocked());
     if (operation.status !== 'uncertain' && !dependenciesMatch(base, operation)) return Promise.reject(errorWith('相关内容已变化，请重新打开编辑，不会覆盖家人的修改', 'CONFLICT'));
     if (operation.status !== 'uncertain') { delete operation.sent; delete operation.rebased; }
@@ -279,7 +327,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
     getRevision: () => revision,
     getScope: () => context.scope,
     isRunning: () => Boolean(running),
-    hasUnresolved: () => operations.length > 0,
+    hasUnresolved: () => operations.some(operation => !operation.stopped),
     pause: () => { paused = true; },
     resume: () => { paused = false; start(); },
     whenIdle: () => running || Promise.resolve(),

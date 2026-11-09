@@ -27,7 +27,7 @@ function initialSnapshot() {
   return snapshot;
 }
 
-function harness({ initial = initialSnapshot(), storage = new Map(), platform, refresh, reuseRenderedState = false } = {}) {
+function harness({ initial = initialSnapshot(), storage = new Map(), platform, refresh, reuseRenderedState = false, recovery = {} } = {}) {
   const requests = [];
   const frames = [];
   let view;
@@ -37,7 +37,7 @@ function harness({ initial = initialSnapshot(), storage = new Map(), platform, r
   let sequence = 0;
   const journal = createCommandJournal({ key: 'queue-test', platform: () => platform || { getStorageSync: key => storage.get(key), setStorageSync: (key, value) => storage.set(key, value) } });
   const queue = createCommandQueue({
-    snapshot: initial, journal, now: () => timestamp, newId: () => `operation-test-${++sequence}`,
+    ...recovery, snapshot: initial, journal, now: () => timestamp, newId: () => `operation-test-${++sequence}`,
     send: payload => new Promise((resolve, reject) => requests.push({ payload, resolve, reject })),
     reconcile: async (result, id) => { queue.receive(result.snapshot, result.revision, id); },
     refresh: async () => { if (refresh) await refresh({ queue, server }); },
@@ -591,4 +591,148 @@ test('a definite failed removal does not prevent an independent queued change', 
   app.confirm(1);
   await setting;
   assert.equal(app.view.family.features.fridge, true);
+});
+
+
+const automatic = { automaticRecovery: true, wait: async () => {} };
+
+test('automatic recovery retries an identical envelope and confirms without a failure banner', async () => {
+  const app = harness({ recovery: automatic });
+  const saved = app.queue.enqueue('setFeature', ['fridge', true]);
+  const envelope = clone(app.requests[0].payload);
+  for (let i = 0; i < 3; i += 1) {
+    app.requests[i].reject(failure('NETWORK'));
+    await tick();
+    assert.deepEqual(app.requests[i + 1].payload, envelope);
+    assert.equal(app.status.failures.length, 0);
+    assert.equal(app.view.family.features.fridge, true);
+  }
+  app.confirm(3);
+  await saved;
+  assert.equal(app.status.pendingCount, 0);
+  assert.equal(app.queue.hasUnresolved(), false);
+});
+
+test('three exhausted retries stop the operation and unblock an independent menu import', async () => {
+  const initial = withOrder();
+  const app = harness({ initial, recovery: automatic });
+  const removal = app.queue.enqueue('removeOrderDish', ['order-1', initial.orders[0].items[0].recipe.id]);
+  const rejected = assert.rejects(removal, /已停止重试/);
+  const post = { id: 'public-dish', kind: 'dish', title: '新菜', familyId: 'source-family', recipes: [{ ...initial.recipes[1], id: 'source-recipe' }] };
+  const imported = app.queue.enqueue('addCollection', [post]);
+  for (let i = 0; i < 4; i += 1) {
+    app.requests[i].reject(failure('NETWORK'));
+    await tick();
+  }
+  await rejected;
+  assert.equal(app.requests.length, 5);
+  assert.equal(app.requests[4].payload.name, 'addCollection');
+  assert.equal(app.view.orders.length, 1);
+  const server = clone(app.server);
+  createKitchenActions({ getState: () => server, commit: next => Object.assign(server, next), newId: () => 'imported-recipe', today: () => today }).addCollection(post);
+  app.requests[4].resolve({ snapshot: server, revision: 2, value: 1 });
+  await imported;
+  assert.equal(app.queue.hasUnresolved(), false);
+  assert.equal(app.status.failures.length, 0);
+  assert.equal(app.status.pendingCount, 0);
+  const record = app.journal.read(context.scope)[0];
+  assert.equal(record.stopped, true);
+  assert.equal(record.hadUncertain, true);
+  assert.equal(record.automaticAttempts, 4);
+  assert.deepEqual(record.sent, app.requests[0].payload);
+  const restarted = harness({ storage: app.storage, recovery: automatic });
+  await tick();
+  assert.equal(restarted.requests.length, 0, 'terminal writes never replay after restart');
+  assert.equal(restarted.queue.hasUnresolved(), false);
+});
+
+test('automatic conflict cancellation preserves family changes and ends dependent callers', async () => {
+  const initial = initialSnapshot();
+  const recipe = clone(initial.recipes[0]);
+  const app = harness({ initial, recovery: automatic, refresh: ({ queue }) => {
+    const next = clone(queue.getBase()); next.recipes[0].title = '家人的新内容'; queue.receive(next, 8);
+  } });
+  const first = app.queue.enqueue('saveRecipe', [{ ...recipe, title: '旧草稿' }, recipe.id]);
+  const rejected = assert.rejects(first, /本次修改已取消/);
+  const second = app.queue.enqueue('saveRecipe', [{ ...recipe, title: '依赖旧草稿' }, recipe.id]);
+  const dependent = assert.rejects(second, /本次修改已取消/);
+  app.requests[0].reject(failure('CONFLICT'));
+  await Promise.all([rejected, dependent]);
+  assert.equal(app.requests.length, 1);
+  assert.equal(app.view.recipes[0].title, '家人的新内容');
+  assert.equal(app.status.failures.length, 0);
+  assert.equal(app.queue.hasUnresolved(), false);
+});
+
+test('automatic recovery does not retry permissions failures', async () => {
+  const app = harness({ recovery: automatic });
+  const saved = app.queue.enqueue('setFeature', ['fridge', true]);
+  const rejected = assert.rejects(saved, { code: 'FORBIDDEN' });
+  app.requests[0].reject(failure('FORBIDDEN'));
+  await rejected;
+  assert.equal(app.requests.length, 1);
+  assert.equal(app.view.family.features.fridge, false);
+  assert.equal(app.queue.hasUnresolved(), false);
+});
+
+test('hanging sends have a finite retry budget and late results cannot restore a projection', async () => {
+  const app = harness({ recovery: { ...automatic, requestTimeout: 5 } });
+  const saved = app.queue.enqueue('setFeature', ['fridge', true]);
+  await assert.rejects(saved, /已停止重试/);
+  await app.queue.whenIdle();
+  assert.equal(app.requests.length, 4);
+  assert.equal(app.queue.hasUnresolved(), false);
+  app.confirm(0);
+  await tick();
+  assert.equal(app.view.family.features.fridge, false, 'late transport responses are ignored');
+  app.queue.receive(clone(app.server), 2);
+  assert.equal(app.view.family.features.fridge, true, 'a later authoritative refresh can confirm a saved write');
+});
+
+test('switching scopes during retry delay never sends the old request into the new scope', async () => {
+  let release;
+  const app = harness({ recovery: { ...automatic, wait: () => new Promise(resolve => { release = resolve; }) } });
+  const saved = app.queue.enqueue('setFeature', ['fridge', true]);
+  const rejected = assert.rejects(saved, { code: 'SCOPE_CHANGED' });
+  app.requests[0].reject(failure('NETWORK'));
+  await tick();
+  app.queue.activate(initialSnapshot(), { ...context, scope: 'another-scope', familyId: 'family-2' });
+  release();
+  await rejected;
+  await tick();
+  assert.equal(app.requests.length, 1);
+});
+
+
+test('recovery after restart respects the persisted attempt budget', async () => {
+  const app = harness();
+  const saved = app.queue.enqueue('setFeature', ['fridge', true]);
+  const rejected = assert.rejects(saved);
+  app.requests[0].reject(failure('NETWORK'));
+  await rejected;
+  const records = app.journal.read(context.scope);
+  records[0].automaticAttempts = 4;
+  app.journal.write(context.scope, records);
+  const restarted = harness({ storage: app.storage, recovery: automatic });
+  await tick();
+  assert.equal(restarted.requests.length, 0);
+  assert.equal(restarted.queue.hasUnresolved(), false);
+  assert.equal(restarted.journal.read(context.scope)[0].stopped, true);
+});
+
+test('exhausted response failures reconcile from the cloud without pretending the write was cancelled', async () => {
+  const app = harness({ recovery: automatic, refresh: ({ queue }) => {
+    const next = clone(queue.getBase()); next.family.features.fridge = true; queue.receive(next, 2);
+  } });
+  const saved = app.queue.enqueue('setFeature', ['fridge', true]);
+  const rejected = assert.rejects(saved, /同步未确认/);
+  for (let i = 0; i < 4; i += 1) {
+    app.requests[i].reject(failure('NETWORK'));
+    await tick();
+  }
+  await rejected;
+  await app.queue.whenIdle();
+  assert.equal(app.view.family.features.fridge, true);
+  assert.equal(app.status.pendingCount, 0);
+  assert.equal(app.status.failures.length, 0);
 });
