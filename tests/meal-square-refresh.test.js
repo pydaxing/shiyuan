@@ -264,3 +264,33 @@ test('leaving during refresh drops the native pull offset and late completion ca
   assert.equal(f.view.feedScrollTop.value, 240);
   assert.equal(f.feed.posts.value[0].id, 'visible');
 });
+
+
+test('opening a discover recipe locks the feed without destroying its owning card; leaving the tab still unmounts it', async context => {
+  const f = fixture(context);
+  const binding = read('../src/pages/index/index.vue').match(/<MealSquare\b[^>]*:active="([^"]+)"/)[1];
+  const activeFor = new Function('tab', 'sheetOpen', `return (${binding});`);
+  const tab = Vue.ref('square');
+  const stop = Vue.watch(() => activeFor(tab.value, f.modules.sheetOpen.value), active => { f.props.active = active; }, { immediate: true, flush: 'sync' });
+  context.after(stop);
+  f.calls[0].resolve({ posts: [{ id: 'recipe-card', visibility: 'public' }], cursor: null });
+  await settle();
+  f.view.feedViewport.onScroll({ detail: { scrollTop: 320 } });
+  const cards = f.feed.posts.value;
+  f.modules.sheetOpen.value = true;
+  await settle();
+  assert.equal(f.props.active, true, 'the detail lives in a card inside the active scroll-view');
+  assert.equal(f.view.feedLocked.value, true);
+  assert.equal(f.view.refresherEnabled.value, false);
+  assert.equal(f.view.feedScrollTop.value, 320);
+  assert.equal(f.feed.posts.value, cards);
+  f.modules.sheetOpen.value = false;
+  await settle();
+  assert.equal(f.props.active, true);
+  assert.equal(f.view.feedLocked.value, false);
+  assert.equal(f.view.feedScrollTop.value, 320, 'closing detail preserves reading position');
+  tab.value = 'family';
+  await settle();
+  assert.equal(f.props.active, false, 'actual tab departure still destroys native refresher');
+  assert.equal(f.view.refreshing.value, false);
+});

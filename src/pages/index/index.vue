@@ -472,7 +472,7 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
       </view>
       <FamilyView v-if="tab === 'family'" ref="familyView" :key="cloudStatus.userId || state.activeMemberId" :today="today" :refresh-action="refreshKitchen" @customize="editFamily($event)" @manage="editFamily('management')" @diary="openMealHistory" />
       <view v-if="squareVisited || tab === 'square'" v-show="tab === 'square'" class="square-view">
-        <MealSquare ref="mealSquare" :active="tab === 'square' && !sheetOpen" @record="recordMeal()" @changed="squareChanged" />
+        <MealSquare ref="mealSquare" :active="tab === 'square'" @record="recordMeal()" @changed="squareChanged" />
       </view>
       <view v-if="communityVisited" v-show="tab === 'community'" class="community-tab"><CommunityView ref="communityView" :key="`${cloudStatus.userId}:${cloudStatus.familyId}`" :active="tab === 'community'" @edit-entry="editEntry" /></view>
     </view>
