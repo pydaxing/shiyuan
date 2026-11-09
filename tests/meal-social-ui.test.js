@@ -406,7 +406,7 @@ test('meal photo fallback previews never enter the uploaded selection and return
   f.api.preview('cloud://real-meal');
   assert.deepEqual(previews[1], [['cloud://real-meal'], 'cloud://real-meal']);
   f.api.remove(0);
-  assert.deepEqual(f.events, [['update:modelValue', []]]);
+  assert.deepEqual(f.events, [['update:modelValue', []], ['incomplete', false]]);
   props.modelValue = f.events[0][1];
   assert.deepEqual(f.api.visibleFallbacks.value, props.fallbackImages);
 });

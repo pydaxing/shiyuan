@@ -128,6 +128,8 @@ test('original photos and bounded previews travel as files through the full clie
     assert.ok(Buffer.from(response.data.base64, 'base64').length <= 120000);
     assert.equal(record.delivery, undefined, 'ordinary display never prepares the original download');
   }
+  const mealPhoto = await app.uploadCloudImage('album-cover.jpg', { previewPath: 'album-cover.jpg' }, 'meal');
+  assert.equal(rows.get(`media:${hash(mealPhoto)}`).mealPhoto, true);
   const cardPath = await app.loadImage(cover, 'card', { force: true });
   assert.ok(temporaryFiles.get(cardPath).length <= 80000);
   assert.equal(downloadedFiles.length, 1);
@@ -173,9 +175,9 @@ test('original photos and bounded previews travel as files through the full clie
   assert.equal((await module.exports.main({ action: 'mediaContent', fileId: avatar, variant: 'card' })).ok, true);
   const denied = await module.exports.main({ action: 'mediaContent', fileId: cover, variant: 'original', transport: 'url' });
   assert.equal(denied.ok, false, 'another user cannot sign a private family original');
-  assert.equal(transfers.length, 12);
+  assert.equal(transfers.length, 14);
   assert.ok(transfers.every(item => !storedFiles.has(item.fileID)), 'server removes temporary unencrypted originals');
-  assert.equal(savedCount, 34); // profile avatar adds encrypted and private delivery thumbnails
+  assert.equal(savedCount, 41); // profile avatar adds encrypted and private delivery thumbnails
   assert.ok(avatarRecord.variants.avatar.bytes <= 20000);
   assert.ok(avatarRecord.variants.avatar.width <= 192);
   assert.equal((await module.exports.main({ action: 'mediaContent', fileId: avatar, variant: 'avatar' })).ok, true);

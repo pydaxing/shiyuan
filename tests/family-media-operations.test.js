@@ -61,3 +61,23 @@ test('an upload adopted by an active family commits its image and clears the pla
   assert.equal(rows[0]._id, 'image');
   assert.equal(rows[0].confirmed, true);
 });
+
+test('exhausted database contention retries do not repeat physical uploads', async () => {
+  const { repository } = await fixture();
+  const transaction = repository.transaction.bind(repository);
+  let produced = 0, conflicts = 0, inject = false;
+  repository.transaction = callback => {
+    if (inject && conflicts++ < 2) throw Object.assign(new Error('concurrent media fence'), { errCode: -501001 });
+    return transaction(callback);
+  };
+  const operations = createFamilyMediaOperations({ repository, now: () => 1000 });
+  const result = await operations.store('me', 'home', async () => {
+    produced += 1;
+    inject = true;
+    return { fileId: 'cloud://env/once' };
+  }, async (db, stored) => db.set('media', 'confirmed', { ...stored, confirmed: true }));
+  assert.equal(result.fileId, 'cloud://env/once');
+  assert.equal(produced, 1);
+  assert.equal((await repository.get('media', 'confirmed')).confirmed, true);
+  assert.equal((await repository.list('media')).length, 1);
+});

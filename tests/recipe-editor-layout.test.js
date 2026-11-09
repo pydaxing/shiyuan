@@ -265,10 +265,10 @@ test('step attachment thumbnails and the add control share compact square geomet
   assert.equal(declarationsFor('.step-photo-tile .card-remove').get('min-height'), '44px');
   assert.match(pickerSource, /selectImagePaths\(capacity.value/);
   assert.match(pickerSource, /await persistSelectedImages\(\[entry.path\]/);
-  assert.match(pickerSource, /@click="preview\(image\)"/);
+  assert.match(pickerSource, /@click="preview\(photo.image\)"/);
   assert.match(pickerSource, /previewImages\(props.modelValue, image\)/);
   assert.match(pickerSource, /v-if="capacity > 0"/);
-  assert.match(pickerSource, /<ImageUploadProgress v-if="photo.status !== 'failed'" :value="imageUploadLabel\(\{ \.\.\.photo, status: photo.stage \}\)" compact/);
+  assert.match(pickerSource, /<ImageUploadProgress v-if="photo.status === 'uploading'" :value="imageUploadLabel\(\{ \.\.\.photo, status: photo.stage \}\)" compact/);
   assert.doesNotMatch(pickerSource, /photo-count|photo-processing-grid/);
   assert.doesNotMatch(pickerSource, /ImageCropper|requestCrop|coverFrameStyle/);
   assert.match(pickerSource, /v-if="failedPaths.length"/);

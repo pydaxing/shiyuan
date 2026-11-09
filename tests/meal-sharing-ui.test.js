@@ -451,3 +451,43 @@ test('personal diary distinguishes original family and personal meals without fo
   assert.equal(mealOrigin({ author: { mode: 'family' } }), 'family');
   assert.equal(mealOrigin({}), '');
 });
+
+
+test('photo tiles retain selection slots and stable keys through failures and out-of-order retries', async context => {
+  const jobs = [];
+  const props = Vue.reactive({ modelValue: [], fallbackImages: [], reservedCount: 0, disabled: false });
+  const { api, events } = harness(context, 'StepImagePicker', {
+    useSheetContentResize() {}, imageUploadLabel() {},
+    selectImagePaths: async () => ['a', 'b', 'c'],
+    persistSelectedImages: paths => new Promise((resolve, reject) => jobs.push({ path: paths[0], resolve, reject })),
+  }, props);
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  const echo = () => { props.modelValue = events.filter(event => event[0] === 'update:modelValue').at(-1)[1]; };
+  await api.choose();
+  const ids = api.entries.value.map(entry => entry.id);
+  jobs[2].resolve(['cloud-c']); await tick(); echo();
+  assert.deepEqual(api.entries.value.map(entry => entry.path), ['a', 'b', 'c']);
+  jobs[0].reject(new Error('network')); jobs[1].resolve(['cloud-b']); await tick(); echo();
+  assert.equal(events.filter(event => event[0] === 'incomplete').at(-1)[1], true);
+  assert.deepEqual(api.entries.value.map(entry => entry.id), ids);
+  await api.choose(true);
+  assert.equal(jobs[3].path, 'a');
+  jobs[3].resolve(['cloud-a']); await tick(); echo();
+  assert.deepEqual(api.entries.value.map(entry => entry.id), ids, 'v-model echo must not recreate tile keys');
+  assert.deepEqual(props.modelValue, ['cloud-a', 'cloud-b', 'cloud-c']);
+  assert.equal(events.filter(event => event[0] === 'incomplete').at(-1)[1], false);
+  api.removeEntry(ids[1]); echo();
+  assert.deepEqual(props.modelValue, ['cloud-a', 'cloud-c']);
+  const source = readFileSync(new URL('../src/components/StepImagePicker.vue', import.meta.url), 'utf8');
+  assert.match(source, /v-for="\(photo, index\) in entries" :key="photo.id"/);
+  assert.doesNotMatch(source, /v-for="[^"\n]* in (modelValue|pendingPhotos)"/);
+});
+
+test('meal publication waits for every selected photo, including failed uploads', async context => {
+  const { api, calls } = harness(context, 'MealPublishSheet');
+  api.images.value = ['cloud-first'];
+  api.incompletePhotos.value = true;
+  await api.save();
+  assert.equal(calls.length, 0);
+  assert.match(api.error.value, /还有照片未上传成功/);
+});

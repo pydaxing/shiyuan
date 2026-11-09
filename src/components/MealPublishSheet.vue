@@ -79,7 +79,7 @@ function toggleMood(id) {
   if (moodIds.value.includes(id)) moodIds.value = moodIds.value.filter(value => value !== id);
   else if (moodIds.value.length < 3) moodIds.value = [...moodIds.value, id];
 }
-const busy = ref(false), uploading = ref(false), error = ref('');
+const busy = ref(false), uploading = ref(false), incompletePhotos = ref(false), error = ref('');
 const pendingRequest = ref(null);
 const locked = computed(() => busy.value || Boolean(pendingRequest.value));
 let disposed = false;
@@ -97,6 +97,7 @@ async function close() {
 }
 async function save() {
   if (busy.value || uploading.value) return;
+  if (incompletePhotos.value) { error.value = '还有照片未上传成功，请重试或移除后再发布'; return; }
   error.value = '';
   if (!pendingRequest.value && selectedOrderId.value && !selectedOrder.value) { error.value = '这条安排已变更，请重新选择'; return; }
   if (!pendingRequest.value && images.value.length + orderImages.value.length > 9) { error.value = '菜品图和实拍合计最多 9 张'; return; }
@@ -141,7 +142,7 @@ async function save() {
           <text v-if="!availableOrders.length" class="meal-arrangement-empty">今天暂无可记录的安排</text>
         </view>
       </view>
-      <StepImagePicker v-model="images" :fallback-images="orderImages" :reserved-count="orderImages.length" label="餐食实拍" purpose="meal" variant="meal" :disabled="locked" @busy="uploading = $event" />
+      <StepImagePicker v-model="images" :fallback-images="orderImages" :reserved-count="orderImages.length" label="餐食实拍" purpose="meal" variant="meal" :disabled="locked" @busy="uploading = $event" @incomplete="incompletePhotos = $event" />
       <text v-if="error" class="form-error meal-composer-error" role="alert">{{ error }}</text>
       <view class="meal-composer-settings">
         <button role="button" class="meal-composer-setting meal-composer-mood-toggle" :disabled="locked || uploading" :aria-expanded="moodsExpanded" :aria-controls="moodsExpanded ? 'meal-composer-mood-options' : undefined" :aria-label="`标签：${moodSummary}，${moodsExpanded ? '收起' : '展开'}选择`" @click="toggleMoodOptions" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { retryTransaction } from './transaction-retry.mjs';
 import { activeSpaceId, personalSpaceId } from './workspaces.mjs';
 
 const unavailable = () => Object.assign(new Error('家庭已变更，请重新上传'), { code: 'NO_FAMILY' });
@@ -6,13 +7,19 @@ const unavailable = () => Object.assign(new Error('家庭已变更，请重新�
 // The family write serializes uploads with deletion, including the time spent
 // outside the database while storage creates the encrypted image variants.
 export function createFamilyMediaOperations({ repository, now = Date.now }) {
+  // Retry only database work, never the storage upload itself. Concurrent photos
+  // share the family deletion fence; stagger exhausted SDK transaction retries.
+  const transaction = callback => retryTransaction(() => repository.transaction(callback), {
+    attempts: 4,
+    wait: delay => new Promise(resolve => setTimeout(resolve, delay * 3)),
+  });
   async function fence(db, userId, familyId) {
     const [family, user] = await Promise.all([db.get('families', familyId), db.get('users', userId)]);
     if (!family || family.deletedAt || activeSpaceId(user) !== familyId || (family.kind === 'personal' && (family.ownerId !== userId || familyId !== personalSpaceId(userId))) || !family.members.some(member => member.id === userId)) throw unavailable();
     await db.set('families', familyId, { ...family, mediaWriteVersion: (family.mediaWriteVersion || 0) + 1 });
     return family;
   }
-  const write = (userId, familyId, callback) => repository.transaction(async db => {
+  const write = (userId, familyId, callback) => transaction(async db => {
     await fence(db, userId, familyId);
     return callback(db);
   });
@@ -22,7 +29,7 @@ export function createFamilyMediaOperations({ repository, now = Date.now }) {
     const operation = { familyId, userId, confirmed: false, uploadFiles: [], uploadInFlightUntil: now() + 90000 };
     await write(userId, familyId, db => db.set('media', id, operation));
     const storageTracker = {
-      record: ({ path, fileId }) => repository.transaction(async db => {
+      record: ({ path, fileId }) => transaction(async db => {
         const current = await db.get('media', id);
         if (!current || current.familyDeletionMedia || current.uploadInFlightUntil <= now()) throw unavailable();
         if (typeof path !== 'string' || !path || (fileId !== undefined && (typeof fileId !== 'string' || !fileId.startsWith('cloud://')))) throw new Error('上传追踪信息无效');
@@ -36,7 +43,7 @@ export function createFamilyMediaOperations({ repository, now = Date.now }) {
         if (index === -1) uploads.push(entry); else uploads[index] = entry;
         await db.set('media', id, { ...current, uploadFiles: uploads, uploadInFlightUntil: now() + 90000 });
       }),
-      discard: fileIds => repository.transaction(async db => {
+      discard: fileIds => transaction(async db => {
         const current = await db.get('media', id);
         if (!current || current.familyDeletionMedia) return;
         const removed = new Set(fileIds);
@@ -46,12 +53,12 @@ export function createFamilyMediaOperations({ repository, now = Date.now }) {
     let stored;
     try {
       stored = await produce(storageTracker);
-      await repository.transaction(async db => {
+      await transaction(async db => {
         const current = await db.get('media', id);
         if (!current || current.familyDeletionMedia) throw unavailable();
         await db.set('media', id, { ...current, ...(typeof stored === 'string' ? { fileId: stored } : stored), confirmed: false });
       });
-      await repository.transaction(async db => {
+      await transaction(async db => {
         await fence(db, userId, familyId);
         await commit(db, stored);
         await db.remove('media', id);
@@ -61,7 +68,7 @@ export function createFamilyMediaOperations({ repository, now = Date.now }) {
       // Failure can happen after storage accepted a file, before its response,
       // or while committing metadata. Never drop the durable upload intents.
       try {
-        await repository.transaction(async db => {
+        await transaction(async db => {
           const current = await db.get('media', id);
           if (!current || current.familyDeletionMedia) return;
           if (!current.uploadFiles?.length && !stored) await db.remove('media', id);
