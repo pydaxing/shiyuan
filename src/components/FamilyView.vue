@@ -29,9 +29,10 @@ async function toggleMode() {
   const enableFamilyMode = personal.value;
   requestedFamilyMode.value = enableFamilyMode;
   modeBusy.value = true; modeError.value = '';
-  notify(enableFamilyMode ? '开启家庭模式' : '关闭家庭模式');
+  notify(enableFamilyMode ? '开启中...' : '关闭中...');
   try {
     await manageFamily('switchWorkspace', { mode: enableFamilyMode ? 'family' : 'personal', expectedSpaceId: state.value.family.id });
+    notify(enableFamilyMode ? '已开启家庭模式' : '已关闭家庭模式');
   }
   catch (error) { if (error.code === 'FAMILY_REQUIRED') { notify('请先创建或加入家庭'); emit('manage'); } else { modeError.value = error.message || '切换失败，请重试'; notify(modeError.value); } }
   finally { modeBusy.value = false; requestedFamilyMode.value = null; if (personal.value) familyOpen.value = false; }
@@ -121,7 +122,7 @@ function familyChanged() {
             <button role="button" class="account-row diary-entry" aria-label="打开饮食日记" @click.stop="$emit('diary')" hover-class="touch-feedback"><AppIcon name="calendar" :size="22" /><text class="account-row-title">饮食日记</text><AppIcon name="chevron" :size="16" /></button>
           </view>
           <view class="account-group account-workspace-group">
-            <view class="account-row account-mode-row" :aria-busy="modeBusy"><AppIcon name="family" :size="22" /><text class="account-row-title">家庭模式</text><button role="switch" class="feature-switch" :class="{ on: displayedFamilyMode, pending: modeBusy }" :aria-checked="displayedFamilyMode" :aria-busy="modeBusy" :disabled="modeBusy || cloudStatus.busy" aria-label="家庭模式" @click.stop="toggleMode" hover-class="none"><view /></button></view>
+            <view class="account-row account-mode-row" :aria-busy="modeBusy"><AppIcon name="family" :size="22" /><text class="account-row-title">家庭模式</text><text v-if="modeBusy" class="account-row-value" role="status">{{ requestedFamilyMode ? '开启中...' : '关闭中...' }}</text><button role="switch" class="feature-switch" :class="{ on: displayedFamilyMode, pending: modeBusy }" :aria-checked="displayedFamilyMode" :aria-busy="modeBusy" :disabled="modeBusy || cloudStatus.busy" aria-label="家庭模式" @click.stop="toggleMode" hover-class="none"><view /></button></view>
             <text v-if="modeError" class="form-error account-error" role="alert">{{ modeError }}</text>
             <button v-if="displayedFamilyMode" role="button" class="account-row family-members-entry" aria-label="查看我的家庭" @click.stop="familyOpen = true" hover-class="touch-feedback"><AppIcon name="family" :size="22" /><text class="account-row-title">我的家庭</text><text v-if="displayedMemberCount" class="account-row-value">{{ displayedMemberCount }} 人</text><AppIcon name="chevron" :size="16" /></button>
           </view>

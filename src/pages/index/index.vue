@@ -496,7 +496,7 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
       <view class="checkout-actions"><view v-if="submitError" class="checkout-tip warning checkout-submit-error" role="alert"><text>{{ submitError }}</text></view><button role="button" class="primary-button full checkout-submit" :disabled="checkout.action === 'blocked' || submitting" @click="submit" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">{{ submitting ? '正在提交…' : checkout.label }}</button></view>
     </Sheet>
     <MealPreparationSheet v-if="preparingOrderId" :order-id="preparingOrderId" :today="today" @close="preparingOrderId = ''" @open="orderRecipe = $event" />
-    <Sheet v-if="mealHistoryOpen" :key="`history:${cloudStatus.userId}:${state.family.id}`" :title="`饮食日记 · ${state.family.kind === 'personal' ? '自己' : '家庭'}`" variant="meal-diary" page :fit-content="false" :footer-visible="false" @close="mealHistoryOpen = false" @reach-bottom="mealTimeline?.loadMore()">
+    <Sheet v-if="mealHistoryOpen" :key="`history:${cloudStatus.userId}:${state.family.id}`" title="饮食日记" variant="meal-diary" page :fit-content="false" :footer-visible="false" @close="mealHistoryOpen = false" @reach-bottom="mealTimeline?.loadMore()">
       <MealTimeline ref="mealTimeline" :orders="state.orders" :today="today" :active="!mealPublishing && !orderRecipe" @open="orderRecipe = $event" @record="recordMeal()" @changed="diaryChanged" />
     </Sheet>
     <MealPublishSheet v-if="mealPublishing" :key="state.family.id" :order="mealShareOrder" :orders="state.orders.filter(order => !isPendingRecord(order.id))" @close="mealPublishing = false; mealShareOrder = null" @saved="mealSaved" />
