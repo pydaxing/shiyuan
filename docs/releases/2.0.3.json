@@ -1,0 +1,40 @@
+{
+  "version": "2.0.3",
+  "versionCode": 20003,
+  "tag": "v2.0.3",
+  "sourceCommit": "1cd44da6c62c791199fc6f98c3581d38c8f8cad7",
+  "stage": "development_uploaded",
+  "taskId": "confirmation_upload_9fa676e2-ec8d-4b27-8483-a6c9c92b7f0b",
+  "status": "success",
+  "uploaded": true,
+  "uploadedAt": "2026-11-09T14:11:19.742000+00:00",
+  "uploadBytes": 2026071,
+  "reviewSubmitted": false,
+  "productionPublished": false,
+  "platformBeforeUpload": {
+    "production": "1.0.4",
+    "source": "Native WeChat developer tools upload window"
+  },
+  "experienceSelectionVerified": false,
+  "experienceEvidence": "Native confirmation says last upload selected as experience version and this upload will replace it; confirmation allowed. Platform web not read.",
+  "artifact": {
+    "sha256": "9af09eeeb1ca7aa065e74c84885b63d8059bc685dec114b1c52818edbc9d54a3",
+    "files": 541,
+    "hashMethod": "SHA256 of sorted relative-path + NUL + file SHA256 + newline"
+  },
+  "validation": {
+    "testsPassed": 2678,
+    "testsFailed": 0,
+    "releaseBuild": true,
+    "cloudTargetVerified": true,
+    "realCloudPreview": "Previous full image QA retained; version-only rebuild real cloud menu smoke passed, developer tools shows 0 errors."
+  },
+  "backend": {
+    "function": "kitchen-v2",
+    "sha256": "2030d97fcd9878b09e51f506f44b3573d479972aca8f2fe6f9869f770eba1e1e",
+    "verifiedAt": "2026-11-09T13:18:43.965Z"
+  },
+  "scope": "Discover feed and recipe detail thumbnails; originals loaded only on explicit tap; preserve original aspect ratio and decoded cover cache.",
+  "excludedWork": "Main workspace unrelated changes and unfinished SMS integration excluded via isolated source build.",
+  "backup": "/tmp/shiyuan-203-before-build"
+}
