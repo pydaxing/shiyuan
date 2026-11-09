@@ -40,7 +40,7 @@ test('family diary grants every current member menu actions without changing old
   const result = await f.diary(spaceId, 'bob');
   assert.equal(result.diaryManagementVersion, 1);
   assert.equal(result.posts[0].isOwner, false);
-  assert.deepEqual([result.posts[0].canDelete, result.posts[0].canChangeVisibility, result.posts[0].deleteScope], [true, true, 'shared']);
+  assert.deepEqual([result.posts[0].canDelete, result.posts[0].canChangeVisibility, result.posts[0].deleteScope], [true, true, 'personal']);
   const legacy = await f.diary(spaceId, 'bob', { diaryManagementVersion: undefined });
   assert.equal(legacy.diaryManagementVersion, undefined);
   assert.equal(legacy.posts[0].canDelete, undefined);
@@ -71,26 +71,23 @@ test('personal deletion of authored family meal persists only own diary exclusio
   ok(await f.remove(alicePersonal, post.id));
   assert.equal((await f.repository.get('meal_reactions', relationKey)).diaryHiddenAt, hidden.diaryHiddenAt);
   ok(await f.call('switchWorkspace', { mode: 'family' }));
-  assert.equal((await f.diary(spaceId)).posts[0].id, post.id, 'own family view remains visible after a personal hide');
+  assert.deepEqual((await f.diary(spaceId)).posts, [], 'own hide follows the user into family mode');
 });
 
-test('family deletion by another member removes canonical meal from all diaries and public feed', async () => {
+test('family deletion hides only the deleting member in both modes and preserves public photos', async () => {
   const f = fixture(), spaceId = await f.family();
   await f.join('bob');
   const post = await f.publish(spaceId, { visibility: 'public' });
   const result = ok(await f.remove(spaceId, post.id, 'bob'));
-  assert.equal(result.deleteScope, 'shared');
-  const stored = await f.repository.get('meal_posts', post.id);
-  assert.equal(stored.status, 'deleted');
-  assert.equal(stored.authorId, hash('alice'), 'deleting member must not replace original author ID');
-  assert.equal(stored.deletedByUserId, hash('bob'));
-  assert.deepEqual(new Set(stored.participantUserIds), new Set([hash('alice'), hash('bob')]));
-  assert.deepEqual((await f.diary(spaceId)).posts, []);
-  assert.deepEqual(ok(await f.call('mealFeed', { spaceId })).posts, []);
-  for (const user of ['alice', 'bob']) assert.equal((await f.call('mediaContent', { fileId: post.images[0] }, user)).code, 'FORBIDDEN');
+  assert.equal(result.deleteScope, 'personal');
+  assert.equal((await f.repository.get('meal_posts', post.id)).status, 'published');
+  assert.equal((await f.diary(spaceId)).posts[0].id, post.id);
+  assert.deepEqual((await f.diary(spaceId, 'bob')).posts, []);
+  assert.equal(ok(await f.call('mealFeed', { spaceId })).posts[0].id, post.id);
+  for (const user of ['alice', 'bob']) assert.equal((await f.call('mediaContent', { fileId: post.images[0] }, user)).ok, true);
   for (const user of ['alice', 'bob']) {
     const personal = await f.personal(user);
-    assert.deepEqual((await f.diary(personal, user)).posts, []);
+    assert.equal((await f.diary(personal, user)).posts.length, user === 'alice' ? 1 : 0);
   }
   assert.equal(ok(await f.remove(`personal-${hash('bob')}`, post.id, 'bob')).deleteScope, 'personal');
 });
@@ -105,22 +102,22 @@ test('own personal meal deletion is canonical rather than an exclusion', async (
   assert.equal(await f.repository.get('meal_reactions', mealDiaryRelationId(post.id, hash('alice'))), null);
 });
 
-test('deletion retains order suppression while preserving completed arrangement state', async () => {
+test('family diary deletion preserves the completed arrangement without global suppression', async () => {
   const f = fixture(), spaceId = await f.family();
   await f.join('bob');
   const orderId = 'my-order', orderKey = hash(`${spaceId}:${orderId}`);
   await f.repository.set('orders', orderKey, { familyId: spaceId, value: { id: orderId, date: today, meal: '晚餐', memberId: hash('alice'), memberName: 'Alice', status: 'accepted', items: [{ quantity: 1, recipe: { id: 'rice', title: '米饭', category: '主食', image: '/static/food.png', ingredients: [], steps: [] } }] } });
   const post = ok(await f.call('finishMeal', { spaceId, orderId, kind: 'plan', requestId: 'finish-diary-order-1', visibility: 'family', mealSharingVersion: 2 })).post;
   const result = ok(await f.remove(spaceId, post.id, 'bob'));
-  assert.deepEqual(result.suppressedOrderIds, [orderId]);
+  assert.equal(result.suppressedOrderIds, undefined);
   const tombstone = await f.repository.get('meal_posts', post.id);
   assert.equal(tombstone.orderId, orderId);
   const order = (await f.repository.get('orders', orderKey)).value;
   assert.equal(order.status, 'completed');
   assert.equal(order.mealPostId, post.id);
-  assert.ok(order.diaryDeletedAt);
-  assert.equal(tombstone.images, undefined, 'deleted meal assets no longer grant access');
-  assert.deepEqual(ok(await f.remove(spaceId, post.id, 'bob')).suppressedOrderIds, [orderId]);
+  assert.equal(order.diaryDeletedAt, undefined);
+  assert.equal(tombstone.status, 'published', 'shared source and photo access remain intact');
+  assert.equal(ok(await f.remove(spaceId, post.id, 'bob')).suppressedOrderIds, undefined);
 });
 
 test('personal deletion of a family order never suppresses unrelated local order with same ID', async () => {
@@ -186,16 +183,18 @@ test('hidden diary pagination does not lose visible meals behind more than one p
   assert.equal(new Set(seen).size, seen.length);
 });
 
-test('legacy global delete also writes order tombstone metadata but remains author-only', async () => {
+test('legacy family clients cannot erase the shared source either', async () => {
   const f = fixture(), familyId = await f.family();
   const post = await f.publish(familyId, { mealSharingVersion: undefined, visibility: 'public' });
   const source = await f.repository.get('meal_posts', post.id);
   await f.repository.set('meal_posts', post.id, { ...source, orderId: 'legacy-order' });
   await f.repository.set('orders', hash(`${familyId}:legacy-order`), { familyId, value: { id: 'legacy-order', status: 'accepted' } });
   const result = ok(await f.call('deleteMealPost', { spaceId: familyId, postId: post.id }));
-  assert.equal(result.deleteScope, undefined);
+  assert.equal(result.deleteScope, 'personal');
   assert.equal((await f.repository.get('meal_posts', post.id)).orderId, 'legacy-order');
-  assert.ok((await f.repository.get('orders', hash(`${familyId}:legacy-order`))).value.diaryDeletedAt);
+  assert.equal((await f.repository.get('orders', hash(`${familyId}:legacy-order`))).value.diaryDeletedAt, undefined);
+  assert.equal((await f.repository.get('meal_posts', post.id)).status, 'published');
+  assert.equal((await f.diary(familyId, 'alice', { mealSharingVersion: undefined })).posts.length, 0);
 });
 
 async function previousArrangement(f, familyId) {
@@ -205,7 +204,7 @@ async function previousArrangement(f, familyId) {
   return id;
 }
 
-test('automatic shared diary deletion stays removed through repeated archival and every participant diary', async () => {
+test('automatic shared diary hide survives repeated archival only for its deleting participant', async () => {
   const f = fixture(), familyId = await f.family();
   await f.join('bob');
   const orderId = await previousArrangement(f, familyId);
@@ -216,16 +215,17 @@ test('automatic shared diary deletion stays removed through repeated archival an
   const post = page.posts[0];
   assert.equal(post.visibility, 'public');
   assert.equal(post.sourceOrderId, orderId);
-  assert.equal(post.deleteScope, 'shared');
+  assert.equal(post.deleteScope, 'personal');
   ok(await f.remove(familyId, post.id, 'bob'));
   const after = await f.diary(familyId);
-  assert.deepEqual(after.posts, []);
-  assert.deepEqual(after.suppressedOrderIds, [orderId]);
+  assert.equal(after.posts[0].id, post.id);
+  assert.deepEqual(after.suppressedOrderIds, []);
+  assert.deepEqual((await f.diary(familyId, 'bob')).posts, []);
   for (const user of ['alice', 'bob']) {
     const personal = await f.personal(user);
-    assert.deepEqual((await f.diary(personal, user)).posts, []);
+    assert.equal((await f.diary(personal, user)).posts.length, user === 'alice' ? 1 : 0);
   }
-  assert.equal((await f.repository.get('meal_posts', post.id)).status, 'deleted');
+  assert.equal((await f.repository.get('meal_posts', post.id)).status, 'published');
   assert.equal((await f.repository.get('orders', hash(`${familyId}:${orderId}`))).value.status, 'accepted', 'automatic archival and diary deletion must not claim manual completion');
 });
 
@@ -313,7 +313,7 @@ test('personal cooking and likes totals include eaten family meals once and resp
   assert.deepEqual(await stats(), { spaceId: personalId, mealCount: 2, receivedLikes: 3 }, 'personal hiding removes only own diary reference');
   assert.deepEqual(ok(await f.call('mealReceivedLikes', { spaceId: familyId }, 'bob')), { spaceId: familyId, mealCount: 2, receivedLikes: 5 });
   ok(await f.remove(familyId, own.id, 'bob'));
-  assert.deepEqual(await stats(), { spaceId: personalId, mealCount: 1, receivedLikes: 1 }, 'shared deletion removes personal totals too');
+  assert.deepEqual(await stats(), { spaceId: personalId, mealCount: 2, receivedLikes: 3 }, 'another member hide cannot change personal totals');
 });
 
 test('unified diary and totals are identical in both modes, with independent personal meals and shared family likes', async () => {
@@ -342,7 +342,7 @@ test('unified diary and totals are identical in both modes, with independent per
     const rows = (await diary(familyId, who)).posts;
     assert.deepEqual(new Set(rows.map(p => p.id)), new Set([shared.id, own[who].id]));
     assert.equal(rows.find(p => p.id === own[who].id).deleteScope, 'own');
-    assert.equal(rows.find(p => p.id === shared.id).deleteScope, 'shared');
+    assert.equal(rows.find(p => p.id === shared.id).deleteScope, 'personal');
   }
   ok(await f.call('setMealLike', { spaceId: familyId, postId: shared.id, selected: false }, 'bob'));
   assert.equal((await summary(familyId, 'alice')).receivedLikes, 1);
@@ -355,7 +355,7 @@ test('unified diary and totals are identical in both modes, with independent per
   assert.equal((await summary(familyId, 'alice')).mealCount, 1);
   assert.equal((await summary(familyId, 'bob')).mealCount, 2);
   ok(await f.remove(familyId, shared.id, 'bob'));
-  assert.equal((await summary(familyId, 'alice')).mealCount, 0);
+  assert.equal((await summary(familyId, 'alice')).mealCount, 1);
   assert.equal((await summary(familyId, 'bob')).mealCount, 1);
 });
 
@@ -379,4 +379,31 @@ test('unified family diary reconciles personal arrangements too, preserving sour
   assert.equal(rows[0].mealContext, 'personal');
   assert.equal(rows[0].author.mode, 'personal');
   assert.equal((await f.diary(familyId, 'bob', { userSummaryVersion: 1 })).posts.length, 0);
+});
+
+test('display query failures do not roll back a finished meal, and exact retry returns its receipt', async () => {
+  const f = fixture(), familyId = await f.family(); await f.join('bob');
+  const orderId = 'publish-display-failure', orderKey = hash(`${familyId}:${orderId}`);
+  await f.repository.set('orders', orderKey, { familyId, value: { id: orderId, date: today, meal: '晚餐', status: 'accepted', items: [{ recipe: { id: 'rice', title: '米饭', image: '/static/food.png', ingredients: [], steps: [] } }] } });
+  const transact = f.repository.transaction.bind(f.repository);
+  let presentationInTransaction = 0;
+  f.repository.transaction = callback => transact(db => callback({ ...db, list: (...args) => {
+    if (args[0] === 'posts') { presentationInTransaction++; throw new Error('display lookup unavailable'); }
+    return db.list(...args);
+  } }));
+  const list = f.repository.list.bind(f.repository);
+  f.repository.list = (...args) => { if (args[0] === 'posts') throw new Error('display lookup unavailable'); return list(...args); };
+  const request = { spaceId: familyId, orderId, kind: 'plan', requestId: 'display-failure-retry', visibility: 'public', mealSharingVersion: 2, showMealBadge: true };
+  const first = ok(await f.call('finishMeal', request));
+  assert.equal(first.presentationPending, true);
+  assert.equal(first.post.visibility, 'public');
+  assert.equal(first.post.showMealBadge, true);
+  assert.equal((await f.repository.get('orders', orderKey)).value.status, 'completed');
+  assert.equal(presentationInTransaction, 0);
+  const retry = ok(await f.call('finishMeal', request));
+  assert.equal(retry.replay, true);
+  assert.equal(retry.post.id, first.post.id);
+  assert.equal((await list('meal_posts', { status: 'published' })).length, 1);
+  f.repository.list = list;
+  assert.equal((await f.diary(familyId, 'bob')).posts[0].id, first.post.id);
 });

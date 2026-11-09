@@ -48,22 +48,22 @@ function familyPost(overrides = {}) {
   return { id: 'family-meal', mealSharingVersion: 2, mealContext: 'family', visibility: 'family', showMealBadge: true, isOwner: true, ...overrides };
 }
 
-test('confirmed family sharing defaults to the family diary, including legacy families without a kind', async context => {
+test('confirmed family sharing defaults to public, including legacy families without a kind', async context => {
   const f = harness(context, 'MealPublishSheet');
   assert.equal(f.api.familyMeal, true);
-  assert.equal(f.api.visibility.value, 'family');
-  assert.equal(f.api.visibilityLabel.value, '仅饮食日记');
+  assert.equal(f.api.visibility.value, 'public');
+  assert.equal(f.api.visibilityLabel.value, '发现 · 公开');
   assert.deepEqual(f.api.visibilityOptions.map(option => option.value), ['public', 'family']);
   f.api.selectVisibility('private');
-  assert.equal(f.api.visibility.value, 'family', 'a new family meal cannot silently become author-only');
+  assert.equal(f.api.visibility.value, 'public', 'a new family meal cannot silently become author-only');
   f.api.images.value = ['cloud://meal-photo'];
   const saved = f.api.save();
-  assert.equal(f.calls[0].args.visibility, 'family');
+  assert.equal(f.calls[0].args.visibility, 'public');
   assert.equal(f.calls[0].args.mealSharingVersion, 2);
   assert.equal(f.calls[0].args.showMealBadge, true);
   assert.equal(Object.hasOwn(f.calls[0].args, 'participantUserIds'), false, 'membership comes from the server, never from the publisher');
-  f.calls[0].resolve({ post: familyPost() }); await saved;
-  assert.deepEqual(f.events, [['saved', familyPost()]]);
+  f.calls[0].resolve({ post: familyPost({ visibility: 'public' }) }); await saved;
+  assert.deepEqual(f.events, [['saved', familyPost({ visibility: 'public' })]]);
 });
 
 test('personal meals keep public and self-only audiences while sending the optional solo badge', async context => {
@@ -108,7 +108,7 @@ test('background capability and mode updates do not change an already-open draft
   f.modules.currentIdentity.value = { family: { id: 'personal-a', kind: 'personal' } };
   f.modules.cloudStatus.value.mealSharingVersion = 0;
   assert.equal(f.api.familyMeal, true);
-  assert.equal(f.api.visibility.value, 'family');
+  assert.equal(f.api.visibility.value, 'public');
   assert.deepEqual(f.api.visibilityOptions.map(option => option.value), ['public', 'family']);
 
   const old = harness(context, 'MealPublishSheet', { cloudStatus: Vue.ref({ familyId: 'family-a', userId: 'alice' }) });
@@ -143,7 +143,7 @@ test('new meals retain their automatic badge across audience changes and an exac
 test('an old or mismatched response cannot claim a new family record was saved with the intended audience', async context => {
   for (const post of [
     { id: 'legacy-public', visibility: 'public' },
-    familyPost({ visibility: 'public' }),
+    familyPost({ visibility: 'family' }),
     familyPost({ showMealBadge: false }),
   ]) {
     const f = harness(context, 'MealPublishSheet');
@@ -155,7 +155,7 @@ test('an old or mismatched response cannot claim a new family record was saved w
     assert.match(f.api.error.value, /重试确认/);
     const retry = f.api.save();
     assert.deepEqual(f.calls[1].args, f.calls[0].args);
-    f.calls[1].resolve({ post: familyPost() }); await retry;
+    f.calls[1].resolve({ post: familyPost({ visibility: 'public' }) }); await retry;
     assert.equal(f.events.length, 1);
   }
 });
@@ -167,10 +167,10 @@ test('family sharing options and badges also apply when recording an arranged me
   assert.equal(f.calls[0].action, 'finishMeal');
   assert.equal(f.calls[0].args.kind, 'plan');
   assert.equal(f.calls[0].args.orderId, order.id);
-  assert.equal(f.calls[0].args.visibility, 'family');
+  assert.equal(f.calls[0].args.visibility, 'public');
   assert.equal(f.calls[0].args.mealSharingVersion, 2);
   assert.equal(Object.hasOwn(f.calls[0].args, 'images'), false);
-  f.calls[0].resolve({ post: familyPost({ mealStarted: true }) }); await saved;
+  f.calls[0].resolve({ post: familyPost({ visibility: 'public', mealStarted: true }) }); await saved;
   assert.equal(f.events[0][1].mealStarted, true);
 });
 

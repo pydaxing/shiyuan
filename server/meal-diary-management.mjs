@@ -28,7 +28,7 @@ export async function mealDiaryCapabilities(db, post, userId, family) {
     return mealDiaryCapabilities(db, post, userId, { id: personalSpaceId(userId), kind: 'personal' });
   }
   const canManage = owns || post.visibility === 'public' || isSharedFamilyMeal(post) && post.visibility === 'family';
-  return { canDelete: canManage, canChangeVisibility: canManage, deleteScope: 'shared' };
+  return { canDelete: canManage, canChangeVisibility: canManage, deleteScope: 'personal' };
 }
 
 export async function hidePersonalMeal(db, post, userId, now) {

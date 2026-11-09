@@ -40,7 +40,7 @@ async function visibility(post, value) {
   else if (error.value) notify(`未保存成功：${error.value}`);
 }
 async function remove(post) {
-  const yes = await new Promise(resolve => uni.showModal({ title: '删除这条餐食记录？', content: post.deleteScope === 'personal' ? '仅从你的个人饮食日记中移除，家庭和其他成员的日记会保留。' : post.mealSharingVersion === 2 && post.mealContext === 'family' ? '这条记录会从家庭日记和家人的个人日记中一起移除，原餐单状态保留。' : '这条动态会移除，原餐单状态保留。', confirmText: '删除', cancelText: '保留', confirmColor: NATIVE_UI_COLORS.danger, cancelColor: NATIVE_UI_COLORS.muted, success: result => resolve(result.confirm), fail: () => resolve(false) }));
+  const yes = await new Promise(resolve => uni.showModal({ title: '删除这条餐食记录？', content: post.deleteScope === 'personal' || post.mealContext === 'family' || post.author?.mode === 'family' ? '仅从你的饮食日记中移除，其他家人的记录和发现页展示会保留。' : '这条动态会移除，原餐单状态保留。', confirmText: '删除', cancelText: '保留', confirmColor: NATIVE_UI_COLORS.danger, cancelColor: NATIVE_UI_COLORS.muted, success: result => resolve(result.confirm), fail: () => resolve(false) }));
   if (yes) {
     const result = await change('deleteMealPost', post);
     if (!result && error.value) notify(`删除未成功：${error.value}`);

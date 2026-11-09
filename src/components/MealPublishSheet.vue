@@ -50,7 +50,7 @@ function selectMeal(value) {
 // bootstrap must not change the audience while someone is composing a meal.
 const sharedDiary = cloudStatus.value.mealSharingVersion === 2;
 const familyMeal = Boolean(currentIdentity?.value?.family?.id && currentIdentity.value.family.kind !== 'personal');
-const visibility = ref(sharedDiary && familyMeal ? 'family' : 'public'), visibilityExpanded = ref(false);
+const visibility = ref('public'), visibilityExpanded = ref(false);
 const visibilityOptions = [{ value: 'public', label: '发现 · 公开', icon: 'moments' }, sharedDiary && familyMeal
   ? { value: 'family', label: '仅饮食日记', icon: 'lock' }
   : { value: 'private', label: '仅饮食日记', icon: 'lock' }];

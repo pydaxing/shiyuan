@@ -200,7 +200,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       const batch = merged.slice(0, 21);
       more = merged.length > 21 || branches.some(branch => branch.length === 21);
       if (!batch.length) { more = false; break; }
-      const hidden = own && modern && (unified || family.kind === 'personal')
+      const hidden = own
         ? await readDocuments(repository, 'meal_reactions', batch.map(post => mealDiaryRelationId(post.id, userId)), { fields: ['diaryHiddenAt'] }) : new Map();
       rows.push(...batch.filter(post => !hidden.get(mealDiaryRelationId(post.id, userId))?.diaryHiddenAt));
       after = { id: batch.at(-1).id || batch.at(-1)._id, createdAt: batch.at(-1).createdAt };
@@ -230,7 +230,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
     if (modern) Object.assign(input, { mealSharingVersion: 2, showMealBadge: event.showMealBadge !== false });
     if (input.kind === 'actual' && !MEAL_SLOTS.includes(input.meal)) fail('请选择餐次');
     const fingerprint = hash(JSON.stringify(input));
-    return repository.transaction(async db => {
+    const committed = await repository.transaction(async db => {
       const { user, family } = await workspaceMembership(db, userId);
       if (event.spaceId !== family.id) fail('使用空间已变更，请重新打开发布', 'CONFLICT');
       if (modern && (family.kind === 'personal' ? visibility === 'family' : visibility === 'private')) fail('请选择当前空间的可见范围');
@@ -240,7 +240,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
         if (receipt.fingerprint !== fingerprint) fail('这次请求已处理，请刷新后重试', 'CONFLICT');
         const post = await db.get('meal_posts', receipt.postId);
         if (!post || post.status !== 'published') fail('这条餐食已删除', 'NOT_FOUND');
-        return { post: await view(db, post, userId, createIdentityPresentation(db), { currentSpaceId: family.id, mealLikesVersion: event.mealLikesVersion, liveImages: event.identityPresentationVersion === 1, defaultProfileVersion: event.defaultProfileVersion }), replay: true };
+        return { post, currentSpaceId: family.id, replay: true };
       }
       const id = `meal-${hash(`${family.id}:${userId}:${input.kind}:${event.requestId}`)}`;
       // Older clients could publish an arrangement without completing it. The
@@ -281,8 +281,16 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
       await db.set('families', family.id, { ...family, socialWriteVersion: (family.socialWriteVersion || 0) + 1, ...(finish ? { revision: (family.revision || 0) + 1, updatedAt: now() } : {}) });
       await db.set('meal_posts', id, post);
       await db.set('requests', receiptId, { kind: 'meal_post_v1', postId: id, fingerprint, createdAt: now() });
-      return { post: await view(db, post, userId, createIdentityPresentation(db), { currentSpaceId: family.id, mealLikesVersion: event.mealLikesVersion, liveImages: event.identityPresentationVersion === 1, defaultProfileVersion: event.defaultProfileVersion }) };
+      return { post, currentSpaceId: family.id };
     });
+    // Presentation queries must not expand or roll back the write transaction.
+    // A committed receipt is sufficient to acknowledge the exact saved draft;
+    // the normal diary refresh can retry optional display enrichment.
+    try {
+      return { post: await view(repository, committed.post, userId, createIdentityPresentation(repository), { currentSpaceId: committed.currentSpaceId, mealLikesVersion: event.mealLikesVersion, liveImages: event.identityPresentationVersion === 1, defaultProfileVersion: event.defaultProfileVersion }), ...(committed.replay ? { replay: true } : {}) };
+    } catch {
+      return { post: mealPostView(committed.post, null, userId), presentationPending: true, ...(committed.replay ? { replay: true } : {}) };
+    }
   }
   return async (action, event, userId) => {
     if (action === 'mealReceivedLikes') {
@@ -377,7 +385,7 @@ export function createMealPostService({ repository, now, throttle, archiveForUse
         const capabilities = managed ? await mealDiaryCapabilities(db, post, userId, family) : null;
         if (managed ? !capabilities[action === 'deleteMealPost' ? 'canDelete' : 'canChangeVisibility'] : !owns) fail('当前没有权限修改这条餐食', 'FORBIDDEN');
         if (action === 'deleteMealPost') {
-          if (capabilities?.deleteScope === 'personal') return hidePersonalMeal(db, post, userId, now);
+          if (capabilities?.deleteScope === 'personal' || post.mealContext === 'family' || post.author?.mode === 'family') return hidePersonalMeal(db, post, userId, now);
           const result = await deleteCanonicalMeal(db, post, userId, now, capabilities?.deleteScope);
           if (post.spaceId !== family.id) delete result.suppressedOrderIds;
           return result;

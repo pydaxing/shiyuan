@@ -197,9 +197,9 @@ test('family participants retain access to recipe-cover meal images after leavin
   assert.equal((await f.call('mediaContent', { fileId: image }, 'bob')).ok, true);
   assert.equal((await f.call('mediaUrl', { fileId: image }, 'bob')).ok, true);
   ok(await f.call('deleteMealPost', { spaceId, postId: post.id }));
-  assert.deepEqual((await f.diary(bobPersonal, 'bob')).posts, []);
-  assert.equal((await f.call('mediaContent', { fileId: image }, 'bob')).code, 'FORBIDDEN');
-  assert.equal((await f.call('mediaUrl', { fileId: image }, 'bob')).code, 'FORBIDDEN');
+  assert.equal((await f.diary(bobPersonal, 'bob')).posts[0].id, post.id);
+  assert.equal((await f.call('mediaContent', { fileId: image }, 'bob')).ok, true);
+  assert.equal((await f.call('mediaUrl', { fileId: image }, 'bob')).ok, true);
 });
 
 test('a later visible image reference grants access when the first family reference is inaccessible', async () => {
@@ -285,7 +285,7 @@ test('aggregated personal diary pagination has no gaps or duplicates with overla
   assert.equal(cursor, null);
 });
 
-test('deleting a canonical shared record removes all diary views and media access', async () => {
+test('deleting a shared diary reference preserves other members and media access', async () => {
   const f = fixture(), spaceId = await f.family();
   await f.join('bob');
   const post = ok(await f.publish(spaceId)).post;
@@ -293,7 +293,7 @@ test('deleting a canonical shared record removes all diary views and media acces
   assert.equal((await f.diary(bobPersonal, 'bob')).posts.length, 1);
   ok(await f.call('deleteMealPost', { spaceId, postId: post.id }));
   assert.deepEqual((await f.diary(spaceId)).posts, []);
-  assert.deepEqual((await f.diary(bobPersonal, 'bob')).posts, []);
-  assert.equal((await f.call('mediaContent', { fileId: post.images[0] }, 'bob')).code, 'FORBIDDEN');
-  assert.equal((await f.call('mediaContent', { fileId: post.images[0] })).code, 'FORBIDDEN');
+  assert.equal((await f.diary(bobPersonal, 'bob')).posts[0].id, post.id);
+  assert.equal((await f.call('mediaContent', { fileId: post.images[0] }, 'bob')).ok, true);
+  assert.equal((await f.call('mediaContent', { fileId: post.images[0] })).ok, true);
 });
