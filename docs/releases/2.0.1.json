@@ -1,0 +1,43 @@
+{
+  "version": "2.0.1",
+  "versionCode": 20001,
+  "tag": "v2.0.1",
+  "sourceCommit": "37813d2deed382b5818c69a8a8cb62b7b2852a06",
+  "stage": "development_uploaded",
+  "uploaded": true,
+  "uploadedAt": "2026-11-09T07:59:06.587000+00:00",
+  "uploadBytes": 2015178,
+  "taskId": "confirmation_upload_c7a5b90a-95ce-4be8-8bc9-57595ee8941d",
+  "finalStatus": "success",
+  "finalDetail": "execution_success",
+  "reviewSubmitted": false,
+  "productionPublished": false,
+  "backendDeployed": false,
+  "platformBeforeUpload": {
+    "source": "User confirmation on 2026-11-09",
+    "production": "1.0.4",
+    "experience": "2.0.0",
+    "reviewPending": false
+  },
+  "evidence": "Official wechatide final asynchronous task status success and nested result success. Public platform experience selection not independently verified.",
+  "artifact": {
+    "commit": "37813d2deed382b5818c69a8a8cb62b7b2852a06",
+    "version": "2.0.1",
+    "sha256": "575faf237697f7e75e74017fb5ab146e66fdb6d7fe11b7f6f3bd71d33e6bf3b0",
+    "files": 534
+  },
+  "validation": {
+    "testsPassed": 2634,
+    "testsFailed": 0,
+    "weixinBuild": true,
+    "cloudTargetVerified": true,
+    "frontendFilesCompared": 534,
+    "realCloudPreview": "Existing account with phoneBound false successfully entered existing space; accountAccess/bootstrap succeeded; no console errors.",
+    "limitations": [
+      "New-user setup and invitation/share destinations covered by automated checks; not fully exercised with new real accounts."
+    ]
+  },
+  "backup": "artifacts/wechat-direct-20261109/release-before",
+  "scope": "Remove frontend phone gate and opt-in phone-binding protocol flag. Preserve WeChat identity, existing data, onboarding and invitation confirmation. No cloud deployment.",
+  "excludedWork": "Unfinished SMS code, dependencies, database configuration, unrelated design/documents and generated artifacts in original workspace excluded using isolated worktree."
+}
