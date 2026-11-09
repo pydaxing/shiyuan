@@ -193,7 +193,7 @@ test('add-dish whitespace is tightened without reducing the forty-four-pixel tap
   assert.equal(selectors.get('.order-add-button').get('min-width'), '44px');
 });
 
-for (const [initialStatus, label] of [['pending', '已安排'], ['accepted', '已安排'], ['completed', '已开饭'], ['cancelled', '已取消']]) {
+for (const [initialStatus, label] of [['pending', '已安排'], ['accepted', '已安排'], ['completed', '已记录'], ['cancelled', '已取消']]) {
   test(`${initialStatus} meal renders a non-interactive status badge without an unused quantity toolbar`, () => {
     const kitchen = context({ initialStatus });
     const renderedCard = kitchen.draw().find(node => node.key === `lunch:${initialStatus}`);
@@ -226,7 +226,7 @@ test('opening a meal immediately moves its finished card below the remaining pre
   assert.equal(after[1].key, 'lunch:completed');
   assert.equal(after[2].key, before[2].key);
   assert.match(after[1].props.class, /\bis-finished\b/);
-  assert.ok(nodes(after[1]).some(node => node.children === '已开饭'));
+  assert.ok(nodes(after[1]).some(node => node.children === '已记录'));
 });
 
 for (const initialStatus of ['pending', 'accepted']) {

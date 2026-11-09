@@ -57,7 +57,7 @@ function kitchenContext(familyOrders, currentDay = today) {
   return {
     isPendingRecord: () => false, orders, kitchenIntro: kitchenWelcome(orders, currentDay), todayLabel: homeDateLabel(currentDay), today: currentDay, DEFAULT_FAMILY_COVER,
     state: { orders: familyOrders, family: { cover: 'cloud://family-cover', members: [] } }, features: { fridge: false, shopping: false },
-    statusNames: { pending: '已安排', accepted: '已安排', completed: '已开饭', cancelled: '已取消' }, kitchenOrderAnchor, mealDateLabel,
+    statusNames: { pending: '已安排', accepted: '已安排', completed: '已记录', cancelled: '已取消' }, kitchenOrderAnchor, mealDateLabel,
     preparationByOrder: Object.fromEntries(preparationMeals({ orders: familyOrders }, currentDay).map(order => [order.id, order])),
     orderRows: order => order.items, orderAction() {}, openAdditions() {}, openPreparation() {}, openIngredients() {}, orderRecipe: null, tab: 'activity', mealSection: 'orders', showMenu() { this.tab = 'menu'; },
   };
@@ -113,7 +113,7 @@ test('calendar descriptions wrap whole date segments without splitting lunar wor
 test('an empty kitchen differs from a kitchen containing only cancelled or completed records', () => {
   assert.deepEqual(kitchenWelcome([], today), { mode: 'empty', title: '还没有安排', recordTitle: '' });
   assert.deepEqual(kitchenWelcome([meal('cancelled')], today), { mode: 'idle', title: '可以继续安排下一餐', recordTitle: '' });
-  assert.equal(kitchenWelcome([meal('completed')], today).recordTitle, '已开饭');
+  assert.equal(kitchenWelcome([meal('completed')], today).recordTitle, '已记录');
   assert.equal(kitchenWelcome([meal('completed')], today).title, '可以继续安排下一餐');
   assert.equal(kitchenWelcome([meal('completed'), meal('cancelled')], today).recordTitle, '餐食记录');
   assert.equal(kitchenWelcome([meal('completed'), meal('cancelled')], today).title, '可以继续安排下一餐');

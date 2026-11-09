@@ -178,7 +178,7 @@ test('kitchen headings group date, meal and status in compact matching tags with
   const page = readFileSync(new URL('../src/pages/index/index.vue', import.meta.url), 'utf8');
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
   const heading = page.match(/<view class="section-line compact order-card-heading">([\s\S]*?)<MealDishList/)[1];
-  assert.match(page, /pending: '已安排', accepted: '已安排', completed: '已开饭', cancelled: '已取消'/);
+  assert.match(page, /pending: '已安排', accepted: '已安排', completed: '已记录', cancelled: '已取消'/);
   assert.doesNotMatch(page, /待备菜/);
   assert.match(heading, /class="order-tag order-date-tag">{{ mealDateLabel\(order.date, today\) }}/);
   assert.match(heading, /class="order-tag order-meal-tag">{{ order.meal }}/);
