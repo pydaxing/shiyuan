@@ -205,6 +205,9 @@ export function rememberMedia(media = {}) {
 export function resolveImage(value, variant = 'card', options) {
   if (typeof value !== 'string' || !value.startsWith('cloud://')) return value;
   if (!cloudMode) return mediaUrls.value[value] || '';
+  // If the original was explicitly previewed, reuse its authorized local file
+  // for detail covers instead of fetching another size.
+  if (variant === 'detail' && protectedImages.peek(value)) return protectedImages.resolve(value, options);
   const version = imageVersion(value, variant);
   const resolved = protectedImages.resolve(version, options);
   return resolved || (variant === 'cover' ? protectedImages.peek(imageVersion(value, 'detail')) || protectedImages.peek(imageVersion(value, 'card')) : variant === 'detail' ? protectedImages.peek(imageVersion(value, 'card')) : '');
@@ -212,9 +215,11 @@ export function resolveImage(value, variant = 'card', options) {
 export function peekImage(value, variant = 'card') {
   if (typeof value !== 'string' || !value.startsWith('cloud://')) return value;
   if (!cloudMode) return mediaUrls.value[value] || '';
+  if (variant === 'detail' && protectedImages.peek(value)) return protectedImages.peek(value);
   return protectedImages.peek(imageVersion(value, variant)) || (variant === 'cover' ? protectedImages.peek(imageVersion(value, 'detail')) || protectedImages.peek(imageVersion(value, 'card')) : variant === 'detail' ? protectedImages.peek(imageVersion(value, 'card')) : '');
 }
 export function loadImage(value, variant = 'card', options) {
+  if (cloudMode && typeof value === 'string' && value.startsWith('cloud://') && variant === 'detail' && protectedImages.peek(value)) return protectedImages.load(value, options);
   return cloudMode && typeof value === 'string' && value.startsWith('cloud://') ? protectedImages.load(imageVersion(value, variant), options) : Promise.resolve(resolveImage(value, variant));
 }
 

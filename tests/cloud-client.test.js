@@ -496,6 +496,7 @@ test('display rendering batches thumbnails, caches by size and only downloads an
   assert.equal(app.calls[0].action, 'mediaBatch');
   assert.equal(app.calls[0].images.length, 6);
   ids.forEach((id, index) => assert.equal(app.resolveImage(id), paths[index]));
+  assert.equal(app.peekImage(ids[0], 'detail'), paths[0], 'detail immediately displays the cached thumbnail');
   await app.loadImage(ids[0], 'detail');
   assert.equal(app.calls[1].images[0].variant, 'detail');
   await app.loadImage(ids[0]);
@@ -507,6 +508,11 @@ test('display rendering batches thumbnails, caches by size and only downloads an
   await app.loadImage(ids[0], 'original');
   assert.equal(app.calls.length, 3);
   assert.equal(app.resolveImage(ids[0], 'card'), paths[0], 'opening an original must not replace card thumbnails');
+  const original = app.peekImage(ids[0], 'original');
+  assert.equal(app.peekImage(ids[0], 'detail'), original, 'detail uses the already loaded full-resolution file synchronously');
+  assert.equal(app.resolveImage(ids[0], 'detail'), original);
+  assert.equal(await app.loadImage(ids[0], 'detail'), original);
+  assert.equal(app.calls.length, 3, 'opening detail must not issue another image request');
   disk.delete(paths[0]);
   const recovered = await app.loadImage(ids[0], 'card');
   assert.notEqual(recovered, paths[0]);
