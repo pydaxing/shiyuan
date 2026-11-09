@@ -9,7 +9,7 @@ import StretchCover from './StretchCover.vue';
 import AppIcon from './AppIcon.vue';
 import PageHeader from './PageHeader.vue';
 import Sheet from './Sheet.vue';
-import { familyModePreview, personalModePreview, manageFamily } from '../services/cloud.js';
+import { familyModePreview, personalModePreview, manageFamily, companionDays } from '../services/cloud.js';
 import { familyAppearance } from '../domain/family.js';
 import { localDate } from '../domain/kitchen.js';
 import { useNavigationAppearance } from '../composables/useNavigationAppearance.js';
@@ -45,6 +45,7 @@ const displayedPersonal = computed(() => personal.value ? state.value.family
 const familyDisplay = computed(() => familyAppearance((displayedFamilyMode.value ? displayedFamily.value : displayedPersonal.value) || {}));
 const displayedSpaceId = computed(() => (displayedFamilyMode.value ? displayedFamily.value : displayedPersonal.value)?.id || '');
 const { count: receivedLikes, mealCount: cookedMeals, error: likesError, refresh: refreshLikes } = useReceivedMealLikes(displayedSpaceId);
+const displayedCompanionDays = computed(() => displayedSpaceId.value === cloudStatus.value.familyId ? companionDays.value : null);
 const receivedLikesLabel = computed(() => receivedLikes.value === null ? '—' : receivedLikes.value >= 10000 ? `${Math.floor(receivedLikes.value / 1000) / 10}万` : String(receivedLikes.value));
 const cookedMealsLabel = computed(() => cookedMeals.value === null ? '—' : cookedMeals.value >= 10000 ? `${Math.floor(cookedMeals.value / 1000) / 10}万` : String(cookedMeals.value));
 async function refreshAccount() { await Promise.all([props.refreshAction?.(), refreshLikes()]); }
@@ -109,6 +110,7 @@ function familyChanged() {
         <view class="account-profile-chevron"><AppIcon name="chevron" :size="18" /></view>
         </view>
         <view class="account-summary-row" :aria-busy="modeBusy">
+          <view class="account-stat" :aria-label="displayedCompanionDays === null ? '相伴天数加载中' : `已相伴${displayedCompanionDays}天`"><text class="account-stat-number">{{ displayedCompanionDays === null ? '—' : displayedCompanionDays }}</text><text class="account-stat-label">天相伴</text></view>
           <view class="account-stat" :aria-label="cookedMeals === null ? '开火次数加载中' : `已记录${cookedMeals}餐`"><text class="account-stat-number">{{ cookedMealsLabel }}</text><text class="account-stat-label">开火</text></view>
           <view class="account-stat" :aria-label="receivedLikes === null ? (likesError || '获赞数加载中') : `${displayedFamilyMode ? '家庭' : '个人'}获赞${receivedLikes}次`"><text class="account-stat-number">{{ receivedLikesLabel }}</text><text class="account-stat-label">获赞</text></view>
         </view>
@@ -150,7 +152,7 @@ function familyChanged() {
 .family-view { min-height: calc(100vh - var(--account-bottom-inset, 0px)); margin: 0 calc(-1 * var(--page-gutter)); background: var(--paper); }
 .account-profile { display: flex; flex-direction: column; justify-content: flex-end; gap: 16px; width: 100%; box-sizing: border-box; height: var(--home-cover-content-height); padding: 24px 24px 40px; background: var(--white); color: var(--ink); text-align: left; }
 .account-person-row { display: flex; align-items: center; gap: 18px; width: 100%; min-width: 0; }
-.account-summary-row { display: flex; align-items: center; justify-content: flex-start; gap: 30px; width: 100%; min-width: 0; }
+.account-summary-row { display: flex; align-items: center; justify-content: flex-start; gap: clamp(16px, 6vw, 30px); width: 100%; min-width: 0; }
 .account-profile.is-pending { opacity: 1; }
 .has-family-cover .account-profile { position: relative; background: transparent; color: var(--white); border-radius: 0; }
 .has-family-cover .account-avatar { box-shadow: 0 0 0 1px var(--profile-cover-border); }
@@ -180,4 +182,8 @@ function familyChanged() {
 .account-mode-row { padding-top: 5px; padding-bottom: 5px; }
 .account-mode-row .feature-switch { flex-shrink: 0; }
 .account-error { display: block; margin: 0 20px 16px; }
+</style>
+
+<style scoped>
+@media (max-width: 360px) { .account-summary-row { gap: 18px; } .account-stat { gap: 4px; } }
 </style>

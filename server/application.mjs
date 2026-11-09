@@ -1,3 +1,4 @@
+import { createAccountVisits } from './account-visits.mjs';
 import { createAccountAccess, accountAccessSummary } from './account-access.mjs';
 import { createIdentityPresentation, canReadCurrentIdentityImage } from './identity-presentation.mjs';
 import { createHash, randomBytes } from 'node:crypto';
@@ -68,6 +69,7 @@ async function all(repository, collection, where, options = {}) {
 }
 
 export function createApplication({ repository, signFiles, storeImage, storeImageBytes, readImage, readImportImage, cleanupMedia, exchangePhone, appId, onError = () => {}, now = Date.now }) {
+  const recordAccountVisit = createAccountVisits({ repository, now });
   const accountAccess = createAccountAccess({ repository, exchangePhone, appId, now });
   const mediaOperations = createFamilyMediaOperations({ repository, now });
   const authorizedImport = createAuthorizedImport({ repository, storeImageBytes, readImportImage, mediaOperations, now });
@@ -452,6 +454,7 @@ export function createApplication({ repository, signFiles, storeImage, storeImag
     validateEnvelope(event);
     const userId = hash(openid);
     const action = event.action;
+    if (action === 'recordAccountVisit') return recordAccountVisit(userId, event.spaceId);
     if (action === 'accountAccess') return accountAccess.status(userId);
     if (action === 'bindAccountPhone') { await throttle(userId, 'phone-login', 10); return accountAccess.bind(userId, event); }
     // Existing released clients retain their protocol. Updated clients must bind

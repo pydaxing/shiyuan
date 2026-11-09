@@ -1,3 +1,4 @@
+import { createAccountVisitTracker } from './account-visits.js';
 import { cloudTransportError } from './cloud-errors.js';
 import { sameSnapshotField } from './snapshot-equality.js';
 import { computed, ref, watch } from 'vue';
@@ -635,3 +636,11 @@ export async function uploadCloudImage(path, previews = {}, purpose = '') {
   if (signed.media[confirmed.fileId]?.protected) await protectedImages.load(imageVersion(confirmed.fileId, 'card'));
   return confirmed.fileId;
 }
+
+// Personal union and per-user family attendance. Never put it in family snapshots.
+export const companionDays = ref(null);
+const accountVisitCache = createPersistentCache(`shiyuan-account-visits-v1-${cloudEnvironment}-${cloudFunction}`, { maxEntries: 12, maxChars: 6000, writeDelay: 150 });
+const accountVisits = createAccountVisitTracker({ invoke: spaceId => invokeCloud('recordAccountVisit', { spaceId }), cache: accountVisitCache, publish: days => { companionDays.value = days; } });
+export function setAccountVisitVisible(visible) { return cloudMode ? accountVisits.setVisible(visible) : Promise.resolve(); }
+export function refreshAccountVisit() { return cloudMode ? accountVisits.tick() : Promise.resolve(); }
+watch([() => cloudStatus.value.userId, () => cloudStatus.value.familyId, () => cloudStatus.value.phase], ([id, space, phase]) => { if (cloudMode) void accountVisits.identity(id, space, phase === 'ready'); }, { immediate: true });

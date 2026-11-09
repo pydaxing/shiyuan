@@ -291,7 +291,7 @@ function avatarComponent(name) {
     '../domain/family.js': { FAMILY_APPEARANCE_DEFAULTS, familyAppearance, familyAppearanceFieldErrors, familyPublicId },
     '../domain/kitchen.js': { localDate: () => '2026-10-27' },
     '../store.js': avatarStore,
-    '../services/cloud.js': { cloudMode: false, cloudStatus: avatarStore.cloudStatus, familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null) },
+    '../services/cloud.js': { cloudMode: false, cloudStatus: avatarStore.cloudStatus, familyModePreview: Vue.ref(null), personalModePreview: Vue.ref(null), companionDays: Vue.ref(null) },
   };
   runInNewContext(readFileSync(resolve(directory, `components/${name}.js`), 'utf8'), {
     require: specifier => { assert.ok(modules[specifier], `${name}: expected native dependency ${specifier}`); return modules[specifier]; },

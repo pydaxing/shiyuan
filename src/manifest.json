@@ -2,8 +2,8 @@
   "name": "食愿",
   "appid": "",
   "description": "一家人一起安排吃什么，按需备菜并整理采购。",
-  "versionName": "2.0.1",
-  "versionCode": "20001",
+  "versionName": "2.0.2",
+  "versionCode": "20002",
   "uniStatistics": { "enable": false },
   "h5": { "title": "食愿 · 家庭小厨房", "router": { "mode": "hash" } },
   "mp-weixin": {
