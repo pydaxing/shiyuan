@@ -1,4 +1,15 @@
 export const ACCOUNT_PRIVACY_VERSION = '2026-11-09';
+export function phoneAuthorizationError(detail) {
+  const message = typeof detail?.errMsg === 'string' ? detail.errMsg : '';
+  const errno = Number(detail?.errno);
+  if (errno === 1400001) return '手机号服务暂不可用，请稍后重试（1400001）';
+  if (/privacy/i.test(message)) return '微信隐私授权未完成，请重新点击微信登录';
+  if (/no permission|permission denied/i.test(message)) return '小程序暂无手机号接口权限，请联系开发者处理';
+  if (/user deny|user cancel|user denied|cancelled/i.test(message)) return '已取消手机号授权，请点击微信登录重试';
+  if (detail?.encryptedData && detail?.iv) return '微信返回了旧版授权结果，请更新微信后重试';
+  const suffix = Number.isSafeInteger(errno) && errno !== 0 ? `（${errno}）` : '';
+  return `微信未返回手机号登录凭证，请稍后重试${suffix}`;
+}
 export function createAccountEntry({ request, changed = () => {} }) {
   let state = { phase: 'checking', busy: false, error: '' };
   let checking;
@@ -22,10 +33,13 @@ export function createAccountEntry({ request, changed = () => {} }) {
     await check();
     return ready;
   }
+  function beginAuthorization() {
+    if (state.phase === 'phone' && !state.busy) update({ error: '' });
+  }
   async function bind(detail, consent) {
     if (state.busy || state.phase !== 'phone') return;
     if (!consent) { update({ error: '请先阅读并同意隐私协议' }); return; }
-    if (!detail?.code) { update({ error: '需要授权手机号才能登录，请点击按钮重试' }); return; }
+    if (typeof detail?.code !== 'string' || !detail.code.trim()) { update({ error: phoneAuthorizationError(detail) }); return; }
     update({ busy: true, error: '' });
     try {
       const result = valid(await request('bindAccountPhone', { code: detail.code, privacyVersion: ACCOUNT_PRIVACY_VERSION }));
@@ -38,5 +52,5 @@ export function createAccountEntry({ request, changed = () => {} }) {
       update({ error: error.message || '登录失败，请重试' });
     } finally { update({ busy: false }); }
   }
-  return { check, ensureReady, bind, getState: () => state };
+  return { check, ensureReady, bind, beginAuthorization, getState: () => state };
 }

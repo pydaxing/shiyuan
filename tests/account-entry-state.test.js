@@ -1,8 +1,33 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createAccountEntry } from '../src/services/account-entry-state.js';
+import { createAccountEntry, phoneAuthorizationError } from '../src/services/account-entry-state.js';
 const status = phoneBound => ({ accountLoginVersion: 1, phoneBound });
 const tick = () => new Promise(resolve => setImmediate(resolve));
+test('native authorization failures distinguish cancellation from service errors without exposing payloads', () => {
+  assert.match(phoneAuthorizationError({ errMsg: 'getPhoneNumber:fail user deny' }), /已取消/);
+  assert.match(phoneAuthorizationError({ errno: 1400001 }), /服务暂不可用/);
+  assert.match(phoneAuthorizationError({ errMsg: 'getPhoneNumber:fail no permission' }), /小程序暂无手机号接口权限/);
+  assert.match(phoneAuthorizationError({ errMsg: 'getPhoneNumber:fail privacy permission denied' }), /隐私授权/);
+  assert.match(phoneAuthorizationError({ encryptedData: 'secret', iv: 'secret' }), /旧版/);
+  assert.match(phoneAuthorizationError({ errMsg: 'getPhoneNumber:ok' }), /未返回/);
+  assert.equal(phoneAuthorizationError({ errno: 123, errMsg: 'secret', code: 'secret' }).includes('secret'), false);
+});
+test('another native login attempt clears stale error without bypassing phone authorization', async () => {
+  const f = fixture(); await f.entry.check();
+  await f.entry.bind({ errMsg: 'getPhoneNumber:fail no permission' }, true);
+  f.entry.beginAuthorization();
+  assert.equal(f.entry.getState().error, '');
+  assert.equal(f.entry.getState().phase, 'phone');
+  assert.equal(f.calls.length, 1);
+  await f.entry.bind({ code: 'valid-new-code' }, true);
+  assert.equal(f.entry.getState().phase, 'ready');
+});
+test('invalid native credentials never reach phone binding', async () => {
+  const f = fixture(); await f.entry.check();
+  for (const code of [undefined, '', '  ', 123, {}]) await f.entry.bind({ code }, true);
+  assert.equal(f.calls.length, 1);
+  assert.equal(f.entry.getState().phase, 'phone');
+});
 function fixture({ bound = false, request: custom } = {}) {
   const calls = []; let isBound = bound;
   const entry = createAccountEntry({ request: async (action, data) => {
