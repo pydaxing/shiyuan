@@ -8,7 +8,7 @@ function openAgreement() { uni.navigateTo({ url: '/pages/privacy/index' }); }
 <template>
   <view class="privacy-consent" :class="{ 'is-invalid': invalid }">
     <button class="privacy-toggle" role="checkbox" :aria-checked="modelValue" :aria-invalid="invalid" :disabled="disabled" aria-label="我已阅读并同意隐私协议" hover-class="none" @click="$emit('update:modelValue', !modelValue)">
-      <view class="privacy-check" :class="{ checked: modelValue }"><AppIcon v-if="modelValue" name="check" :size="13" /></view>
+      <view class="privacy-check" :class="{ checked: modelValue }"><AppIcon v-if="modelValue" name="check" :size="11" /></view>
       <text>我已阅读并同意</text>
     </button>
     <button class="privacy-link" hover-class="none" @click="openAgreement">《隐私协议》</button>
@@ -21,8 +21,8 @@ function openAgreement() { uni.navigateTo({ url: '/pages/privacy/index' }); }
 .privacy-toggle { gap: 8px; }
 .privacy-toggle, .privacy-link { border: 0; box-shadow: none; border-radius: 0; }
 .privacy-toggle::after, .privacy-link::after { border: 0; }
-.privacy-check { display: flex; align-items: center; justify-content: center; width: 17px; height: 17px; border: 1px solid var(--border-strong); border-radius: 50%; box-sizing: border-box; }
-.privacy-check.checked { background: var(--green-light); border-color: var(--green); }
+.privacy-check { display: flex; align-items: center; justify-content: center; width: 15px; height: 15px; flex-shrink: 0; border: 1px solid var(--border-strong); border-radius: 50%; box-sizing: border-box; }
+.privacy-check.checked { background: #405b46; border-color: #405b46; color: #fff; }
 .privacy-link { color: var(--green); }
 .is-invalid .privacy-check { border-color: var(--danger); }
 </style>
