@@ -240,7 +240,7 @@ test('leaving during refresh drops the native pull offset and late completion ca
   f.props.active = false;
   assert.equal(f.view.refreshing.value, false);
   assert.equal(f.view.pullReady.value, false);
-  assert.equal(f.view.feedViewportKey.value, 1);
+  assert.match(read('../src/components/MealSquare.vue'), /<scroll-view v-if="active"/, 'inactive native scroll view is destroyed rather than changing a plain key attribute');
   assert.equal(f.feed.posts.value[0].id, 'visible');
   f.props.active = true; await settle();
   const newRefresh = f.view.feedViewport.onRefresh(); await settle();
@@ -249,5 +249,18 @@ test('leaving during refresh drops the native pull offset and late completion ca
   f.calls.at(-1).resolve({ posts: [{ id: 'fresh', visibility: 'public' }], cursor: null }); await newRefresh;
   assert.equal(f.view.refreshing.value, false);
   f.props.active = false;
-  assert.equal(f.view.feedViewportKey.value, 1, 'normal navigation keeps the scroll view and position');
+  assert.equal(f.view.refreshing.value, false);
+});
+
+ test('leaving during a partial pull clears it and preserves the reading position', async context => {
+  const f = fixture(context);
+  f.calls[0].resolve({ posts: [{ id: 'visible', visibility: 'public' }], cursor: null }); await settle();
+  f.view.feedViewport.onScroll({ detail: { scrollTop: 240 } });
+  f.view.feedViewport.onPull({ detail: { dy: 35 } });
+  f.props.active = false; await settle();
+  assert.equal(f.view.refreshing.value, false);
+  assert.equal(f.view.pullReady.value, false);
+  f.props.active = true; await settle();
+  assert.equal(f.view.feedScrollTop.value, 240);
+  assert.equal(f.feed.posts.value[0].id, 'visible');
 });
