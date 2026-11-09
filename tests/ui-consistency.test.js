@@ -216,8 +216,9 @@ test('detail ordering is one title-row pill while other share/import footers ret
   assert.match(component, /'is-complete': selected/);
   for (const path of ['src/pages/shared/index.vue']) {
     const entry = source(path);
-    assert.match(entry, /class="recipe-detail-button" :class="\{ 'is-complete':/);
-    assert.match(entry, /'check' : 'plus'" :size="19" :active=/);
+    assert.match(entry, /class="food-detail-body"/);
+    assert.match(entry, /class="food-detail-title"/);
+    assert.doesNotMatch(entry, /class="entry-eyebrow"/);
   }
   const forward = source('src/components/FriendForwardButton.vue');
   assert.match(forward, /button-class="recipe-detail-button friend-forward-button"/);

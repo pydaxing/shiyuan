@@ -180,8 +180,8 @@ test('sharing lives in the detail toolbar and ordering lives beside the title', 
   const read = path => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
   for (const path of ['src/pages/shared/index.vue']) {
     const source = read(path);
-    assert.equal((source.match(/class="friend-action-cell"/g) || []).length, 2);
-    assert.match(source, /<FriendForwardButton :card=/);
+    assert.equal((source.match(/class="friend-action-cell"/g) || []).length, 0);
+    assert.match(source, /@click="home"[^>]*>进入食愿小灶/);
   }
   for (const path of ['src/components/RecipeSheet.vue', 'src/components/SetSheet.vue']) {
     assert.match(read(path), /MenuDetailActions :selected="selected" :busy="props.busy"/);

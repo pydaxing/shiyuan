@@ -102,17 +102,30 @@ function home() { uni.reLaunch({ url: '/pages/index/index' }); }
     </view>
     <text class="entry-message">正在打开做法...</text>
   </view>
-  <view v-else class="app-shell" @click="dismissFocusedKeyboard" @touchmove="cancelRecipeScroll"><view class="entry-page shared-page">
-    <view v-if="error"><text class="error-message">{{ error }}</text><button class="secondary-button full" @click="read">重新加载</button></view>
-    <view v-if="post"><text class="entry-eyebrow">{{ post.kind === 'menu' ? '分享的套餐' : '分享的菜品' }}</text><text class="entry-title">{{ post.title }}</text>
-      <RecipeContent v-if="post.kind === 'dish'" :recipe="post.recipes[0]" />
-      <view v-else><RecipeCover :image="post.image" kind="set" :title="post.title" category="套餐" :dish-count="post.recipes.length" /><view v-for="(recipe, index) in post.recipes" :id="recipeAnchor(index)" :key="recipe.id" class="shared-recipe-card"><button class="recipe-expand" :aria-label="`${expanded === recipe.id ? '收起' : '查看'}${recipe.title}食材与做法`" :aria-expanded="expanded === recipe.id" @click="$feedback(); toggleRecipe(recipe.id, index)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><FoodThumbnail :src="recipe.image" /><view class="recipe-list-copy"><text class="stock-name" :class="{ 'food-list-title': expanded !== recipe.id }">{{ recipe.title }}</text><RecipeListMeta :category="recipe.category" :minutes="recipe.minutes" /></view><AppIcon :name="expanded === recipe.id ? 'minus' : 'plus'" class="expand-mark" /></button><RecipeContent v-if="expanded === recipe.id" :recipe="recipe" :cover="false" :show-meta="false" /></view></view>
-      <view v-if="onboarding && cloudStatus.phase !== 'ready'" class="entry-card"><CloudConnection /></view><view class="shared-cta"><text class="subheading">把喜欢的味道，留给自家餐桌</text><view class="friend-detail-actions"><view class="friend-action-cell"><FriendForwardButton :card="card" /></view><view class="friend-action-cell"><button class="recipe-detail-button" :class="{ 'is-complete': added }" :disabled="busy || added" :aria-busy="busy" @click="$feedback(); importDish()" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><AppIcon :name="added ? 'check' : 'plus'" :size="19" :active="!added" /><text>{{ added ? '已加入' : busy ? '正在加入…' : cloudStatus.phase === 'ready' ? '加入我家菜单' : '进入我的小灶' }}</text></button></view></view></view>
-    </view><button class="text-button entry-home" @click="home">打开食愿小灶</button>
-  </view></view>
+  <view v-else class="app-shell shared-fullscreen" @click="dismissFocusedKeyboard" @touchmove="cancelRecipeScroll">
+    <view v-if="error" class="shared-error"><text class="error-message">{{ error }}</text><button class="secondary-button full" @click="read">重新加载</button></view>
+    <view v-if="post">
+      <RecipeCover :image="post.image || post.recipes?.[0]?.image" :kind="post.kind === 'menu' ? 'set' : 'dish'" :title="post.title" :category="post.kind === 'menu' ? '套餐' : post.recipes?.[0]?.category" :minutes="post.kind === 'dish' ? post.recipes?.[0]?.minutes : null" :dish-count="post.kind === 'menu' ? post.recipes.length : null" immersive />
+      <view class="food-detail-body">
+        <view class="food-detail-heading"><text class="food-detail-title" role="heading" aria-level="1">{{ post.title }}</text></view>
+        <RecipeContent v-if="post.kind === 'dish'" :recipe="post.recipes[0]" :cover="false" :show-meta="false" />
+        <view v-else>
+          <view v-for="(recipe, index) in post.recipes" :id="recipeAnchor(index)" :key="recipe.id" class="shared-recipe-card">
+            <button class="recipe-expand" :aria-label="`${expanded === recipe.id ? '收起' : '查看'}${recipe.title}食材与做法`" :aria-expanded="expanded === recipe.id" @click="toggleRecipe(recipe.id, index)" hover-class="none"><FoodThumbnail :src="recipe.image" /><view class="recipe-list-copy"><text class="stock-name" :class="{ 'food-list-title': expanded !== recipe.id }">{{ recipe.title }}</text><RecipeListMeta :category="recipe.category" :minutes="recipe.minutes" /></view><AppIcon :name="expanded === recipe.id ? 'minus' : 'plus'" class="expand-mark" /></button>
+            <RecipeContent v-if="expanded === recipe.id" :recipe="recipe" :cover="false" :show-meta="false" />
+          </view>
+        </view>
+      </view>
+    </view>
+    <view class="shared-entry-action"><button class="primary-button full" @click="home" hover-class="none">进入食愿小灶</button></view>
+  </view>
 </template>
 
 <style scoped>
+.shared-fullscreen { min-height: 100vh; background: var(--white); }
+.shared-error { padding: 0 var(--page-gutter); }
+.shared-entry-action { padding: 24px var(--page-gutter) calc(28px + env(safe-area-inset-bottom)); }
+
  .shared-loading-cover { position: fixed; inset: 0; z-index: 20; overflow: hidden; background: #d1d2b9; }
 .entry-backdrop { position: absolute; inset: 0; width: 100%; height: 100%; }
 .entry-shade { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 76%, rgba(247,243,230,.78) 100%); }

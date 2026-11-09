@@ -84,7 +84,7 @@ test('detail headers and recipe data remain full length with no shared truncatio
   assert.equal(declarations('.food-detail-title').get('overflow-wrap'), 'anywhere');
   const shared = parse(readFileSync(new URL('../src/pages/shared/index.vue', import.meta.url), 'utf8')).descriptor;
   const sharedTitle = titleNode(shared, 'post.title');
-  assert.ok(hasClass(sharedTitle, 'entry-title'));
+  assert.ok(hasClass(sharedTitle, 'food-detail-title'));
   assert.equal(hasClass(sharedTitle, 'food-list-title'), false);
 });
 
