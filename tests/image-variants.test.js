@@ -8,7 +8,7 @@ import { createMediaBatch } from '../src/services/media-batch.js';
 import { COVER_RATIOS } from '../src/domain/image-crop.js';
 
 test('image variants have separate immutable cache versions and originals retain the legacy key', () => {
-  for (const variant of ['original', 'card', 'detail', 'avatar', 'cover']) {
+  for (const variant of ['original', 'card', 'detail', 'avatar', 'cover', 'feed']) {
     const key = imageVersion('cloud://env/photo.bin', variant);
     assert.deepEqual(imageRequest(key), { fileId: 'cloud://env/photo.bin', variant });
   }
@@ -17,7 +17,7 @@ test('image variants have separate immutable cache versions and originals retain
 
 test('display images respect dimensions, strip EXIF and never enlarge small recipe step images', async () => {
   const source = await sharp({ create: { width: 2400, height: 1600, channels: 3, background: '#587040' } }).jpeg().withMetadata().toBuffer();
-  for (const [variant, edge] of [['card', 480], ['detail', 960], ['cover', 1440]]) {
+  for (const [variant, edge] of [['feed', 480], ['card', 480], ['detail', 960], ['cover', 1440]]) {
     const image = await createDisplayImage(source, variant);
     const meta = await sharp(image.bytes).metadata();
     assert.equal(meta.width, edge);
@@ -119,4 +119,13 @@ test('avatars are bounded to 192 pixels and 20 KB even for high-detail large upl
   assert.ok(avatar.width <= 192 && avatar.height <= 192);
   assert.ok(avatar.size <= 20000);
   assert.ok(avatar.size < source.length / 20);
+});
+
+
+test('feed thumbnails preserve portrait originals rather than applying recipe cover crops', async () => {
+  const source = await sharp({ create: { width: 900, height: 1800, channels: 3, background: '#587040' } }).jpeg().toBuffer();
+  const image = await createDisplayImage(source, 'feed');
+  assert.equal(image.width, 240);
+  assert.equal(image.height, 480);
+  assert.ok(image.size <= 80000);
 });

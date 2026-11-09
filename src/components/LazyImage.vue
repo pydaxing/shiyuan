@@ -27,9 +27,9 @@ function imageDemand() {
   return () => !disposed && visible.value && token === sequence;
 }
 const image = computed(() => visible.value ? resolveImage(props.src, props.variant, { isNeeded: imageDemand() }) : peekImage(props.src, props.variant) || lastImage.value);
-// Keep the decoded cover mounted while its higher-resolution replacement loads.
+// Keep the decoded cover mounted while its refreshed cache file loads.
 const coverLayers = computed(() => {
-  if (props.variant !== 'detail' || props.mode !== 'aspectFill') return [];
+  if (props.avatar || !['detail', 'card'].includes(props.variant) || props.mode !== 'aspectFill') return [];
   return [...new Set([displayedImage.value, failed.value ? '' : image.value].filter(Boolean))];
 });
 const imageLoaded = computed(() => {

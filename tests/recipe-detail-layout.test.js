@@ -22,7 +22,7 @@ test('recipe details read continuously from cover to ingredients to method witho
   const methodBody = nodes.find(node => hasClass(node, 'recipe-method-body'));
   assert.ok(!methodBody.props.some(prop => prop.name === 'if'));
   assert.doesNotMatch(source, /methodOpen|recipe-method-toggle|标准用量/);
-  assert.match(methodBody.loc.source, /variant="detail"/);
+  assert.match(methodBody.loc.source, /variant="card"/);
   assert.match(content[ingredients].loc.source, /<IngredientTable :ingredients="recipe.ingredients" :reset-key="recipe.id"/);
 });
 
@@ -30,7 +30,7 @@ test('every step photo preserves the whole image, including multi-photo steps', 
   const photos = nodes.find(node => hasClass(node, 'recipe-step-photos'));
   const image = nodes.find(node => hasClass(node, 'step-image'));
   assert.equal(image.props.find(prop => prop.name === 'mode')?.value?.content, 'widthFix');
-  assert.equal(image.props.find(prop => prop.name === 'variant')?.value?.content, 'detail');
+  assert.equal(image.props.find(prop => prop.name === 'variant')?.value?.content, 'card');
   assert.match(photos.loc.source, /@click="preview\(step, image\)"/);
   assert.doesNotMatch(photos.loc.source, /aspectFill|multiple|:mode=/);
   const css = readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
@@ -80,7 +80,7 @@ test('food, home and friend-shared details reuse cover tags and the continuous i
   const byline = readFileSync(new URL('../src/components/CommunityByline.vue', import.meta.url), 'utf8');
   assert.match(byline, /communityPublisherName\(props.post\)/);
   const cover = readFileSync(new URL('../src/components/RecipeCover.vue', import.meta.url), 'utf8');
-  assert.match(cover, /variant="detail"/);
+  assert.match(cover, /variant="card"/);
   assert.match(cover, /@click="previewImages\(/);
   assert.match(cover, /class="recipe-cover-tags"/);
   for (const path of ['components/RecipeSheet.vue', 'pages/shared/index.vue']) assert.match(readFileSync(new URL(`../src/${path}`, import.meta.url), 'utf8'), /<RecipeContent/);

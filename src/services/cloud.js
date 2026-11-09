@@ -205,6 +205,7 @@ export function rememberMedia(media = {}) {
 export function resolveImage(value, variant = 'card', options) {
   if (typeof value !== 'string' || !value.startsWith('cloud://')) return value;
   if (!cloudMode) return mediaUrls.value[value] || '';
+  if (variant === 'card' && !protectedImages.peek(imageVersion(value, 'card')) && protectedImages.peek(imageVersion(value, 'feed'))) return protectedImages.resolve(imageVersion(value, 'feed'), options);
   // If the original was explicitly previewed, reuse its authorized local file
   // for detail covers instead of fetching another size.
   if (variant === 'detail' && protectedImages.peek(value)) return protectedImages.resolve(value, options);
@@ -215,10 +216,12 @@ export function resolveImage(value, variant = 'card', options) {
 export function peekImage(value, variant = 'card') {
   if (typeof value !== 'string' || !value.startsWith('cloud://')) return value;
   if (!cloudMode) return mediaUrls.value[value] || '';
+  if (variant === 'card') return protectedImages.peek(imageVersion(value, 'card')) || protectedImages.peek(imageVersion(value, 'feed'));
   if (variant === 'detail' && protectedImages.peek(value)) return protectedImages.peek(value);
   return protectedImages.peek(imageVersion(value, variant)) || (variant === 'cover' ? protectedImages.peek(imageVersion(value, 'detail')) || protectedImages.peek(imageVersion(value, 'card')) : variant === 'detail' ? protectedImages.peek(imageVersion(value, 'card')) : '');
 }
 export function loadImage(value, variant = 'card', options) {
+  if (cloudMode && typeof value === 'string' && value.startsWith('cloud://') && variant === 'card' && !protectedImages.peek(imageVersion(value, 'card')) && protectedImages.peek(imageVersion(value, 'feed'))) return protectedImages.load(imageVersion(value, 'feed'), options);
   if (cloudMode && typeof value === 'string' && value.startsWith('cloud://') && variant === 'detail' && protectedImages.peek(value)) return protectedImages.load(value, options);
   return cloudMode && typeof value === 'string' && value.startsWith('cloud://') ? protectedImages.load(imageVersion(value, variant), options) : Promise.resolve(resolveImage(value, variant));
 }

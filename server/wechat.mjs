@@ -103,7 +103,9 @@ async function ensureVariant(fileId, record, variant) {
   const key = `${fileId}:${variant}`;
   if (!pendingVariants.has(key)) {
     const promise = withMediaUpload(fileId, record, async ticket => {
-      const candidate = await saveVariant(await imageBytes(fileId, record), variant, ticket);
+      // Old HEIC uploads retain a decodable JPEG preview; never send originals to render a feed card.
+      const source = variant === 'feed' && record.contentType === 'image/heic' ? record.variants?.detail : null;
+      const candidate = await saveVariant(await imageBytes(source?.fileId || fileId, source || record), variant, ticket);
       let selected;
       try {
         selected = await adapter(database).transaction(async db => {
@@ -147,7 +149,7 @@ const delivery = createImageDelivery({
 async function readImage(fileId, record, variant = 'original', { transport, preparedOnly = false } = {}) {
   if (variant === 'cover' && !record.variants?.cover && record.variants?.detail?.formatVersion === 1) variant = 'detail';
   if (preparedOnly) {
-    if (!privateDeliveryEnabled || transport !== 'url' || !['card', 'detail', 'avatar', 'cover'].includes(variant) || record.variants?.[variant]?.formatVersion !== 1 || record.variants[variant].delivery?.version !== 1) return null;
+    if (!privateDeliveryEnabled || transport !== 'url' || !['card', 'detail', 'avatar', 'cover', 'feed'].includes(variant) || record.variants?.[variant]?.formatVersion !== 1 || record.variants[variant].delivery?.version !== 1) return null;
     return delivery.manifest(fileId, record, variant);
   }
   if (transport === 'url' && privateDeliveryEnabled) return delivery.manifest(fileId, record, variant);

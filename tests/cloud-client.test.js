@@ -521,6 +521,30 @@ test('display rendering batches thumbnails, caches by size and only downloads an
   assert.equal(app.resolveImage(ids[0], 'card'), recovered);
 });
 
+
+test('recipe thumbnails reuse the cached feed image and only an explicit preview downloads the original', async () => {
+  const app = await client(async data => {
+    if (data.action === 'mediaBatch') return { ok: true, data: { images: data.images.map(request => ({ ok: true, data: { base64: 'cGhvdG8=', contentType: 'image/jpeg', version: `${request.fileId}#display-${request.variant}-v1` } })) } };
+    if (data.action === 'mediaContent') return { ok: true, data: { base64: 'b3JpZ2luYWw=', contentType: 'image/jpeg', version: data.fileId } };
+  });
+  wx.env = { USER_DATA_PATH: '/private-device' };
+  const disk = new Map();
+  wx.getFileSystemManager = () => ({ readdirSync: () => [], stat: options => disk.has(options.path) ? options.success({ stats: { size: disk.get(options.path) } }) : options.fail({ errMsg: 'ENOENT' }), statSync: path => { if (!disk.has(path)) throw new Error('ENOENT'); return { size: disk.get(path) }; }, writeFile: options => { disk.set(options.filePath, Buffer.from(options.data, 'base64').length); options.success(); }, unlink: options => { disk.delete(options.filePath); options.success(); } });
+  const id = 'cloud://env/approved/feed-recipe.bin';
+  const thumb = await app.loadImage(id, 'feed');
+  assert.equal(app.peekImage(id, 'card'), thumb);
+  assert.equal(app.resolveImage(id, 'card'), thumb);
+  assert.equal(await app.loadImage(id, 'card'), thumb);
+  assert.equal(app.calls.length, 1);
+  assert.equal(app.calls[0].images[0].variant, 'feed');
+  const original = await app.loadImage(id, 'original');
+  assert.notEqual(original, thumb);
+  assert.equal(app.calls[1].action, 'mediaContent');
+  assert.equal(app.calls[1].variant, 'original');
+  assert.equal(await app.loadImage(id, 'card'), thumb);
+  assert.equal(app.calls.length, 2);
+});
+
 function privateSnapshot(userId = 'alice') {
   const result = snapshot(7);
   result.userId = userId;

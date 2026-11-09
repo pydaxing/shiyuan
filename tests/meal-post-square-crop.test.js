@@ -18,7 +18,7 @@ test('discovery takes a centered square from the original short edge without dou
     }
   }
   const component = readFileSync(new URL('../src/components/MealPostCard.vue', import.meta.url), 'utf8');
-  assert.match(component, /<LazyImage :src="item.image"[^>]*variant="card"/);
+  assert.match(component, /<LazyImage :src="item.image"[^>]*:variant="feed \? 'feed' : 'card'"/);
   assert.match(component, /:mode="feed && media.length === 1 \? 'widthFix' : 'aspectFill'"/);
   assert.match(component, /\.in-feed \.meal-post-image \{[^}]*height: 0; padding-bottom: 100%/);
   assert.match(component, /\.in-feed \.meal-post-images.single \.meal-post-image \{[^}]*height: auto; padding-bottom: 0/);

@@ -26,7 +26,7 @@ const displaySteps = computed(() => recipeDisplaySteps(props.recipe.steps));
       <view class="recipe-method-body">
         <view v-for="(step, index) in displaySteps" :key="index" class="recipe-step">
           <view class="recipe-step-lead"><text class="step-number" :aria-label="`第${index + 1}步`">{{ index + 1 }}</text><view class="recipe-step-copy"><text v-if="recipeStepTitle(step)" class="step-title">{{ recipeStepTitle(step) }}</text></view></view><text v-if="step.text" class="step-body">{{ step.text }}</text>
-          <view v-if="stepImages(step).length" class="recipe-step-photos"><button role="button" v-for="(image, photoIndex) in stepImages(step)" :key="photoIndex" :aria-label="`查看步骤${index + 1}图片${photoIndex + 1}`" @click="preview(step, image)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><LazyImage :src="image" variant="detail" class="step-image" mode="widthFix" /></button></view>
+          <view v-if="stepImages(step).length" class="recipe-step-photos"><button role="button" v-for="(image, photoIndex) in stepImages(step)" :key="photoIndex" :aria-label="`查看步骤${index + 1}图片${photoIndex + 1}`" @click="preview(step, image)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><LazyImage :src="image" variant="card" class="step-image" mode="widthFix" /></button></view>
         </view>
       </view>
     </view>
