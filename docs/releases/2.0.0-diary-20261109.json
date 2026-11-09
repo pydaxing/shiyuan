@@ -1,0 +1,32 @@
+{
+  "version": "2.0.0",
+  "versionCode": 20000,
+  "tag": "v2.0.0-diary-20261109",
+  "sourceCommit": "bf88ad63550889dfa0f6000ec388470ea8ee5cc0",
+  "stage": "development_uploaded",
+  "uploaded": true,
+  "uploadedAt": "2026-11-09T10:03:10.286000+00:00",
+  "uploadBytes": 2022249,
+  "taskId": "confirmation_upload_714bff69-be20-45ef-9251-350700897f43",
+  "finalStatus": "success",
+  "reviewSubmitted": false,
+  "productionPublished": false,
+  "backendDeployed": false,
+  "artifact": {
+    "sourceCommit": "bf88ad63550889dfa0f6000ec388470ea8ee5cc0",
+    "version": "2.0.0",
+    "sha256": "bcb9b4978b981accbe274c638d7f0a7a5b4593056599acb099e0ed1344fb4c6a",
+    "files": 540
+  },
+  "evidence": "Official wechatide final task status success with nested success. Experience selection not independently verified.",
+  "platformBeforeUpload": {
+    "production": "1.0.4",
+    "reviewPending": false,
+    "source": "User confirmation"
+  },
+  "validation": {
+    "testsPassed": 2649,
+    "realCloudPreview": "About page displays version 2.0.0"
+  },
+  "versionException": "User explicitly requested 2.0.0; historical tags retained unchanged"
+}
