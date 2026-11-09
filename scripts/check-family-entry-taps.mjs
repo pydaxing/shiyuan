@@ -5,6 +5,7 @@ import { baseParse } from '@vue/compiler-dom';
 import { createSeed } from '../src/data/seed.js';
 import { normalizeSnapshot } from '../src/domain/kitchen.js';
 import * as nativeShare from '../src/services/native-share.js';
+import * as moments from '../src/services/moments.js';
 import { tapFeedback } from '../src/services/feedback.js';
 import * as mutationFeedback from '../src/services/mutation-feedback.js';
 
@@ -232,7 +233,8 @@ for (const match of source.matchAll(/require\("([^"]+)"\)/g)) {
   const seed = normalizeSnapshot(createSeed());
   let keyboardDismissals = 0;
   const confirmations = [];
-  const vendor = { ...Vue, index: { getSystemInfoSync: () => ({ uniPlatform: 'mp-weixin' }), pageScrollTo() {}, showModal(options) { confirmations.push(options); options.success({ confirm: false }); } }, onMounted() {}, onUnmounted() {}, onShow() {}, onPageScroll() {}, onReachBottom() {}, onResize() {}, onShareAppMessage() {}, e: Object.assign, f: Vue.renderList, t: String, n: Vue.normalizeClass, s: item => item, sr() {}, p: item => item, o: bind };
+  let timelineShare;
+  const vendor = { ...Vue, index: { getSystemInfoSync: () => ({ uniPlatform: 'mp-weixin' }), pageScrollTo() {}, showModal(options) { confirmations.push(options); options.success({ confirm: false }); } }, onMounted() {}, onUnmounted() {}, onShow() {}, onPageScroll() {}, onReachBottom() {}, onResize() {}, onShareAppMessage() {}, onShareTimeline(callback) { timelineShare = callback; }, e: Object.assign, f: Vue.renderList, t: String, n: Vue.normalizeClass, s: item => item, sr() {}, p: item => item, o: bind };
   vendor._export_sfc = (component, entries) => Object.assign(component, Object.fromEntries(entries));
   vendor.nextTick$1 = Vue.nextTick;
   vendor.index.createSelectorQuery = () => ({
@@ -242,6 +244,7 @@ for (const match of source.matchAll(/require\("([^"]+)"\)/g)) {
   const cloud = { cloudMode: true, cloudStatus: Vue.ref({ phase: 'ready', error: '' }), mutationStatus: Vue.ref({ pending: [], failures: [] }) };
   const modules = { ...dependencies, '../../common/vendor.js': vendor, '../../common/assets.js': {}, '../../store.js': { ...cloud, state: Vue.ref(seed), storageError: Vue.ref('') }, '../../services/cloud.js': cloud, '../../services/feedback.js': { tapFeedback }, '../../services/keyboard.js': { dismissFocusedKeyboard() { keyboardDismissals += 1; } } };
   modules['../../services/native-share.js'] = nativeShare;
+  modules['../../services/moments.js'] = moments;
   modules['../../services/account-entry.js'] = { accountEntryStatus: Vue.ref({ phase: 'ready' }) };
   modules['../../services/mutation-feedback.js'] = mutationFeedback;
   modules['../../store.js'].familyFeatures = Vue.computed(() => seed.family.features);
@@ -252,6 +255,7 @@ for (const match of source.matchAll(/require\("([^"]+)"\)/g)) {
   globalThis.uni = vendor.index;
   try {
     const render = scope.run(() => page.setup({}));
+    assert.deepEqual(timelineShare(), moments.momentsCard(), '编译后页面保留朋友圈分享回调与公开卡片');
     const draw = () => { instance.$ei = 0; return render({ $feedback: tapFeedback, $image: value => value }, []); };
     const tap = { type: 'tap', target: { dataset: { eventsync: 'true' } } };
     {

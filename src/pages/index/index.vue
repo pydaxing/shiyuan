@@ -4,7 +4,9 @@ import { NATIVE_UI_COLORS } from '../../domain/ui-theme.js';
 import { mainNavigation, mainNavigationTab } from '../../domain/navigation.js';
 import FormField from '../../components/FormField.vue';
 import { computed, nextTick, ref, watch, onMounted, onUnmounted, provide } from 'vue';
-import { onShow, onPageScroll, onReachBottom, onResize, onShareAppMessage } from '@dcloudio/uni-app';
+import { onShow, onPageScroll, onReachBottom, onResize, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app';
+import MomentsPreview from '../../components/MomentsPreview.vue';
+import { isMomentsPreview, momentsCard, enableMomentsMenu } from '../../services/moments.js';
 import { shareMessage } from '../../services/native-share.js';
 import FriendShareSheet from '../../components/FriendShareSheet.vue';
 import { useFriendShare } from '../../composables/useFriendShare.js';
@@ -49,6 +51,7 @@ import { checkoutPresentation } from '../../domain/checkout.js';
 import { useKitchenFocus, kitchenOrderAnchor } from '../../composables/useKitchenFocus.js';
 import { useHomeMenuViewport } from '../../composables/useHomeMenuViewport.js';
 
+const momentsPreview = isMomentsPreview();
 const tab = ref('menu');
 const homeMenu = ref(null);
 const familyView = ref(null);
@@ -66,9 +69,9 @@ useNavigationAppearance(computed(() => activeNavigation.value === 'menu' ? 'dark
 const mealSquare = ref(null);
 const mealTimeline = ref(null);
 const mealHistoryOpen = ref(false);
-const diaryFeed = useMealPosts('mine', computed(() => tab.value === 'family' || mealHistoryOpen.value));
+const diaryFeed = useMealPosts('mine', computed(() => !momentsPreview && (tab.value === 'family' || mealHistoryOpen.value)));
 provide('mealDiaryFeed', diaryFeed);
-const publicFeed = useMealPosts('public', computed(() => cloudStatus.value.phase === 'ready'));
+const publicFeed = useMealPosts('public', computed(() => !momentsPreview && cloudStatus.value.phase === 'ready'));
 provide('mealPublicFeed', publicFeed);
 function diaryChanged(result) { if (result.deletedId && result.deleteScope !== 'personal') publicFeed.removePost(result.deletedId); else if (result.post) publicFeed.acceptPost(result.post); }
 function squareChanged(result) { if (result.post?.id) diaryFeed.syncReactions(result.post); }
@@ -93,7 +96,7 @@ function mealSaved(post) {
   void nextTick(() => { void publicFeed.load(false, true); void diaryFeed.load(false, true); });
 }
 const preparingOrderId = ref('');
-const homeViewport = useHomeMenuViewport(computed(() => menuActive.value && (!cloudMode || cloudStatus.value.phase === 'ready')), sheetOpen);
+const homeViewport = useHomeMenuViewport(computed(() => !momentsPreview && menuActive.value && (!cloudMode || cloudStatus.value.phase === 'ready')), sheetOpen);
 const { listInset: menuListInset, docked: menuDocked } = homeViewport;
 const pageLock = usePageLock(sheetOpen, (scrollTop) => uni.pageScrollTo({ scrollTop, duration: 0 }));
 onPageScroll(event => { if (activeNavigation.value === 'menu' && !sheetOpen.value) mealsAtTop.value = (event.scrollTop || 0) <= 0; pageLock.onScroll(event); if (menuActive.value) homeMenu.value?.onScroll(event); homeViewport.onScroll(event); if (tab.value === 'community') communityView.value?.onScroll(event); if (tab.value === 'family' && !sheetOpen.value) familyView.value?.onScroll(event); });
@@ -141,6 +144,8 @@ const { share: prepareMenuShare } = useFriendShare(computed(() => swipeSharing.v
   if (swipeSharing.value && friendSharing.value?.itemId === swipeSharing.value.id) share(swipeSharing.value, swipeSharing.value.kind, card);
 });
 onShareAppMessage(event => shareMessage(event));
+onShareTimeline(() => momentsCard());
+onShow(enableMomentsMenu);
 const editingFamily = ref(false);
 const familyEditorTab = ref('appearance');
 const submitting = ref(false);
@@ -301,7 +306,7 @@ function refreshDay() {
 function openCart() { mealRequired.value = false; refreshDay(); submitError.value = ''; cartOpen.value = true; tapFeedback(); }
 onShow(refreshDay);
 onShow(() => { if (tab.value === 'square') void publicFeed.refreshIfStale(); });
-onMounted(() => { clock = setInterval(refreshDay, 60000); });
+onMounted(() => { if (momentsPreview) return; clock = setInterval(refreshDay, 60000); });
 onUnmounted(() => clearInterval(clock));
 async function submit() {
   if (submitting.value) return;
@@ -401,7 +406,8 @@ function resetDraft() { mealDraft.reset(); meal.value = ''; mealRequired.value =
 
 <template>
   <page-meta :page-style="sheetOpen ? 'overflow: hidden;' : 'overflow: visible;'" />
-  <view class="app-shell" :class="{ 'weixin-shell': isWeixin, 'menu-page': tab === 'menu', 'community-page': tab === 'community', 'square-page': tab === 'square', 'family-page': tab === 'family', 'has-selection': dishCount > 0 && menuActive }" :style="pageStyle" @click="dismissFocusedKeyboard">
+  <MomentsPreview v-if="momentsPreview" />
+  <view v-else class="app-shell" :class="{ 'weixin-shell': isWeixin, 'menu-page': tab === 'menu', 'community-page': tab === 'community', 'square-page': tab === 'square', 'family-page': tab === 'family', 'has-selection': dishCount > 0 && menuActive }" :style="pageStyle" @click="dismissFocusedKeyboard">
     <CloudConnection v-if="cloudMode && cloudStatus.phase !== 'ready'" />
     <template v-else>
     <view class="sidebar"><view class="desktop-brand"><AppIcon name="family" /><text>{{ workspaceName }}</text></view><view class="nav-list"><button role="button" v-for="item in navigation" :key="item.id" class="nav-item" :class="{ active: activeNavigation === item.id }" :aria-label="item.label" :aria-pressed="activeNavigation === item.id" @click="selectNavigation(item.id)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view class="nav-icon-wrap"><AppIcon :name="item.icon" :active="activeNavigation === item.id" /><text v-if="item.id === 'menu' && pendingOrderCount" class="nav-count" :class="{ 'is-overflow': pendingOrderCount > 99 }" :aria-label="`已安排${pendingOrderCount}餐`">{{ pendingOrderCount > 99 ? '99+' : pendingOrderCount }}</text></view><text>{{ item.label }}</text></button></view></view>
