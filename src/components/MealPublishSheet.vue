@@ -14,7 +14,7 @@ import { NATIVE_UI_COLORS } from '../domain/ui-theme.js';
 const props = defineProps({ order: Object, orders: { type: Array, default: () => [] } });
 const selectedOrderId = ref('');
 const arrangementsExpanded = ref(false);
-const availableOrders = computed(() => (props.orders || []).filter(item => item.date === localDate() && ['pending', 'accepted'].includes(item.status) && item.items?.length));
+const availableOrders = computed(() => (props.orders || []).filter(item => item.date === localDate() && (['pending', 'accepted'].includes(item.status) || item.status === 'completed' && item.diaryDeletedAt) && item.items?.length));
 const arrangementPreviews = computed(() => Object.fromEntries(availableOrders.value.map(order => [order.id, order.items.map(item => item.recipe?.image).filter(image => typeof image === 'string' && image.trim()).map(image => image.trim())])));
 function arrangementImageStyle(index, count) {
   return { left: count <= 1 ? '0px' : `calc(${index / (count - 1) * 100}% - ${index / (count - 1) * 32}px)`, zIndex: index + 1 };

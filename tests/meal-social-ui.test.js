@@ -710,6 +710,28 @@ test('arrangement picker starts empty and only offers eligible meals today', con
   assert.deepEqual(f.api.images.value, ['cloud://photo']);
 });
 
+test('arrangement picker includes today’s deleted diary for rerecording and submits its order', async context => {
+  const order = { id: 'deleted-diary', date: '2026-11-05', meal: '午餐', status: 'completed', diaryDeletedAt: 1, items: [{ recipe: { image: 'cover', title: '菜' } }] };
+  const orders = [order,
+    { ...order, id: 'recorded', diaryDeletedAt: undefined },
+    { ...order, id: 'cancelled', status: 'cancelled' },
+    { ...order, id: 'empty', items: [] },
+    { ...order, id: 'future', date: '2026-11-06' },
+  ];
+  const f = harness(context, 'MealPublishSheet', { foodCover: image => image }, { orders });
+  assert.deepEqual(f.api.availableOrders.value.map(item => item.id), ['deleted-diary']);
+  f.api.selectArrangement(order.id);
+  assert.equal(f.api.selectedOrder.value.id, order.id);
+  assert.equal(f.api.date.value, order.date);
+  assert.equal(f.api.meal.value, order.meal);
+  assert.deepEqual(f.api.orderImages.value, ['cover']);
+  const saving = f.api.save();
+  assert.equal(f.calls[0].action, 'finishMeal');
+  assert.equal(f.calls[0].args.orderId, order.id);
+  f.calls[0].resolve({ post: { id: 'rerecorded' } });
+  await saving;
+});
+
 test('selected arrangement uses existing finish protocol and locks selection during save', async context => {
   const order = { id: 'today', date: '2026-11-05', meal: '午餐', status: 'accepted', items: [{ recipe: { title: '菜' } }] };
   const f = harness(context, 'MealPublishSheet', {}, { orders: [order] });
