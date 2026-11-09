@@ -31,16 +31,19 @@ function dismiss() {
 <template>
   <view v-if="failure && !sheetOpen" class="cloud-sync-warning mutation-failure" role="alert">
     <view class="mutation-failure-copy"><text class="mutation-copy-line mutation-failure-title">{{ failure.label || '修改' }}未同步{{ mutationStatus.failures.length > 1 ? `（${mutationStatus.failures.length}项）` : '' }}</text><text class="mutation-copy-line">{{ cloudErrorMessage(localError || failure.message) }}</text></view>
+    <view class="mutation-actions">
     <button v-if="failure.canRetry !== false" role="button" class="text-button mutation-action" :disabled="Boolean(retrying)" @click="retry" hover-class="touch-feedback">{{ retrying ? '重试中' : '重试' }}</button>
-    <button v-if="failure.status !== 'uncertain' && failure.canDismiss !== false" role="button" class="text-button mutation-action mutation-dismiss" :disabled="Boolean(retrying)" @click="dismiss" hover-class="touch-feedback">放弃</button>
+    <button v-if="failure.status !== 'uncertain' && failure.canDismiss !== false" role="button" class="text-button mutation-action mutation-dismiss" :disabled="Boolean(retrying)" @click="dismiss" hover-class="touch-feedback">放弃修改</button>
+    </view>
   </view>
 </template>
 
 <style scoped>
-.mutation-failure { align-items: center; gap: 8px; padding: 6px 10px; }
-.mutation-failure-copy { flex: 1; min-width: 0; font-size: var(--type-caption); line-height: 18px; overflow-wrap: anywhere; }
+.mutation-failure { flex-direction: column; align-items: stretch; gap: 0; padding: 10px 12px 4px; }
+.mutation-failure-copy { min-width: 0; font-size: var(--type-caption); line-height: 18px; overflow-wrap: anywhere; }
 .mutation-copy-line { display: block; }
 .mutation-failure-title { font-size: var(--type-meta); font-weight: 600; }
-.mutation-action { flex: 0 0 auto; min-width: 44px; min-height: 44px; margin: 0; padding: 0 4px; font-size: var(--type-meta); }
+.mutation-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
+.mutation-action { white-space: nowrap; flex: 0 0 auto; min-width: 44px; min-height: 44px; margin: 0; padding: 0 4px; font-size: var(--type-meta); }
 .mutation-dismiss { color: var(--danger); }
 </style>
