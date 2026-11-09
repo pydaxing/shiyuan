@@ -17,7 +17,7 @@ function phone(event) { return accountEntry.bind(event.detail, consent.value); }
     <view class="account-entry-actions">
       <text v-if="entry.phase === 'checking'" class="account-entry-caption" role="status">正在进入你的小灶</text>
       <template v-else-if="entry.phase === 'phone'">
-        <button v-if="consent" class="primary-button full account-entry-button" open-type="getPhoneNumber" :disabled="entry.busy" @getphonenumber="phone" hover-class="none">{{ entry.busy ? '正在登录…' : '手机号快捷登录' }}</button>
+        <button v-if="consent" class="primary-button full account-entry-button" open-type="getPhoneNumber" :class="{ 'is-disabled': entry.busy }" :disabled="entry.busy" @getphonenumber="phone" hover-class="none">{{ entry.busy ? '正在登录…' : '手机号快捷登录' }}</button>
         <button v-else class="primary-button full account-entry-button" @click="accountEntry.bind(null, false)" hover-class="none">手机号快捷登录</button>
         <PrivacyConsent v-model="consent" :disabled="entry.busy" :invalid="Boolean(entry.error) && !consent" />
       </template>
@@ -41,7 +41,7 @@ function phone(event) { return accountEntry.bind(event.detail, consent.value); }
 .account-entry-caption { display: block; margin-top: 8px; color: #435b46; font-size: var(--type-control); line-height: 1.8; }
 .account-entry-button { margin-top: 24px; min-height: 48px; background: #405b46; color: #fff; border: 0; box-shadow: none; }
 .account-entry-button::after { border: 0; }
-.account-entry-button[disabled] { background: #405b46; color: #fff; opacity: .65; }
+.account-entry-button.is-disabled { background: #405b46; color: #fff; opacity: .65; }
 .account-entry-error { display: block; margin-top: 8px; color: var(--danger); font-size: var(--type-meta); line-height: 1.6; }
 @media (max-height: 600px) { .account-entry-brand { top: 24%; } .account-entry-actions { bottom: calc(12px + env(safe-area-inset-bottom)); } .account-entry-button { margin-top: 12px; } }
 </style>
