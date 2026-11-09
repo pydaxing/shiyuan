@@ -118,6 +118,20 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
     return true;
   }
 
+  const synchronizationBlocked = () => errorWith('上一笔操作的同步结果尚未确认，请先在同步提示中重试核对，再继续操作', 'SYNC_BLOCKED');
+  function blockWaitingImports() {
+    // Menu imports must not leave the detail button awaiting a stopped queue.
+    // Keep the journal for explicit retry after the uncertain receipt is checked.
+    for (const entry of operations) {
+      if (entry.name !== 'addCollection' || entry.status !== 'queued' || entry.sent) continue;
+      const error = synchronizationBlocked();
+      entry.status = 'blocked';
+      entry.message = error.message;
+      entry.code = error.code;
+      settle(entry, error);
+    }
+  }
+
   function fail(operation, error, status) {
     if (status === 'failed' && dependenciesMatch(base, operation)) {
       let previous = base;
@@ -132,7 +146,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
     operation.status = status;
     operation.message = error.message || '同步失败，请重试';
     operation.code = error.code || 'NETWORK';
-    if (status === 'uncertain') operation.hadUncertain = true;
+    if (status === 'uncertain') { operation.hadUncertain = true; blockWaitingImports(); }
     saveStatus();
     settle(operation, error);
     onFailure(error, operation);
@@ -207,6 +221,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
   function enqueue(name, args) {
     try {
       if (journalError) throw journalError;
+      if (name === 'addCollection' && operations.some(entry => entry.status === 'uncertain')) throw synchronizationBlocked();
       if (!context.scope) throw errorWith('请先创建或加入家庭', 'NO_FAMILY');
       const operation = { ...prepareCommand(view, name, args, { id: newId(), createdAt: now() }), status: 'queued', message: '', scope: context.scope };
       operations.push(operation);
@@ -234,6 +249,7 @@ export function createCommandQueue({ snapshot, send, reconcile, refresh, journal
     }
     const operation = operations.find(entry => entry.id === id);
     if (!operation || !['failed', 'blocked', 'uncertain'].includes(operation.status)) return Promise.reject(errorWith('没有可重试的操作', 'INVALID'));
+    if (operation.name === 'addCollection' && operations.some(entry => entry !== operation && entry.status === 'uncertain')) return Promise.reject(synchronizationBlocked());
     if (operation.status !== 'uncertain' && !dependenciesMatch(base, operation)) return Promise.reject(errorWith('相关内容已变化，请重新打开编辑，不会覆盖家人的修改', 'CONFLICT'));
     if (operation.status !== 'uncertain') { delete operation.sent; delete operation.rebased; }
     operation.status = 'queued';

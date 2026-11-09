@@ -542,3 +542,53 @@ test('legacy blocked removal can be retried after harmless whole-meal metadata c
   await retried;
   assert.deepEqual(restored.view.orders, []);
 });
+
+
+test('uncertain removal settles queued menu imports and prevents new callers hanging', async () => {
+  const initial = withOrder();
+  const app = harness({ initial });
+  const removal = app.queue.enqueue('removeOrderDish', ['order-1', initial.orders[0].items[0].recipe.id]);
+  const rejectedRemoval = assert.rejects(removal, /timeout/);
+  const post = { id: 'public-dish', kind: 'dish', title: '新菜', familyId: 'source-family', recipes: [{ ...initial.recipes[1], id: 'source-recipe' }] };
+  const importing = app.queue.enqueue('addCollection', [post]);
+  const rejectedImport = assert.rejects(importing, { code: 'SYNC_BLOCKED' });
+  app.requests[0].reject(new Error('timeout'));
+  await Promise.all([rejectedRemoval, rejectedImport]);
+  assert.equal(app.requests.length, 1);
+  assert.equal(app.status.operations.find(op => op.id === importing.operationId).status, 'blocked');
+  const count = app.status.operations.length;
+  await assert.rejects(app.queue.enqueue('addCollection', [post]), { code: 'SYNC_BLOCKED' });
+  await assert.rejects(app.queue.retry(importing.operationId), { code: 'SYNC_BLOCKED' });
+  assert.equal(app.status.operations.length, count, 'repeated clicks do not create more waiting work');
+  const receipt = clone(app.requests[0].payload);
+  const retry = app.queue.retry(removal.operationId);
+  await tick();
+  assert.deepEqual(app.requests[1].payload, receipt);
+  app.confirm(1);
+  await retry;
+  assert.equal(app.requests.length, 2, 'blocked import is not silently replayed');
+  const imported = app.queue.retry(importing.operationId);
+  await tick();
+  const server = clone(app.server);
+  createKitchenActions({ getState: () => server, commit: next => Object.assign(server, next), newId: () => 'imported-recipe', today: () => today }).addCollection(post);
+  app.requests[2].resolve({ snapshot: server, revision: 3, value: 1 });
+  await imported;
+  assert.equal(app.status.operations.length, 0);
+  assert.ok(app.view.recipes.some(recipe => recipe.sourceId === 'source-recipe'));
+});
+
+
+test('a definite failed removal does not prevent an independent queued change', async () => {
+  const initial = withOrder();
+  const app = harness({ initial });
+  const removal = app.queue.enqueue('removeOrderDish', ['order-1', initial.orders[0].items[0].recipe.id]);
+  const rejected = assert.rejects(removal, /FORBIDDEN/);
+  const setting = app.queue.enqueue('setFeature', ['fridge', true]);
+  app.requests[0].reject(failure('FORBIDDEN'));
+  await rejected;
+  await tick();
+  assert.equal(app.requests.length, 2);
+  app.confirm(1);
+  await setting;
+  assert.equal(app.view.family.features.fridge, true);
+});
