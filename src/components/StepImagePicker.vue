@@ -96,11 +96,20 @@ function remove(index) {
       </view>
       <button v-if="capacity > 0" role="button" class="step-photo-add" :aria-label="`添加${label}`" :disabled="choosing || disabled" @click="choose(false)" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90"><view v-if="variant === 'meal' || iconOnly" class="meal-photo-plus" aria-hidden="true" /><text v-if="variant === 'meal'" class="meal-photo-label">实拍</text><template v-if="variant !== 'meal' && !iconOnly"><AppIcon name="camera" :size="24" active /><text v-if="!busy">添加图片</text></template></button>
     </view>
-    <text v-if="!capacity" class="muted">最多 9 张图片（含菜品图）</text><text v-if="error" class="error-message" role="alert">{{ error }}</text><button v-if="failedPaths.length" class="text-button" :disabled="disabled" @click="choose(true)" role="button" hover-class="touch-feedback" :hover-start-time="0" :hover-stay-time="90">重试未成功的图片</button>
+    <text v-if="!capacity" class="muted">最多 9 张图片（含菜品图）</text>
+    <view v-if="error || failedPaths.length" class="error-message photo-upload-error" role="alert">
+      <text class="photo-upload-error-copy">{{ failedPaths.length ? '照片上传失败，请' : error }}</text>
+      <button v-if="failedPaths.length" class="photo-upload-retry" :disabled="disabled || choosing" @click="choose(true)" role="button" aria-label="重试未成功的图片" hover-class="none">重试</button>
+    </view>
   </view>
 </template>
 
 <style scoped>
+.photo-upload-error { display: flex; align-items: center; flex-wrap: wrap; gap: 0 4px; }
+.photo-upload-error-copy { line-height: 22px; }
+.photo-upload-retry { display: inline-flex; align-items: center; min-height: 22px; margin: 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font-size: inherit; font-weight: inherit; line-height: 22px; text-decoration: underline; text-underline-offset: 3px; }
+.photo-upload-retry::after { border: 0; }
+
 .step-photo-picker.is-meal { --step-photo-size: var(--meal-photo-size, 96px); }
 .is-meal .step-photo-grid { gap: 6px; }
 .is-meal .step-photo-tile, .is-meal .step-photo-add { border-radius: 3px; }
